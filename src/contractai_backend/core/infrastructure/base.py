@@ -32,8 +32,10 @@ class PostgresBaseRepository[T: BaseTable](BaseRepository[T]):
             result = await self.session.exec(statement=query)
             return result.first()
         except OperationalError as e:
+            logger.debug(f"OperationalError al obtener {self.model.__name__} por ID {id}: {e}")
             raise ServiceUnavailableError("La base de datos relacional no esta disponible") from e
         except SQLAlchemyError as e:
+            logger.debug(f"SQLAlchemyError al obtener {self.model.__name__} por ID {id}: {e}")
             raise InternalServerError("Error al acceder a la base de datos relacional") from e
 
     async def save(self, entity: T) -> T:
@@ -67,8 +69,10 @@ class PostgresBaseRepository[T: BaseTable](BaseRepository[T]):
             result = await self.session.exec(statement=query)
             return result.all()
         except OperationalError as e:
+            logger.debug(f"OperationalError al listar {self.model.__name__}: {e}")
             raise ServiceUnavailableError("La base de datos relacional no esta disponible") from e
         except SQLAlchemyError as e:
+            logger.debug(f"SQLAlchemyError al listar {self.model.__name__}: {e}")
             raise InternalServerError("Error al acceder a la base de datos relacional") from e
 
     async def update(self, entity: T) -> T:
@@ -80,12 +84,15 @@ class PostgresBaseRepository[T: BaseTable](BaseRepository[T]):
             return db_merged
         except IntegrityError as e:
             await self.session.rollback()
+            logger.debug(f"IntegrityError al actualizar {self.model.__name__} con ID {entity.id}: {e}")
             raise ConflictError("Conflicto al actualizar el registro en la base de datos relacional") from e
         except OperationalError as e:
             await self.session.rollback()
+            logger.debug(f"OperationalError al actualizar {self.model.__name__} con ID {entity.id}: {e}")
             raise ServiceUnavailableError("La base de datos relacional no esta disponible") from e
         except SQLAlchemyError as e:
             await self.session.rollback()
+            logger.debug(f"SQLAlchemyError al actualizar {self.model.__name__} con ID {entity.id}: {e}")
             raise InternalServerError("Error al acceder a la base de datos relacional") from e
 
     async def delete(self, id: int) -> bool:
@@ -100,10 +107,13 @@ class PostgresBaseRepository[T: BaseTable](BaseRepository[T]):
             return True
         except IntegrityError as e:
             await self.session.rollback()
+            logger.debug(f"IntegrityError al eliminar {self.model.__name__} con ID {id}: {e}")
             raise ConflictError("Conflicto al eliminar el registro en la base de datos relacional") from e
         except OperationalError as e:
             await self.session.rollback()
+            logger.debug(f"OperationalError al eliminar {self.model.__name__} con ID {id}: {e}")
             raise ServiceUnavailableError("La base de datos relacional no esta disponible") from e
         except SQLAlchemyError as e:
             await self.session.rollback()
+            logger.debug(f"SQLAlchemyError al eliminar {self.model.__name__} con ID {id}: {e}")
             raise InternalServerError("Error al acceder a la base de datos relacional") from e

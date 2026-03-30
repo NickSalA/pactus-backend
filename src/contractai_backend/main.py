@@ -3,8 +3,8 @@ from fastapi import FastAPI
 from loguru import logger
 from uvicorn import run
 
-from .shared.logger import setup
 from .shared.config import settings
+from .shared.logger import setup
 
 setup()
 

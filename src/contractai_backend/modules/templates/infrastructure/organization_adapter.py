@@ -28,7 +28,7 @@ class OrganizationModuleAdapter(IOrganizationRepository):
             "jurisdiccion": org_entity.jurisdiction,
             "lugar_firma": org_entity.city,
             "autorizacion_entidad": org_entity.autorizacion_entidad,
-            "autorizacion_fecha": org_entity.autorizacion_fecha,
+            "autorizacion_fecha": org_entity.autorizacion_fecha.isoformat() if org_entity.autorizacion_fecha else None,
             "autorizacion_emitida_por": org_entity.autorizacion_emitida_por,
             "empleador_email": org_entity.email,
             "empleador_telefono": org_entity.phone,
