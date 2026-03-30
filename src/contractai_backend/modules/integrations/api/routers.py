@@ -3,8 +3,9 @@ from typing import Annotated
 from fastapi import APIRouter, BackgroundTasks, Depends, Response
 
 from contractai_backend.modules.integrations.application import IntegrationService
+from contractai_backend.shared.config import settings
 from contractai_backend.shared.api.dependencies.security import CurrentUserDep
-from .dependencies import get_integration_service
+from .dependencies import get_integration_service, process_drive_import_in_background
 from .schemas import AuthURLResponse, DriveRequest, ImportRequest, ImportResponse, TokenResponse
 
 router = APIRouter(prefix="/drive", tags=["Integrations"])
@@ -30,11 +31,11 @@ async def download_drive_file(file_id: str, request: DriveRequest, service: Inte
 
 
 @router.post("/import", response_model=ImportResponse)
-async def import_drive_files(request: ImportRequest, background_tasks: BackgroundTasks, service: IntegrationServiceDep, current_user: CurrentUserDep):
+async def import_drive_files(request: ImportRequest, background_tasks: BackgroundTasks, current_user: CurrentUserDep):
     files_payload = [file_item.model_dump(mode="python") for file_item in request.files]
-    background_tasks.add_task(service.process_import, request.token, files_payload, current_user.organization_id, current_user.id)
+    background_tasks.add_task(process_drive_import_in_background, request.token, files_payload, current_user.organization_id, current_user.id)
     return ImportResponse(
         message="La importación ha comenzado en segundo plano.",
         queued_files=len(request.files),
-        index_name=service.index_name,
+        index_name=settings.DRIVE_INDEX_NAME,
     )

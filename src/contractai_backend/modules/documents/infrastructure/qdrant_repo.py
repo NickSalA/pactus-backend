@@ -102,5 +102,3 @@ class LlamaIndexQdrantRepository(VectorRepository):
             )
         except Exception as e:
             raise DocumentVectorError("Fallo el procesamiento matemático o la inserción de los vectores.") from e
-        finally:
-            self.sync_client.close()

@@ -29,6 +29,7 @@ def _make_chunk(id_: str = "chunk_0") -> MagicMock:
 # delete_vectors
 # ---------------------------------------------------------------------------
 
+
 class TestDeleteVectors:
     @pytest.mark.asyncio
     async def test_deletes_vectors_when_collection_exists(self):
@@ -60,6 +61,7 @@ class TestDeleteVectors:
 # ---------------------------------------------------------------------------
 # _ensure_collection
 # ---------------------------------------------------------------------------
+
 
 class TestEnsureCollection:
     @pytest.mark.asyncio
@@ -103,6 +105,7 @@ class TestEnsureCollection:
 # add_vectors
 # ---------------------------------------------------------------------------
 
+
 class TestAddVectors:
     @pytest.mark.asyncio
     async def test_add_vectors_sets_chunk_metadata(self):
@@ -142,3 +145,14 @@ class TestAddVectors:
         ):
             with pytest.raises(DocumentVectorError):
                 await repo.add_vectors("contracts_index", document_id=1, chunks=[_make_chunk()])
+
+    @pytest.mark.asyncio
+    async def test_add_vectors_keeps_sync_client_open_for_batch_reuse(self):
+        repo, async_client, sync_client = _make_repo()
+        async_client.collection_exists.return_value = True
+
+        with patch("contractai_backend.modules.documents.infrastructure.qdrant_repo.run_in_threadpool", new_callable=AsyncMock):
+            await repo.add_vectors("contracts_index", document_id=1, chunks=[_make_chunk()])
+            await repo.add_vectors("contracts_index", document_id=2, chunks=[_make_chunk()])
+
+        sync_client.close.assert_not_called()

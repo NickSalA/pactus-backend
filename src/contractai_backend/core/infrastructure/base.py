@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from loguru import logger
-from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError, TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import asc, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -31,7 +31,7 @@ class PostgresBaseRepository[T: BaseTable](BaseRepository[T]):
             query = select(self.model).where(self.model.id == id)
             result = await self.session.exec(statement=query)
             return result.first()
-        except OperationalError as e:
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise ServiceUnavailableError("La base de datos relacional no esta disponible") from e
         except SQLAlchemyError as e:
             raise InternalServerError("Error al acceder a la base de datos relacional") from e
@@ -48,7 +48,7 @@ class PostgresBaseRepository[T: BaseTable](BaseRepository[T]):
             await self.session.rollback()
             logger.debug(f"IntegrityError al guardar {self.model.__name__}: {e}")
             raise ConflictError("Conflicto al crear el registro en la base de datos relacional") from e
-        except OperationalError as e:
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
             await self.session.rollback()
             logger.debug(f"OperationalError al guardar {self.model.__name__}: {e}")
             raise ServiceUnavailableError("La base de datos relacional no esta disponible") from e
@@ -66,7 +66,7 @@ class PostgresBaseRepository[T: BaseTable](BaseRepository[T]):
                     query = query.where(getattr(self.model, field) == value)
             result = await self.session.exec(statement=query)
             return result.all()
-        except OperationalError as e:
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise ServiceUnavailableError("La base de datos relacional no esta disponible") from e
         except SQLAlchemyError as e:
             raise InternalServerError("Error al acceder a la base de datos relacional") from e
@@ -81,7 +81,7 @@ class PostgresBaseRepository[T: BaseTable](BaseRepository[T]):
         except IntegrityError as e:
             await self.session.rollback()
             raise ConflictError("Conflicto al actualizar el registro en la base de datos relacional") from e
-        except OperationalError as e:
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
             await self.session.rollback()
             raise ServiceUnavailableError("La base de datos relacional no esta disponible") from e
         except SQLAlchemyError as e:
@@ -101,7 +101,7 @@ class PostgresBaseRepository[T: BaseTable](BaseRepository[T]):
         except IntegrityError as e:
             await self.session.rollback()
             raise ConflictError("Conflicto al eliminar el registro en la base de datos relacional") from e
-        except OperationalError as e:
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
             await self.session.rollback()
             raise ServiceUnavailableError("La base de datos relacional no esta disponible") from e
         except SQLAlchemyError as e:

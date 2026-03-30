@@ -52,10 +52,19 @@ class IntegrationService:
     async def retrieve_file(self, token: dict, file_id: str) -> bytes:
         return await self.provider.download_file(token, file_id)
 
-    async def process_import(self, token: dict, files: list[dict[str, Any]], organization_id: int, imported_by_user_id: int | None = None) -> None:
+    async def process_import(
+        self,
+        token: dict,
+        files: list[dict[str, Any]],
+        organization_id: int,
+        imported_by_user_id: int | None = None,
+    ) -> bool:
         logger.info(f"Iniciando importación directa. Organización: {organization_id}. Archivos: {len(files)}")
+        token_is_valid = True
 
-        for file_item in files:
+        total_files = len(files)
+
+        for index, file_item in enumerate(files):
             file_id = str(file_item.get("file_id") or "").strip()
             document_payload = dict(file_item.get("document") or {})
             try:
@@ -85,10 +94,12 @@ class IntegrationService:
                     f"¡Importación exitosa! Archivo: {file_name} | Tamaño: {len(file_bytes)} bytes | Documento: {getattr(created_document, 'id', None)}"
                 )
 
-                await asyncio.sleep(1)
+                if index < total_files - 1:
+                    await asyncio.sleep(1)
 
             except InvalidCloudTokenError as e:
                 logger.error(f"Fallo de autenticación en la importación. Token inválido o expirado. Organización: {organization_id}. Error: {e}")
+                token_is_valid = False
                 break  # Si el token es inválido, abortamos todo el proceso para evitar un alud de errores
             except CloudFileNotFoundError as e:
                 logger.warning(f"Archivo no encontrado {file_id}. Se saltará. Error: {e}")
@@ -101,3 +112,4 @@ class IntegrationService:
                 continue
 
         logger.info("Proceso de importación finalizado.")
+        return token_is_valid

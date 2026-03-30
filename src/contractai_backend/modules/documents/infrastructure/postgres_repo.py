@@ -8,7 +8,7 @@ from datetime import date
 
 from loguru import logger
 from sqlalchemy import Float, cast, func
-from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError, TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -109,7 +109,7 @@ class SQLModelDocumentRepository(
             query = select(DocumentTable).where(client_column == client_name).order_by(id_column)
             result = await self.session.exec(statement=query)
             return result.all()
-        except OperationalError as e:
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
@@ -122,7 +122,7 @@ class SQLModelDocumentRepository(
             query = select(DocumentTable).where(state_column == DocumentState.ACTIVE).order_by(id_column)
             result = await self.session.exec(statement=query)
             return result.all()
-        except OperationalError as e:
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
@@ -135,7 +135,7 @@ class SQLModelDocumentRepository(
             query = select(DocumentServiceTable).where(document_id_column == document_id).order_by(id_column)
             result = await self.session.exec(statement=query)
             return result.all()
-        except OperationalError as e:
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
@@ -154,7 +154,7 @@ class SQLModelDocumentRepository(
             for service_item in result.all():
                 grouped_services[service_item.document_id].append(service_item)
             return dict(grouped_services)
-        except OperationalError as e:
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
@@ -255,7 +255,7 @@ class SQLModelDocumentRepository(
 
             result = await self.session.exec(select(DocumentServiceTable).where(document_id_column == document_id).order_by(id_column))
             return result.all()
-        except OperationalError as e:
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
             await self.session.rollback()
             logger.debug(f"OperationalError replacing services for document {document_id}: {e}")
             raise DocumentDatabaseUnavailableError() from e
@@ -275,7 +275,7 @@ class SQLModelDocumentRepository(
             query = select(ServiceTable).where(organization_id_column == organization_id, service_id_column.in_(service_ids))
             result = await self.session.exec(statement=query)
             return result.all()
-        except OperationalError as e:
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
@@ -289,7 +289,7 @@ class SQLModelDocumentRepository(
             query = select(ServiceTable).where(organization_id_column == organization_id).order_by(name_column, id_column)
             result = await self.session.exec(statement=query)
             return result.all()
-        except OperationalError as e:
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
