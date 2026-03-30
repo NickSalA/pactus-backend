@@ -2,10 +2,10 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from datetime import date
 from typing import Any
 
 from ...domain import DocumentServiceTable, DocumentTable, ServiceTable
+from ..dto import ContractQueryDTO
 
 
 class DocumentQueryRepository(ABC):
@@ -20,7 +20,7 @@ class DocumentQueryRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_document_services(self, document_id: int) -> Sequence[DocumentServiceTable]:
+    async def get_document_services(self, doc_id: int) -> Sequence[DocumentServiceTable]:
         """Lists service items for one document."""
         pass
 
@@ -33,16 +33,7 @@ class DocumentQueryRepository(ABC):
     async def search_contracts(
         self,
         organization_id: int,
-        client: str | None = None,
-        contract_name: str | None = None,
-        min_value: float | None = None,
-        max_value: float | None = None,
-        currency: str | None = None,
-        state: str | None = None,
-        document_type: str | None = None,
-        period_start: date | None = None,
-        period_end: date | None = None,
-        date_mode: str = "overlap",
+        query: ContractQueryDTO,
         limit: int | None = None,
     ) -> Sequence[DocumentTable]:
         """Lists contracts matching structured filters."""
@@ -52,16 +43,7 @@ class DocumentQueryRepository(ABC):
     async def count_contracts(
         self,
         organization_id: int,
-        client: str | None = None,
-        contract_name: str | None = None,
-        min_value: float | None = None,
-        max_value: float | None = None,
-        currency: str | None = None,
-        state: str | None = None,
-        document_type: str | None = None,
-        period_start: date | None = None,
-        period_end: date | None = None,
-        date_mode: str = "overlap",
+        query: ContractQueryDTO,
     ) -> int:
         """Counts contracts matching structured filters."""
         pass
@@ -89,7 +71,7 @@ class DocumentCommandRepository(ABC):
         pass
 
     @abstractmethod
-    async def replace_document_services(self, document_id: int, service_items: Sequence[DocumentServiceTable]) -> Sequence[DocumentServiceTable]:
+    async def replace_document_services(self, doc_id: int, service_items: Sequence[DocumentServiceTable]) -> Sequence[DocumentServiceTable]:
         """Replaces all service items for a document."""
         pass
 

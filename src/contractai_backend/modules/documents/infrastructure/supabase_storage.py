@@ -1,6 +1,7 @@
 """Supabase Storage implementation for document files."""
 
 import re
+from pathlib import Path
 
 import httpx
 from httpx import Response
@@ -13,42 +14,36 @@ from ..domain.exceptions import DocumentStorageError, DocumentStorageUnavailable
 class SupabaseStorageRepository(DocumentStorageRepository):
     """Stores document binaries in Supabase Storage using REST API."""
 
-    def __init__(self, client: httpx.AsyncClient | None = None):
+    def __init__(self, client: httpx.AsyncClient):
         self.base_url: str = settings.SUPABASE_URL.rstrip("/")
         self.bucket: str = settings.SUPABASE_STORAGE_BUCKET
         self.api_key: str = settings.SUPABASE_SECRET_KEY
-        self.client = client
+        self.client: httpx.AsyncClient = client
 
     def _sanitize_filename(self, filename: str) -> str:
         """Sanitizes filenames to a safe storage-friendly format."""
-        base_name: str = filename.rsplit(sep="/", maxsplit=1)[-1].rsplit(sep="\\", maxsplit=1)[-1]
+        file_path = Path(filename)
+        base_name: str = file_path.stem
+        extension: str = file_path.suffix.lower()
+        if not extension:
+            extension = ".pdf"
         normalized: str = re.sub(pattern=r"[^A-Za-z0-9._-]", repl="_", string=base_name).strip("._")
         if not normalized:
-            return "document.pdf"
-        if "." not in normalized:
-            return f"{normalized}.pdf"
-        return normalized
+            normalized = "document"
+        return f"{normalized}{extension}"
 
     def _build_path(self, document_id: int, filename: str | None = None) -> str:
         """Builds deterministic storage path for each document."""
         if not filename:
-            return f"documents/{document_id}.pdf"
+            filename = "document.pdf"
         safe_name: str = self._sanitize_filename(filename)
         return f"documents/{document_id}/{safe_name}"
 
     async def _post(self, *, url: str, headers: dict[str, str], content: bytes | None = None, json: dict | None = None) -> Response:
-        if self.client is not None:
-            return await self.client.post(url=url, headers=headers, content=content, json=json, timeout=30.0)
-
-        async with httpx.AsyncClient() as client:
-            return await client.post(url=url, headers=headers, content=content, json=json, timeout=30.0)
+        return await self.client.post(url=url, headers=headers, content=content, json=json, timeout=30.0)
 
     async def _delete(self, *, url: str, headers: dict[str, str]) -> Response:
-        if self.client is not None:
-            return await self.client.delete(url=url, headers=headers, timeout=30.0)
-
-        async with httpx.AsyncClient() as client:
-            return await client.delete(url=url, headers=headers, timeout=30.0)
+        return await self.client.delete(url=url, headers=headers, timeout=30.0)
 
     async def upload_file(self, document_id: int, file: bytes, filename: str, content_type: str) -> str:
         """Uploads a document file to Supabase Storage."""
