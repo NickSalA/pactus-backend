@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v0.13.3 (2026-03-30)
+
+### Bug Fixes
+
+- Change qdrant session managing and database pooling
+  ([`f0d914d`](https://github.com/NickSalA/ContractAI-Backend/commit/f0d914db168f05826a0904782656e19ebe2b4cb0))
+
+### Refactoring
+
+- Enhance error logging in PostgresBaseRepository and update organization service documentation
+  ([`9d0cf3f`](https://github.com/NickSalA/ContractAI-Backend/commit/9d0cf3f30563ae5d548f935fc738d42c1fcab318))
+
+- Implement structured contract query DTO and refactor related services
+  ([`74311a5`](https://github.com/NickSalA/ContractAI-Backend/commit/74311a54da8d1c9ac04f7a06d6fc82be235f224d))
+
+
 ## v0.13.2 (2026-03-28)
 
 ### Bug Fixes
