@@ -114,7 +114,7 @@ class DocumentCommandService:
         vectors_added = False
 
         try:
-            await self.command_repo.replace_document_services(document_id=document_id, service_items=service_entities)
+            await self.command_repo.replace_document_services(doc_id=document_id, service_items=service_entities)
 
             storage_path = await self.storage_repo.upload_file(
                 document_id=document_id,
@@ -252,7 +252,7 @@ class DocumentCommandService:
             document_id=document_id,
             service_items=payload.requested_service_items,
         )
-        await self.command_repo.replace_document_services(document_id=document_id, service_items=service_entities)
+        await self.command_repo.replace_document_services(doc_id=document_id, service_items=service_entities)
 
     async def _update_document_without_file(
         self,

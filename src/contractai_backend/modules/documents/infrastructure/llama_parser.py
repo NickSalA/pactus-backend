@@ -4,9 +4,9 @@ import tempfile
 from pathlib import Path
 
 from llama_cloud import AsyncLlamaCloud
-from llama_index.core.schema import Document
 from llama_cloud.types.file_create_response import FileCreateResponse
 from llama_cloud.types.parsing_get_response import ParsingGetResponse
+from llama_index.core.schema import Document
 
 from ....shared.config import settings
 from ..application.repositories import DocumentExtractor
@@ -39,12 +39,7 @@ class LlamaParseExtractor(DocumentExtractor):
                 tier="agentic",
                 version="latest",
                 agentic_options={
-                    "custom_prompt": (
-                        "Este es un contrato laboral peruano oficial. "
-                        "Es OBLIGATORIO mantener todos los puntos suspensivos (........)"
-                        "ya que son campos que el usuario debe llenar. No los elimines ni los limpies. "
-                        "Conserva las negritas de los títulos y las cláusulas originales."
-                    )
+                    "custom_prompt": ("Este es un contrato laboral peruano oficial. Conserva las negritas de los títulos y las cláusulas originales.")
                 },
                 processing_options={"ocr_parameters": {"languages": ["es"]}},
                 expand=["markdown"],

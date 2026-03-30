@@ -1,22 +1,19 @@
 """Repositorio de Documentos utilizando SQLModel y AsyncSession para Supabase."""
 
-# pyright: reportArgumentType=false, reportAttributeAccessIssue=false
-
 from collections import defaultdict
 from collections.abc import Sequence
-from datetime import date
 
 from loguru import logger
 from sqlalchemy import Float, cast, func
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
-from sqlmodel import delete, select
+from sqlmodel import col, delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....core.infrastructure.base import PostgresBaseRepository
+from ..application.dto import ContractQueryDTO
 from ..application.repositories import DocumentCommandRepository, DocumentQueryRepository, ServiceCatalogRepository
 from ..domain import DocumentServiceTable, DocumentTable, ServiceTable
 from ..domain.exceptions import DocumentDatabaseError, DocumentDatabaseUnavailableError
-from ..domain.value_objs import DocumentState
 
 
 class SQLModelDocumentRepository(
@@ -42,97 +39,67 @@ class SQLModelDocumentRepository(
     def _build_contract_value_expression():
         return cast(DocumentTable.form_data["value"].astext, Float)
 
-    def _apply_contract_filters(  # noqa: PLR0913
+    def _apply_period_filters(self, statement, filters: ContractQueryDTO):
+        if not (filters.period_start or filters.period_end):
+            return statement
+
+        default_columns = (col(DocumentTable.end_date), col(DocumentTable.start_date))
+
+        mode_columns = {
+            "start_date": (col(DocumentTable.start_date), col(DocumentTable.start_date)),
+            "end_date": (col(DocumentTable.end_date), col(DocumentTable.end_date)),
+            "overlap": default_columns,
+        }
+
+        period_start_column, period_end_column = mode_columns.get(filters.date_mode, default_columns)
+
+        if filters.period_start is not None:
+            statement = statement.where(period_start_column >= filters.period_start)
+        if filters.period_end is not None:
+            statement = statement.where(period_end_column <= filters.period_end)
+        return statement
+
+    def _apply_contract_filters(
         self,
-        query,
+        statement,
         organization_id: int,
-        client: str | None = None,
-        contract_name: str | None = None,
-        min_value: float | None = None,
-        max_value: float | None = None,
-        currency: str | None = None,
-        state: str | None = None,
-        document_type: str | None = None,
-        period_start: date | None = None,
-        period_end: date | None = None,
-        date_mode: str = "overlap",
+        filters: ContractQueryDTO,
     ):
-        query = query.where(DocumentTable.organization_id == organization_id)
+        """Aplica los filtros de búsqueda de contratos a la consulta base."""
+        statement = statement.where(DocumentTable.organization_id == organization_id)
 
-        normalized_client = self._normalize_text_filter(client)
-        if normalized_client:
-            query = query.where(func.lower(DocumentTable.client).like(f"%{normalized_client}%"))
-
-        normalized_contract_name = self._normalize_text_filter(contract_name)
-        if normalized_contract_name:
-            query = query.where(func.lower(DocumentTable.name).like(f"%{normalized_contract_name}%"))
+        text_filters = (
+            (filters.client, DocumentTable.client),
+            (filters.contract_name, DocumentTable.name),
+        )
+        for raw_value, field in text_filters:
+            normalized_value = self._normalize_text_filter(raw_value)
+            if normalized_value:
+                statement = statement.where(col(field).ilike(f"%{normalized_value}%"))
 
         contract_value = self._build_contract_value_expression()
-        if min_value is not None:
-            query = query.where(contract_value >= min_value)
-        if max_value is not None:
-            query = query.where(contract_value <= max_value)
+        if filters.min_value is not None:
+            statement = statement.where(contract_value >= filters.min_value)
+        if filters.max_value is not None:
+            statement = statement.where(contract_value <= filters.max_value)
 
-        if currency:
-            query = query.where(func.upper(DocumentTable.form_data["currency"].astext) == currency)
+        if filters.currency:
+            statement = statement.where(func.upper(DocumentTable.form_data["currency"].astext) == filters.currency)
 
-        if state:
-            query = query.where(DocumentTable.state == state)
+        exact_filters = (
+            (filters.state, col(DocumentTable.state)),
+            (filters.document_type, col(DocumentTable.type)),
+        )
+        for value, field in exact_filters:
+            if value is not None:
+                statement = statement.where(field == value)
 
-        if document_type:
-            query = query.where(DocumentTable.type == document_type)
+        return self._apply_period_filters(statement=statement, filters=filters)
 
-        if period_start or period_end:
-            if date_mode == "start_date":
-                if period_start is not None:
-                    query = query.where(DocumentTable.start_date >= period_start)
-                if period_end is not None:
-                    query = query.where(DocumentTable.start_date <= period_end)
-            elif date_mode == "end_date":
-                if period_start is not None:
-                    query = query.where(DocumentTable.end_date >= period_start)
-                if period_end is not None:
-                    query = query.where(DocumentTable.end_date <= period_end)
-            else:
-                if period_start is not None:
-                    query = query.where(DocumentTable.end_date >= period_start)
-                if period_end is not None:
-                    query = query.where(DocumentTable.start_date <= period_end)
-
-        return query
-
-    async def get_by_client_name(self, client_name: str) -> Sequence[DocumentTable]:
-        """Obtiene los documentos asociados a un cliente."""
-        try:
-            client_column = DocumentTable.__table__.c.client
-            id_column = DocumentTable.__table__.c.id
-            query = select(DocumentTable).where(client_column == client_name).order_by(id_column)
-            result = await self.session.exec(statement=query)
-            return result.all()
-        except OperationalError as e:
-            raise DocumentDatabaseUnavailableError() from e
-        except SQLAlchemyError as e:
-            raise DocumentDatabaseError() from e
-
-    async def get_active_documents(self) -> Sequence[DocumentTable]:
-        """Obtiene todos los documentos activos."""
-        try:
-            state_column = DocumentTable.__table__.c.state
-            id_column = DocumentTable.__table__.c.id
-            query = select(DocumentTable).where(state_column == DocumentState.ACTIVE).order_by(id_column)
-            result = await self.session.exec(statement=query)
-            return result.all()
-        except OperationalError as e:
-            raise DocumentDatabaseUnavailableError() from e
-        except SQLAlchemyError as e:
-            raise DocumentDatabaseError() from e
-
-    async def get_document_services(self, document_id: int) -> Sequence[DocumentServiceTable]:
+    async def get_document_services(self, doc_id: int) -> Sequence[DocumentServiceTable]:
         """Obtiene los servicios asociados a un documento."""
         try:
-            document_id_column = DocumentServiceTable.__table__.c.document_id
-            id_column = DocumentServiceTable.__table__.c.id
-            query = select(DocumentServiceTable).where(document_id_column == document_id).order_by(id_column)
+            query = select(DocumentServiceTable).where(col(DocumentServiceTable.document_id) == doc_id).order_by(col(DocumentServiceTable.id))
             result = await self.session.exec(statement=query)
             return result.all()
         except OperationalError as e:
@@ -146,9 +113,11 @@ class SQLModelDocumentRepository(
             return {}
 
         try:
-            document_id_column = DocumentServiceTable.__table__.c.document_id
-            id_column = DocumentServiceTable.__table__.c.id
-            query = select(DocumentServiceTable).where(document_id_column.in_(document_ids)).order_by(document_id_column, id_column)
+            query = (
+                select(DocumentServiceTable)
+                .where(col(DocumentServiceTable.document_id).in_(document_ids))
+                .order_by(col(DocumentServiceTable.document_id), col(DocumentServiceTable.id))
+            )
             result = await self.session.exec(statement=query)
             grouped_services: defaultdict[int, list[DocumentServiceTable]] = defaultdict(list)
             for service_item in result.all():
@@ -159,81 +128,40 @@ class SQLModelDocumentRepository(
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
 
-    async def search_contracts(  # noqa: PLR0913
-        self,
-        organization_id: int,
-        client: str | None = None,
-        contract_name: str | None = None,
-        min_value: float | None = None,
-        max_value: float | None = None,
-        currency: str | None = None,
-        state: str | None = None,
-        document_type: str | None = None,
-        period_start: date | None = None,
-        period_end: date | None = None,
-        date_mode: str = "overlap",
-        limit: int | None = None,
-    ) -> Sequence[DocumentTable]:
+    async def search_contracts(self, organization_id: int, query: ContractQueryDTO, limit: int | None = None) -> Sequence[DocumentTable]:
         """Obtiene contratos aplicando filtros estructurados."""
         try:
-            query = select(DocumentTable).order_by(DocumentTable.start_date, DocumentTable.end_date, DocumentTable.id)
-            query = self._apply_contract_filters(
-                query=query,
+            statement = select(DocumentTable).order_by(
+                col(DocumentTable.start_date),
+                col(DocumentTable.end_date),
+                col(DocumentTable.id),
+            )
+            statement = self._apply_contract_filters(
+                statement=statement,
                 organization_id=organization_id,
-                client=client,
-                contract_name=contract_name,
-                min_value=min_value,
-                max_value=max_value,
-                currency=currency,
-                state=state,
-                document_type=document_type,
-                period_start=period_start,
-                period_end=period_end,
-                date_mode=date_mode,
+                filters=query,
             )
 
             if limit is not None:
-                query = query.limit(limit)
+                statement = statement.limit(limit)
 
-            result = await self.session.exec(statement=query)
+            result = await self.session.exec(statement=statement)
             return result.all()
         except OperationalError as e:
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
 
-    async def count_contracts(  # noqa: PLR0913
-        self,
-        organization_id: int,
-        client: str | None = None,
-        contract_name: str | None = None,
-        min_value: float | None = None,
-        max_value: float | None = None,
-        currency: str | None = None,
-        state: str | None = None,
-        document_type: str | None = None,
-        period_start: date | None = None,
-        period_end: date | None = None,
-        date_mode: str = "overlap",
-    ) -> int:
+    async def count_contracts(self, organization_id: int, query: ContractQueryDTO) -> int:
         """Cuenta contratos aplicando filtros estructurados."""
         try:
-            query = select(func.count()).select_from(DocumentTable)
-            query = self._apply_contract_filters(
-                query=query,
+            statement = select(func.count()).select_from(DocumentTable)
+            statement = self._apply_contract_filters(
+                statement=statement,
                 organization_id=organization_id,
-                client=client,
-                contract_name=contract_name,
-                min_value=min_value,
-                max_value=max_value,
-                currency=currency,
-                state=state,
-                document_type=document_type,
-                period_start=period_start,
-                period_end=period_end,
-                date_mode=date_mode,
+                filters=query,
             )
-            result = await self.session.exec(statement=query)
+            result = await self.session.exec(statement=statement)
             count = result.one()
             return int(count or 0)
         except OperationalError as e:
@@ -241,27 +169,25 @@ class SQLModelDocumentRepository(
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
 
-    async def replace_document_services(self, document_id: int, service_items: Sequence[DocumentServiceTable]) -> Sequence[DocumentServiceTable]:
+    async def replace_document_services(self, doc_id: int, service_items: Sequence[DocumentServiceTable]) -> Sequence[DocumentServiceTable]:
         """Reemplaza el conjunto de servicios asociados a un documento."""
         try:
-            document_id_column = DocumentServiceTable.__table__.c.document_id
-            id_column = DocumentServiceTable.__table__.c.id
-            await self.session.exec(delete(DocumentServiceTable).where(document_id_column == document_id))
+            await self.session.exec(delete(DocumentServiceTable).where(col(DocumentServiceTable.document_id) == doc_id))
 
             if service_items:
                 self.session.add_all(service_items)
 
             await self.session.commit()
 
-            result = await self.session.exec(select(DocumentServiceTable).where(document_id_column == document_id).order_by(id_column))
-            return result.all()
+            return service_items
+
         except OperationalError as e:
             await self.session.rollback()
-            logger.debug(f"OperationalError replacing services for document {document_id}: {e}")
+            logger.debug(f"OperationalError replacing services for document {doc_id}: {e}")
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:
             await self.session.rollback()
-            logger.debug(f"SQLAlchemyError replacing services for document {document_id}: {e}")
+            logger.debug(f"SQLAlchemyError replacing services for document {doc_id}: {e}")
             raise DocumentDatabaseError() from e
 
     async def get_services_by_ids(self, organization_id: int, service_ids: Sequence[int]) -> Sequence[ServiceTable]:
@@ -270,9 +196,10 @@ class SQLModelDocumentRepository(
             return []
 
         try:
-            organization_id_column = ServiceTable.__table__.c.organization_id
-            service_id_column = ServiceTable.__table__.c.id
-            query = select(ServiceTable).where(organization_id_column == organization_id, service_id_column.in_(service_ids))
+            query = select(ServiceTable).where(
+                col(ServiceTable.organization_id) == organization_id,
+                col(ServiceTable.id).in_(service_ids),
+            )
             result = await self.session.exec(statement=query)
             return result.all()
         except OperationalError as e:
@@ -283,10 +210,11 @@ class SQLModelDocumentRepository(
     async def get_services(self, organization_id: int) -> Sequence[ServiceTable]:
         """Obtiene el catálogo de servicios de una organización."""
         try:
-            organization_id_column = ServiceTable.__table__.c.organization_id
-            name_column = ServiceTable.__table__.c.name
-            id_column = ServiceTable.__table__.c.id
-            query = select(ServiceTable).where(organization_id_column == organization_id).order_by(name_column, id_column)
+            query = (
+                select(ServiceTable)
+                .where(col(ServiceTable.organization_id) == organization_id)
+                .order_by(col(ServiceTable.name), col(ServiceTable.id))
+            )
             result = await self.session.exec(statement=query)
             return result.all()
         except OperationalError as e:

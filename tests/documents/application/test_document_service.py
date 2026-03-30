@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from contractai_backend.modules.documents.application.dto import ContractQueryDTO
 from contractai_backend.modules.documents.api.schemas import CreateDocumentRequest, DocumentServiceItemRequest, FileRequest, UpdateDocumentRequest
 from contractai_backend.modules.documents.infrastructure.chunk_metadata_enricher import VectorChunkMetadataEnricher
 from contractai_backend.modules.documents.application.services.contract_query_service import ContractQueryService
@@ -361,7 +362,10 @@ class TestContractQueryService:
         sql_repo = AsyncMock()
         service = _make_contract_query_service(sql_repo=sql_repo)
 
-        result = await service.run_query(organization_id=1, operation="count", max_value=50000)
+        result = await service.run_query(
+            organization_id=1,
+            query=ContractQueryDTO(operation="count", max_value=50000),
+        )
 
         assert result["status"] == "needs_clarification"
         sql_repo.count_contracts.assert_not_called()
@@ -372,7 +376,7 @@ class TestContractQueryService:
         sql_repo.count_contracts.return_value = 0
         service = _make_contract_query_service(sql_repo=sql_repo)
 
-        result = await service.run_query(organization_id=1, operation="count")
+        result = await service.run_query(organization_id=1, query=ContractQueryDTO(operation="count"))
 
         assert result == {"status": "no_data", "message": "No hay contratos cargados para la organizacion actual."}
 
@@ -384,29 +388,28 @@ class TestContractQueryService:
 
         result = await service.run_query(
             organization_id=1,
-            operation="count",
-            max_value=50000,
-            currency="usd",
-            period_start="2024-01-01",
-            period_end="2024-03-31",
+            query=ContractQueryDTO(
+                operation="count",
+                max_value=50000,
+                currency="usd",
+                period_start="2024-01-01",
+                period_end="2024-03-31",
+            ),
         )
 
         assert result["status"] == "success"
         assert result["count"] == 2
         assert result["filters_applied"]["currency"] == "USD"
-        sql_repo.count_contracts.assert_any_call(organization_id=1)
+        sql_repo.count_contracts.assert_any_call(organization_id=1, query=ContractQueryDTO(operation="count"))
         sql_repo.count_contracts.assert_any_call(
             organization_id=1,
-            client=None,
-            contract_name=None,
-            min_value=None,
-            max_value=50000,
-            currency="USD",
-            state=None,
-            document_type=None,
-            period_start=date(2024, 1, 1),
-            period_end=date(2024, 3, 31),
-            date_mode="overlap",
+            query=ContractQueryDTO(
+                operation="count",
+                max_value=50000,
+                currency="USD",
+                period_start=date(2024, 1, 1),
+                period_end=date(2024, 3, 31),
+            ),
         )
 
     @pytest.mark.asyncio
@@ -416,7 +419,10 @@ class TestContractQueryService:
         sql_repo.search_contracts.return_value = [_make_doc()]
         service = _make_contract_query_service(sql_repo=sql_repo)
 
-        result = await service.run_query(organization_id=1, operation="list", client="Cliente", limit=5)
+        result = await service.run_query(
+            organization_id=1,
+            query=ContractQueryDTO(operation="list", client="Cliente", limit=5),
+        )
 
         assert result["status"] == "success"
         assert result["items"][0]["name"] == "Contrato Test"
@@ -424,16 +430,7 @@ class TestContractQueryService:
         assert result["returned_items"] == 1
         sql_repo.search_contracts.assert_called_once_with(
             organization_id=1,
-            client="Cliente",
-            contract_name=None,
-            min_value=None,
-            max_value=None,
-            currency=None,
-            state=None,
-            document_type=None,
-            period_start=None,
-            period_end=None,
-            date_mode="overlap",
+            query=ContractQueryDTO(operation="list", client="Cliente", limit=5),
             limit=5,
         )
 

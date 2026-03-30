@@ -1,11 +1,16 @@
 """Tools personalizados para el agente de chatbot, integrando la búsqueda en la base de conocimientos contractual."""
 
 import json
+from datetime import datetime
 
 from langchain_core.tools import tool
+from pydantic import ValidationError
 
-from ...application.repositories import VectorRepository
+from .....core.application.validation import format_pydantic_validation_error
+from ....documents.application.dto import ContractQueryDTO
 from ....documents.application.services import ContractQueryService
+from ....documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
+from ...application.repositories import VectorRepository
 
 
 def build_bc_tool(repo: VectorRepository):
@@ -43,29 +48,37 @@ def build_contracts_query_tool(service: ContractQueryService, organization_id: i
         contract_name: str | None = None,
         min_value: float | None = None,
         max_value: float | None = None,
-        currency: str | None = None,
-        state: str | None = None,
-        document_type: str | None = None,
-        period_start: str | None = None,
-        period_end: str | None = None,
+        currency: CurrencyType | None = None,
+        state: DocumentState | None = None,
+        document_type: DocumentType | None = None,
+        period_start: datetime | None = None,
+        period_end: datetime | None = None,
         date_mode: str = "overlap",
         limit: int = 20,
     ) -> str:
-        result = await service.run_query(
-            organization_id=organization_id,
-            operation=operation,
-            client=client,
-            contract_name=contract_name,
-            min_value=min_value,
-            max_value=max_value,
-            currency=currency,
-            state=state,
-            document_type=document_type,
-            period_start=period_start,
-            period_end=period_end,
-            date_mode=date_mode,
-            limit=limit,
-        )
+        try:
+            query = ContractQueryDTO(
+                operation=operation,
+                client=client,
+                contract_name=contract_name,
+                min_value=min_value,
+                max_value=max_value,
+                currency=currency,
+                state=state,
+                document_type=document_type,
+                period_start=period_start,
+                period_end=period_end,
+                date_mode=date_mode,
+                limit=limit,
+            )
+        except ValidationError as exc:
+            result = {
+                "status": "invalid_request",
+                "message": f"No se pudo interpretar uno de los filtros proporcionados: {format_pydantic_validation_error(exc)}",
+            }
+            return json.dumps(result, ensure_ascii=True)
+
+        result = await service.run_query(organization_id=organization_id, query=query)
         return json.dumps(result, ensure_ascii=True)
 
     return contracts_query_tool

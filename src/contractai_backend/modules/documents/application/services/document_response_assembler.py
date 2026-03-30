@@ -10,13 +10,13 @@ from ..repositories import DocumentQueryRepository
 class DocumentResponseAssembler:
     def __init__(self, sql_repo: DocumentQueryRepository):
         """Stores the query repo used to load service items."""
-        self.sql_repo = sql_repo
+        self.sql_repo: DocumentQueryRepository = sql_repo
 
     async def build(self, document: DocumentTable) -> DocumentResponse:
         """Builds one response including attached service items."""
         service_items: Sequence[DocumentServiceTable] = []
         if document.id is not None:
-            service_items = await self.sql_repo.get_document_services(document_id=document.id)
+            service_items: Sequence[DocumentServiceTable] = await self.sql_repo.get_document_services(doc_id=document.id)
 
         return self.serialize(document=document, service_items=service_items)
 
