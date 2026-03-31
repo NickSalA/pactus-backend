@@ -1,6 +1,6 @@
 """Tests unitarios para DocumentCommandService y servicios auxiliares."""
 
-from datetime import date
+from datetime import date, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
@@ -12,7 +12,7 @@ from contractai_backend.modules.documents.application.services.contract_query_se
 from contractai_backend.modules.documents.application.services.document_query_service import DocumentQueryService
 from contractai_backend.modules.documents.application.services.document_command_service import DocumentCommandService
 from contractai_backend.modules.documents.application.services.service_catalog_service import ServiceCatalogService
-from contractai_backend.modules.documents.domain import DocumentTable, ServiceTable
+from contractai_backend.modules.documents.domain import DocumentServiceTable, DocumentTable, ServiceTable
 from contractai_backend.modules.documents.domain.exceptions import (
     DocumentExtractionError,
     DocumentFileMissingError,
@@ -23,19 +23,40 @@ from contractai_backend.modules.documents.domain.exceptions import (
 from contractai_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
 
 
-def _make_doc(id: int = 1, file_path: str | None = "docs/1/file.pdf", organization_id: int = 1) -> DocumentTable:
+def _make_doc(
+    id: int = 1,
+    file_path: str | None = "docs/1/file.pdf",
+    organization_id: int = 1,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    client: str = "Cliente Test",
+    form_data: dict | None = None,
+) -> DocumentTable:
     return DocumentTable(
         id=id,
         organization_id=organization_id,
         name="Contrato Test",
-        client="Cliente Test",
+        client=client,
         type=DocumentType.LICENSES,
-        start_date=date(2024, 1, 1),
-        end_date=date(2024, 12, 31),
-        form_data={"value": 500.0, "currency": "USD", "owner": "IT"},
+        start_date=start_date or date(2024, 1, 1),
+        end_date=end_date or date(2024, 12, 31),
+        form_data=form_data or {"value": 500.0, "currency": "USD", "owner": "IT"},
         state=DocumentState.ACTIVE,
         file_path=file_path,
         file_name="file.pdf",
+    )
+
+
+def _make_document_service(id: int = 1, document_id: int = 1, service_id: int = 2) -> DocumentServiceTable:
+    return DocumentServiceTable(
+        id=id,
+        document_id=document_id,
+        service_id=service_id,
+        description="Hosting administrado",
+        value=250.0,
+        currency=CurrencyType.USD,
+        start_date=date(2024, 1, 1),
+        end_date=date(2024, 4, 1),
     )
 
 
@@ -419,6 +440,8 @@ class TestContractQueryService:
         sql_repo = AsyncMock()
         sql_repo.count_contracts.side_effect = [3, 1]
         sql_repo.search_contracts.return_value = [_make_doc()]
+        sql_repo.get_document_services_by_document_ids.return_value = {1: [_make_document_service(document_id=1)]}
+        sql_repo.get_services_by_ids.return_value = [ServiceTable(id=2, organization_id=1, name="Hosting")]
         service = _make_contract_query_service(sql_repo=sql_repo)
 
         result = await service.run_query(
@@ -429,11 +452,59 @@ class TestContractQueryService:
         assert result["status"] == "success"
         assert result["items"][0]["name"] == "Contrato Test"
         assert result["items"][0]["value"] == 500.0
+        assert result["items"][0]["service_items"][0]["service_name"] == "Hosting"
         assert result["returned_items"] == 1
         sql_repo.search_contracts.assert_called_once_with(
             organization_id=1,
             query=ContractQueryDTO(operation="list", client="Cliente", limit=5),
             limit=5,
+        )
+
+    @pytest.mark.asyncio
+    async def test_lists_current_activity_from_today_range(self):
+        today = date.today()
+        active_document = _make_doc(
+            start_date=today - timedelta(days=2),
+            end_date=today + timedelta(days=5),
+        )
+
+        sql_repo = AsyncMock()
+        sql_repo.count_contracts.side_effect = [2, 1]
+        sql_repo.search_contracts.return_value = [active_document]
+        sql_repo.get_document_services_by_document_ids.return_value = {1: []}
+        sql_repo.get_services_by_ids.return_value = []
+        service = _make_contract_query_service(sql_repo=sql_repo)
+
+        result = await service.run_query(
+            organization_id=1,
+            query=ContractQueryDTO(operation="list", currently_active=True),
+        )
+
+        assert result["items"][0]["is_currently_active"] is True
+        assert result["filters_applied"]["currently_active"] is True
+
+    @pytest.mark.asyncio
+    async def test_returns_client_ranking(self):
+        sql_repo = AsyncMock()
+        sql_repo.count_contracts.side_effect = [4, 4]
+        sql_repo.rank_contracts_by_client.return_value = [
+            {"client": "Cliente A", "currency": "USD", "total_value": 1500.0, "contracts_count": 3},
+            {"client": "Cliente B", "currency": "USD", "total_value": 300.0, "contracts_count": 1},
+        ]
+        service = _make_contract_query_service(sql_repo=sql_repo)
+
+        result = await service.run_query(
+            organization_id=1,
+            query=ContractQueryDTO(operation="ranking", currently_active=True, limit=10),
+        )
+
+        assert result["status"] == "success"
+        assert result["items"][0]["client"] == "Cliente A"
+        assert result["items"][0]["contracts_count"] == 3
+        sql_repo.rank_contracts_by_client.assert_called_once_with(
+            organization_id=1,
+            query=ContractQueryDTO(operation="ranking", currently_active=True, limit=10),
+            limit=10,
         )
 
 

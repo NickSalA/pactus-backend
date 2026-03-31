@@ -97,6 +97,49 @@ class TestCountContracts:
         assert result == 1
 
 
+class TestRankContractsByClient:
+    @pytest.mark.asyncio
+    async def test_returns_client_ranking_rows(self):
+        repo, session = _make_repo()
+        first_row = MagicMock()
+        first_row._mapping = {
+            "client": "Cliente A",
+            "currency": "USD",
+            "total_value": 1500.0,
+            "contracts_count": 3,
+        }
+        second_row = MagicMock()
+        second_row._mapping = {
+            "client": "Cliente B",
+            "currency": "PEN",
+            "total_value": 300.0,
+            "contracts_count": 1,
+        }
+        result_mock = MagicMock()
+        result_mock.all.return_value = [first_row, second_row]
+        session.exec.return_value = result_mock
+
+        result = await repo.rank_contracts_by_client(
+            organization_id=1,
+            query=ContractQueryDTO(operation="ranking", currently_active=True, sort_by="total_value", sort_direction="desc"),
+            limit=10,
+        )
+
+        assert result == [
+            {"client": "Cliente A", "currency": "USD", "total_value": 1500.0, "contracts_count": 3},
+            {"client": "Cliente B", "currency": "PEN", "total_value": 300.0, "contracts_count": 1},
+        ]
+        session.exec.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_operational_error_raises_unavailable(self):
+        repo, session = _make_repo()
+        session.exec.side_effect = OperationalError("conn", {}, Exception())
+
+        with pytest.raises(DocumentDatabaseUnavailableError):
+            await repo.rank_contracts_by_client(organization_id=1, query=ContractQueryDTO(operation="ranking"))
+
+
 class TestGetDocumentServices:
     @pytest.mark.asyncio
     async def test_returns_document_services(self):

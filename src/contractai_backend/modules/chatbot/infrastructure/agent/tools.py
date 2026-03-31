@@ -22,11 +22,12 @@ def build_bc_tool(repo: VectorRepository):
             "Usala obligatoriamente para buscar informacion en contratos corporativos, "
             "anexos, acuerdos comerciales, SLAs y documentos legales. Devuelve fragmentos "
             "relevantes de la base de conocimientos contractual de la empresa. Tambien sirve "
-            "para extraer datos textuales como firmantes, representantes, apoderados, clausulas y obligaciones."
+            "para extraer datos textuales como firmantes, representantes, apoderados, clausulas y obligaciones. "
+            "Si ya identificaste un contrato, pasa document_ids para restringir la busqueda a ese contrato."
         ),
     )
-    async def bc_tool(query: str, limit: int = 5) -> str:
-        return await repo.search_documents(query=query, limit=limit)
+    async def bc_tool(query: str, limit: int = 5, document_ids: list[int] | None = None) -> str:
+        return await repo.search_documents(query=query, limit=limit, document_ids=document_ids)
 
     return bc_tool
 
@@ -37,9 +38,10 @@ def build_contracts_query_tool(service: ContractQueryService, organization_id: i
     @tool(
         name_or_callable="contracts_query_tool",
         description=(
-            "Usala para contar, listar o filtrar contratos como registros por cliente, nombre, valor total, moneda, "
-            "estado, tipo y rangos de fechas. No es para extraer nombres de firmantes u otros datos textuales internos del contrato. "
-            "Si el usuario pide montos sin moneda, esta herramienta indicara que se debe pedir aclaracion."
+            "Usala para contar, listar, ordenar y rankear contratos como registros por cliente, nombre, valor total, moneda, "
+            "estado, tipo y rangos de fechas. Tambien sirve para identificar contratos vigentes hoy y devolver sus servicios asociados. "
+            "No es para extraer nombres de firmantes u otros datos textuales internos del contrato. Si el usuario pide montos sin moneda, "
+            "esta herramienta indicara que se debe pedir aclaracion."
         ),
     )
     async def contracts_query_tool(  # noqa: PLR0913
@@ -54,6 +56,9 @@ def build_contracts_query_tool(service: ContractQueryService, organization_id: i
         period_start: datetime | None = None,
         period_end: datetime | None = None,
         date_mode: str = "overlap",
+        currently_active: bool | None = None,
+        sort_by: str | None = None,
+        sort_direction: str = "asc",
         limit: int = 20,
     ) -> str:
         try:
@@ -69,6 +74,9 @@ def build_contracts_query_tool(service: ContractQueryService, organization_id: i
                 period_start=period_start,
                 period_end=period_end,
                 date_mode=date_mode,
+                currently_active=currently_active,
+                sort_by=sort_by,
+                sort_direction=sort_direction,
                 limit=limit,
             )
         except ValidationError as exc:

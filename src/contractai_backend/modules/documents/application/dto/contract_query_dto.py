@@ -7,8 +7,10 @@ from pydantic import BaseModel, field_validator
 
 from ...domain import CurrencyType, DocumentState, DocumentType
 
-VALID_OPERATIONS = {"count", "list"}
+VALID_OPERATIONS = {"count", "list", "ranking"}
 VALID_DATE_MODES = {"overlap", "start_date", "end_date"}
+VALID_SORT_FIELDS = {"client", "name", "value", "start_date", "end_date", "currency", "total_value", "contracts_count"}
+VALID_SORT_DIRECTIONS = {"asc", "desc"}
 
 
 class ContractQueryDTO(BaseModel):
@@ -23,15 +25,18 @@ class ContractQueryDTO(BaseModel):
     period_start: date | None = None
     period_end: date | None = None
     date_mode: str = "overlap"
+    currently_active: bool | None = None
+    sort_by: str | None = None
+    sort_direction: str = "asc"
     limit: int | None = None
 
     @field_validator("operation")
     @classmethod
     def validate_operation(cls, value: str) -> str:
-        """Valida que la operación sea 'count' o 'list'."""
+        """Valida que la operacion sea 'count', 'list' o 'ranking'."""
         normalized = value.strip().lower()
         if normalized not in VALID_OPERATIONS:
-            raise ValueError("La operacion debe ser 'count' o 'list'.")
+            raise ValueError("La operacion debe ser 'count', 'list' o 'ranking'.")
         return normalized
 
     @field_validator("client", "contract_name")
@@ -82,4 +87,27 @@ class ContractQueryDTO(BaseModel):
         normalized = value.strip().lower()
         if normalized not in VALID_DATE_MODES:
             raise ValueError("date_mode invalido")
+        return normalized
+
+    @field_validator("sort_by")
+    @classmethod
+    def validate_sort_by(cls, value: str | None) -> str | None:
+        """Valida el campo de ordenamiento cuando esta presente."""
+        if value is None:
+            return None
+
+        normalized = value.strip().lower()
+        if not normalized:
+            return None
+        if normalized not in VALID_SORT_FIELDS:
+            raise ValueError("sort_by invalido")
+        return normalized
+
+    @field_validator("sort_direction")
+    @classmethod
+    def validate_sort_direction(cls, value: str) -> str:
+        """Valida la direccion de ordenamiento."""
+        normalized = value.strip().lower()
+        if normalized not in VALID_SORT_DIRECTIONS:
+            raise ValueError("sort_direction invalido")
         return normalized

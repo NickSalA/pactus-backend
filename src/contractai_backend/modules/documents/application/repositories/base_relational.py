@@ -48,6 +48,16 @@ class DocumentQueryRepository(ABC):
         """Counts contracts matching structured filters."""
         pass
 
+    @abstractmethod
+    async def rank_contracts_by_client(
+        self,
+        organization_id: int,
+        query: ContractQueryDTO,
+        limit: int | None = None,
+    ) -> Sequence[dict[str, Any]]:
+        """Returns a client ranking based on filtered contracts."""
+        pass
+
 
 class DocumentCommandRepository(ABC):
     @abstractmethod

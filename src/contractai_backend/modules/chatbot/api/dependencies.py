@@ -33,7 +33,9 @@ async def get_llm_provider(
     checkpointer = AsyncPostgresSaver(conn=pool)
 
     vector_repo: QdrantVectorRepository = await QdrantVectorRepository.build(
-        collection_names=[settings.INDEX_NAME, settings.DRIVE_INDEX_NAME], client=await get_aclient()
+        collection_names=[settings.INDEX_NAME, settings.DRIVE_INDEX_NAME],
+        client=await get_aclient(),
+        organization_id=current_user.organization_id,
     )
     contract_repo = SQLModelDocumentRepository(session=session)
     contract_query_service = ContractQueryService(sql_repo=contract_repo)

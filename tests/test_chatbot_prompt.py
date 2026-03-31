@@ -10,3 +10,12 @@ def test_prompt_routes_signer_lists_to_document_search() -> None:
     assert "personas que firman" in prompt
     assert "usa bc_tool aunque el usuario pida una lista" in prompt
     assert "### Personas identificadas" in prompt
+
+
+def test_prompt_includes_current_activity_and_document_scoping_rules() -> None:
+    prompt = get_chat_system_prompt()
+
+    assert "currently_active=true" in prompt
+    assert "start_date <= hoy <= end_date" in prompt
+    assert "document_ids" in prompt
+    assert "### Ranking de clientes" in prompt
