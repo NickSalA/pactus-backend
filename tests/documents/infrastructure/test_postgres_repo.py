@@ -4,8 +4,10 @@ from datetime import date
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError, TimeoutError as SQLAlchemyTimeoutError
 
+from contractai_backend.core.exceptions.base import ServiceUnavailableError
+from contractai_backend.modules.documents.application.dto import ContractQueryDTO
 from contractai_backend.modules.documents.domain import DocumentServiceTable, DocumentTable, ServiceTable
 from contractai_backend.modules.documents.domain.exceptions import DocumentDatabaseError, DocumentDatabaseUnavailableError
 from contractai_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
@@ -50,9 +52,9 @@ def _make_repo() -> tuple[SQLModelDocumentRepository, AsyncMock]:
     return repo, session
 
 
-class TestGetByClientName:
+class TestSearchContracts:
     @pytest.mark.asyncio
-    async def test_returns_documents_for_client(self):
+    async def test_returns_documents_for_query(self):
         repo, session = _make_repo()
         docs = [_make_doc(1), _make_doc(2)]
 
@@ -60,7 +62,7 @@ class TestGetByClientName:
         result_mock.all.return_value = docs
         session.exec.return_value = result_mock
 
-        result = await repo.get_by_client_name("Cliente Test")
+        result = await repo.search_contracts(organization_id=1, query=ContractQueryDTO(operation="list", client="Cliente Test"))
 
         assert result == docs
         session.exec.assert_called_once()
@@ -71,7 +73,7 @@ class TestGetByClientName:
         session.exec.side_effect = OperationalError("conn", {}, Exception())
 
         with pytest.raises(DocumentDatabaseUnavailableError):
-            await repo.get_by_client_name("Cliente Test")
+            await repo.search_contracts(organization_id=1, query=ContractQueryDTO(operation="list", client="Cliente Test"))
 
     @pytest.mark.asyncio
     async def test_sqlalchemy_error_raises_database_error(self):
@@ -79,21 +81,20 @@ class TestGetByClientName:
         session.exec.side_effect = SQLAlchemyError("query error")
 
         with pytest.raises(DocumentDatabaseError):
-            await repo.get_by_client_name("Cliente Test")
+            await repo.search_contracts(organization_id=1, query=ContractQueryDTO(operation="list", client="Cliente Test"))
 
 
-class TestGetActiveDocuments:
+class TestCountContracts:
     @pytest.mark.asyncio
-    async def test_returns_active_documents(self):
+    async def test_returns_contract_count(self):
         repo, session = _make_repo()
-        docs = [_make_doc(1)]
         result_mock = MagicMock()
-        result_mock.all.return_value = docs
+        result_mock.one.return_value = 1
         session.exec.return_value = result_mock
 
-        result = await repo.get_active_documents()
+        result = await repo.count_contracts(organization_id=1, query=ContractQueryDTO(operation="count"))
 
-        assert result == docs
+        assert result == 1
 
 
 class TestGetDocumentServices:
@@ -105,10 +106,28 @@ class TestGetDocumentServices:
         result_mock.all.return_value = service_items
         session.exec.return_value = result_mock
 
-        result = await repo.get_document_services(document_id=1)
+        result = await repo.get_document_services(doc_id=1)
 
         assert result == service_items
         session.exec.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_timeout_raises_document_database_unavailable(self):
+        repo, session = _make_repo()
+        session.exec.side_effect = SQLAlchemyTimeoutError("pool exhausted")
+
+        with pytest.raises(DocumentDatabaseUnavailableError):
+            await repo.get_document_services(doc_id=1)
+
+
+class TestInheritedGetAll:
+    @pytest.mark.asyncio
+    async def test_timeout_raises_service_unavailable(self):
+        repo, session = _make_repo()
+        session.exec.side_effect = SQLAlchemyTimeoutError("pool exhausted")
+
+        with pytest.raises(ServiceUnavailableError):
+            await repo.get_all(filters={"organization_id": 1})
 
 
 class TestGetDocumentServicesByDocumentIds:
@@ -147,7 +166,7 @@ class TestReplaceDocumentServices:
         select_result.all.return_value = service_items
         session.exec.side_effect = [delete_result, select_result]
 
-        result = await repo.replace_document_services(document_id=1, service_items=service_items)
+        result = await repo.replace_document_services(doc_id=1, service_items=service_items)
 
         assert result == service_items
         assert session.exec.call_count == 2
@@ -160,7 +179,7 @@ class TestReplaceDocumentServices:
         session.exec.side_effect = SQLAlchemyError("boom")
 
         with pytest.raises(DocumentDatabaseError):
-            await repo.replace_document_services(document_id=1, service_items=[])
+            await repo.replace_document_services(doc_id=1, service_items=[])
 
         session.rollback.assert_called_once()
 
@@ -173,7 +192,7 @@ class TestReplaceDocumentServices:
         select_result.all.return_value = service_items
         session.exec.side_effect = [delete_result, select_result]
 
-        result = await repo.replace_document_services(document_id=1, service_items=service_items)
+        result = await repo.replace_document_services(doc_id=1, service_items=service_items)
 
         assert result == service_items
         session.add_all.assert_called_once_with(service_items)

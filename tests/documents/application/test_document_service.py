@@ -114,6 +114,7 @@ class TestCreateDocument:
         storage_repo.upload_file.assert_called_once()
         vector_repo.add_vectors.assert_called_once()
         sql_repo.update.assert_called_once()
+        sql_repo.get_document_services.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_create_document_with_invalid_service_ids_raises(self):
@@ -224,6 +225,7 @@ class TestCreateDocument:
         saved_entity = sql_repo.save.await_args.kwargs["entity"]
         assert saved_entity.form_data["value"] == 250.0
         assert saved_entity.form_data["currency"] == "USD"
+        sql_repo.get_document_services.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_create_document_with_service_dates_outside_contract_raises(self):

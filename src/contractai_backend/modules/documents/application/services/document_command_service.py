@@ -114,7 +114,7 @@ class DocumentCommandService:
         vectors_added = False
 
         try:
-            await self.command_repo.replace_document_services(doc_id=document_id, service_items=service_entities)
+            persisted_service_entities = await self.command_repo.replace_document_services(doc_id=document_id, service_items=service_entities)
 
             storage_path = await self.storage_repo.upload_file(
                 document_id=document_id,
@@ -129,7 +129,7 @@ class DocumentCommandService:
             saved_document.file_path = storage_path
             saved_document.file_name = file_data.filename
             updated_document = await self.command_repo.update(entity=saved_document)
-            return await self.response_assembler.build(document=updated_document)
+            return self.response_assembler.serialize(document=updated_document, service_items=persisted_service_entities)
 
         except Exception as exc:
             if vectors_added:
