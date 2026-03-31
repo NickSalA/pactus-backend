@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.13.4 (2026-03-31)
+
+### Bug Fixes
+
+- Change on document module
+  ([`e50a7be`](https://github.com/NickSalA/ContractAI-Backend/commit/e50a7be80f1bdea043c3095ef2b41420971110fd))
+
+
 ## v0.13.3 (2026-03-30)
 
 ### Bug Fixes
