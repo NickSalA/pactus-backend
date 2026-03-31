@@ -1,6 +1,6 @@
 [project]
 name = "contractai-backend"
-version = "0.13.4"
+version = "0.13.5"
 description = "Backend para ContractIA - Gestión de Contratos"
 readme = "README.md"
 requires-python = "==3.12.*"

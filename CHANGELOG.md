@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.13.5 (2026-03-31)
+
+### Bug Fixes
+
+- Add more agent capabilities
+  ([`50b0dd5`](https://github.com/NickSalA/ContractAI-Backend/commit/50b0dd5cee7820fc197f354535fc4683f921d726))
+
+
 ## v0.13.4 (2026-03-31)
 
 ### Bug Fixes
