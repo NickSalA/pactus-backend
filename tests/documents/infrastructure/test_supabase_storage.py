@@ -10,11 +10,12 @@ from contractai_backend.modules.documents.infrastructure.supabase_storage import
 
 
 def _make_repo() -> SupabaseStorageRepository:
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
     with patch("contractai_backend.modules.documents.infrastructure.supabase_storage.settings") as mock_settings:
         mock_settings.SUPABASE_URL = "https://fake.supabase.co"
         mock_settings.SUPABASE_STORAGE_BUCKET = "documents"
         mock_settings.SUPABASE_SECRET_KEY = "fake-key"
-        repo = SupabaseStorageRepository()
+        repo = SupabaseStorageRepository(client=mock_client)
     return repo
 
 
@@ -73,7 +74,7 @@ class TestBuildPath:
     def test_builds_path_without_filename(self):
         repo = _make_repo()
         path = repo._build_path(document_id=5)
-        assert path == "documents/5.pdf"
+        assert path == "documents/5/document.pdf"
 
 
 # ---------------------------------------------------------------------------
@@ -84,61 +85,34 @@ class TestUploadFile:
     @pytest.mark.asyncio
     async def test_upload_success_returns_path(self):
         repo = _make_repo()
-        mock_response = _mock_response(201)
+        repo.client.post = AsyncMock(return_value=_mock_response(201))
 
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.post.return_value = mock_response
-            mock_client_cls.return_value = mock_client
-
-            path = await repo.upload_file(1, b"content", "file.pdf", "application/pdf")
-
+        path = await repo.upload_file(1, b"content", "file.pdf", "application/pdf")
         assert path == "documents/1/file.pdf"
 
     @pytest.mark.asyncio
     async def test_upload_http_error_raises_storage_error(self):
         repo = _make_repo()
-        mock_response = _mock_response(500)
+        repo.client.post = AsyncMock(return_value=_mock_response(500))
 
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.post.return_value = mock_response
-            mock_client_cls.return_value = mock_client
-
-            with pytest.raises(DocumentStorageError):
-                await repo.upload_file(1, b"content", "file.pdf", "application/pdf")
+        with pytest.raises(DocumentStorageError):
+            await repo.upload_file(1, b"content", "file.pdf", "application/pdf")
 
     @pytest.mark.asyncio
     async def test_upload_timeout_raises_unavailable(self):
         repo = _make_repo()
+        repo.client.post = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
 
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.post.side_effect = httpx.TimeoutException("timeout")
-            mock_client_cls.return_value = mock_client
-
-            with pytest.raises(DocumentStorageUnavailableError):
-                await repo.upload_file(1, b"content", "file.pdf", "application/pdf")
+        with pytest.raises(DocumentStorageUnavailableError):
+            await repo.upload_file(1, b"content", "file.pdf", "application/pdf")
 
     @pytest.mark.asyncio
     async def test_upload_request_error_raises_unavailable(self):
         repo = _make_repo()
+        repo.client.post = AsyncMock(side_effect=httpx.RequestError("conn error"))
 
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.post.side_effect = httpx.RequestError("conn error")
-            mock_client_cls.return_value = mock_client
-
-            with pytest.raises(DocumentStorageUnavailableError):
-                await repo.upload_file(1, b"content", "file.pdf", "application/pdf")
+        with pytest.raises(DocumentStorageUnavailableError):
+            await repo.upload_file(1, b"content", "file.pdf", "application/pdf")
 
 
 # ---------------------------------------------------------------------------
@@ -149,73 +123,36 @@ class TestDeleteFile:
     @pytest.mark.asyncio
     async def test_delete_success(self):
         repo = _make_repo()
-        mock_response = _mock_response(200)
-
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.delete.return_value = mock_response
-            mock_client_cls.return_value = mock_client
-
-            await repo.delete_file("documents/1/file.pdf")  # no debe lanzar
+        repo.client.delete = AsyncMock(return_value=_mock_response(200))
+        await repo.delete_file("documents/1/file.pdf")
 
     @pytest.mark.asyncio
     async def test_delete_not_found_is_silent(self):
         repo = _make_repo()
-        mock_response = _mock_response(404)
-
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.delete.return_value = mock_response
-            mock_client_cls.return_value = mock_client
-
-            await repo.delete_file("documents/1/file.pdf")  # no debe lanzar
+        repo.client.delete = AsyncMock(return_value=_mock_response(404))
+        await repo.delete_file("documents/1/file.pdf")
 
     @pytest.mark.asyncio
     async def test_delete_bad_request_not_found_body_is_silent(self):
         repo = _make_repo()
-        mock_response = _mock_response(400, text="object not found")
-
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.delete.return_value = mock_response
-            mock_client_cls.return_value = mock_client
-
-            await repo.delete_file("documents/1/file.pdf")  # no debe lanzar
+        repo.client.delete = AsyncMock(return_value=_mock_response(400, text="object not found"))
+        await repo.delete_file("documents/1/file.pdf")
 
     @pytest.mark.asyncio
     async def test_delete_server_error_raises_storage_error(self):
         repo = _make_repo()
-        mock_response = _mock_response(500)
+        repo.client.delete = AsyncMock(return_value=_mock_response(500))
 
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.delete.return_value = mock_response
-            mock_client_cls.return_value = mock_client
-
-            with pytest.raises(DocumentStorageError):
-                await repo.delete_file("documents/1/file.pdf")
+        with pytest.raises(DocumentStorageError):
+            await repo.delete_file("documents/1/file.pdf")
 
     @pytest.mark.asyncio
     async def test_delete_timeout_raises_unavailable(self):
         repo = _make_repo()
+        repo.client.delete = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
 
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.delete.side_effect = httpx.TimeoutException("timeout")
-            mock_client_cls.return_value = mock_client
-
-            with pytest.raises(DocumentStorageUnavailableError):
-                await repo.delete_file("documents/1/file.pdf")
+        with pytest.raises(DocumentStorageUnavailableError):
+            await repo.delete_file("documents/1/file.pdf")
 
 
 # ---------------------------------------------------------------------------
@@ -226,60 +163,32 @@ class TestCreateSignedUrl:
     @pytest.mark.asyncio
     async def test_returns_full_signed_url(self):
         repo = _make_repo()
-        mock_response = _mock_response(200, json_data={"signedURL": "/object/sign/documents/1/file.pdf?token=abc"})
+        repo.client.post = AsyncMock(return_value=_mock_response(200, json_data={"signedURL": "/object/sign/documents/1/file.pdf?token=abc"}))
 
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.post.return_value = mock_response
-            mock_client_cls.return_value = mock_client
-
-            url = await repo.create_signed_url("documents/1/file.pdf")
-
+        url = await repo.create_signed_url("documents/1/file.pdf")
         assert url.startswith("https://fake.supabase.co/storage/v1")
         assert "token=abc" in url
 
     @pytest.mark.asyncio
     async def test_missing_signed_url_in_response_raises(self):
         repo = _make_repo()
-        mock_response = _mock_response(200, json_data={})  # sin signedURL
+        repo.client.post = AsyncMock(return_value=_mock_response(200, json_data={}))
 
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.post.return_value = mock_response
-            mock_client_cls.return_value = mock_client
-
-            with pytest.raises(DocumentStorageError):
-                await repo.create_signed_url("documents/1/file.pdf")
+        with pytest.raises(DocumentStorageError):
+            await repo.create_signed_url("documents/1/file.pdf")
 
     @pytest.mark.asyncio
     async def test_http_error_raises_storage_error(self):
         repo = _make_repo()
-        mock_response = _mock_response(403)
+        repo.client.post = AsyncMock(return_value=_mock_response(403))
 
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.post.return_value = mock_response
-            mock_client_cls.return_value = mock_client
-
-            with pytest.raises(DocumentStorageError):
-                await repo.create_signed_url("documents/1/file.pdf")
+        with pytest.raises(DocumentStorageError):
+            await repo.create_signed_url("documents/1/file.pdf")
 
     @pytest.mark.asyncio
     async def test_timeout_raises_unavailable(self):
         repo = _make_repo()
+        repo.client.post = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
 
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.post.side_effect = httpx.TimeoutException("timeout")
-            mock_client_cls.return_value = mock_client
-
-            with pytest.raises(DocumentStorageUnavailableError):
-                await repo.create_signed_url("documents/1/file.pdf")
+        with pytest.raises(DocumentStorageUnavailableError):
+            await repo.create_signed_url("documents/1/file.pdf")
