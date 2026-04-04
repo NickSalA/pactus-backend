@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.14.0 (2026-04-04)
+
+### Features
+
+- Implement template draft generation functionality
+  ([`5faf08f`](https://github.com/NickSalA/ContractAI-Backend/commit/5faf08f640ecc7d66751d86f8e2a213d0264b576))
+
+### Testing
+
+- Add unit tests for chatbot, integrations, notifications, organizations, templates, and users
+  ([`953e916`](https://github.com/NickSalA/ContractAI-Backend/commit/953e91637bb32ea1387e83bcb311bf7e2c1d3001))
+
+
 ## v0.13.5 (2026-03-31)
 
 ### Bug Fixes
