@@ -7,12 +7,29 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....shared.infrastructure.database import get_session
 from ...documents.api.dependencies import get_document_command_service
+from ...documents.application.repositories import DocumentExtractor
 from ...documents.application.services import DocumentCommandService
+from ...documents.infrastructure import LlamaParseExtractor
 from ...organizations.api.dependencies import get_organization_service
 from ...organizations.application.services.organization_service import OrganizationService
-from ..application.repositories import IDocumentGenerator, IDocumentModuleAdapter, IOrganizationRepository, ITemplateRenderer, ITemplateRepository
+from ..application.repositories import (
+    IDocumentGenerator,
+    IDocumentModuleAdapter,
+    IOrganizationRepository,
+    ITemplateDraftGenerator,
+    ITemplateRenderer,
+    ITemplateRepository,
+)
+from ..application.services.template_authoring_service import TemplateAuthoringService
 from ..application.services.template_service import TemplateService
-from ..infrastructure import DocumentModuleAdapter, JinjaRenderer, OrganizationModuleAdapter, SQLModelTemplateRepository, WeasyPrintGenerator
+from ..infrastructure import (
+    DocumentModuleAdapter,
+    GeminiTemplateDraftGenerator,
+    JinjaRenderer,
+    OrganizationModuleAdapter,
+    SQLModelTemplateRepository,
+    WeasyPrintGenerator,
+)
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 DocumentServiceDep = Annotated[DocumentCommandService, Depends(get_document_command_service)]
@@ -44,11 +61,23 @@ async def get_document_generator() -> IDocumentGenerator:
     return WeasyPrintGenerator()
 
 
+async def get_document_extractor() -> DocumentExtractor:
+    """Devuelve una instancia del extractor de documentos."""
+    return LlamaParseExtractor()
+
+
+async def get_template_draft_generator() -> ITemplateDraftGenerator:
+    """Devuelve una instancia del generador de borradores de plantillas."""
+    return GeminiTemplateDraftGenerator()
+
+
 TemplateRepositoryDep = Annotated[ITemplateRepository, Depends(get_template_repository)]
 DocumentAdapterDep = Annotated[IDocumentModuleAdapter, Depends(get_document_module_adapter)]
 OrganizationRepositoryDep = Annotated[IOrganizationRepository, Depends(get_organization_repository)]
 TemplateRendererDep = Annotated[ITemplateRenderer, Depends(get_template_renderer)]
 DocumentGeneratorDep = Annotated[IDocumentGenerator, Depends(get_document_generator)]
+DocumentExtractorDep = Annotated[DocumentExtractor, Depends(get_document_extractor)]
+TemplateDraftGeneratorDep = Annotated[ITemplateDraftGenerator, Depends(get_template_draft_generator)]
 
 
 async def get_template_service(
@@ -65,4 +94,21 @@ async def get_template_service(
         organization_repo=organization_repo,
         renderer=renderer,
         document_generator=generator,
+    )
+
+
+async def get_template_authoring_service(
+    template_repo: TemplateRepositoryDep,
+    organization_repo: OrganizationRepositoryDep,
+    renderer: TemplateRendererDep,
+    extractor: DocumentExtractorDep,
+    draft_generator: TemplateDraftGeneratorDep,
+) -> TemplateAuthoringService:
+    """Devuelve una instancia del servicio de autoría de plantillas."""
+    return TemplateAuthoringService(
+        template_repo=template_repo,
+        organization_repo=organization_repo,
+        renderer=renderer,
+        extractor=extractor,
+        draft_generator=draft_generator,
     )

@@ -1,19 +1,30 @@
 """Módulo de enrutamiento para la API de plantillas."""
 
+import json
 from collections.abc import Sequence
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
+from pydantic import ValidationError
 
 from contractai_backend.modules.templates.domain.entities import TemplateTable
 
 from ....shared.api.dependencies.security import CurrentUserDep
+from ..application.services.template_authoring_service import TemplateAuthoringService
 from ..application.services.template_service import TemplateService
-from .dependencies import get_template_service
+from .dependencies import get_template_authoring_service, get_template_service
+from .schemas import (
+    CreateTemplateRequest,
+    GenerateTemplateDraftRequest,
+    PreviewTemplateRequest,
+    PreviewTemplateResponse,
+    TemplateDraftResponse,
+)
 
 router = APIRouter()
 
 TemplateServiceDep = Annotated[TemplateService, Depends(get_template_service)]
+TemplateAuthoringServiceDep = Annotated[TemplateAuthoringService, Depends(get_template_authoring_service)]
 
 
 @router.post(path="/{template_id}/generate", status_code=status.HTTP_201_CREATED)
@@ -35,6 +46,72 @@ async def generate_template(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al generar el documento: {e!s}") from e
 
 
+@router.post(path="/drafts/from-prompt", response_model=TemplateDraftResponse, status_code=status.HTTP_201_CREATED)
+async def generate_template_draft_from_prompt(
+    request: GenerateTemplateDraftRequest,
+    template_service: TemplateAuthoringServiceDep,
+    current_user: CurrentUserDep,
+):
+    """Endpoint para generar un borrador de plantilla desde un formulario."""
+    try:
+        return await template_service.generate_draft_from_prompt(
+            request=request,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al generar el borrador: {e!s}") from e
+
+
+@router.post(path="/drafts/from-file", response_model=TemplateDraftResponse, status_code=status.HTTP_201_CREATED)
+async def generate_template_draft_from_file(
+    file: UploadFile,
+    template_service: TemplateAuthoringServiceDep,
+    current_user: CurrentUserDep,
+    request: str = Form(...),
+):
+    """Endpoint para generar un borrador de plantilla desde un archivo de referencia."""
+    try:
+        request_obj = GenerateTemplateDraftRequest(**json.loads(request))
+    except (json.JSONDecodeError, ValidationError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Payload invalido: {e}") from e
+
+    if file.filename is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Archivo invalido.")
+
+    try:
+        file_content = await file.read()
+        return await template_service.generate_draft_from_file(
+            request=request_obj,
+            file_content=file_content,
+            filename=file.filename,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al generar el borrador: {e!s}") from e
+
+
+@router.post(path="/preview", response_model=PreviewTemplateResponse, status_code=status.HTTP_200_OK)
+async def preview_template(
+    request: PreviewTemplateRequest,
+    template_service: TemplateAuthoringServiceDep,
+    current_user: CurrentUserDep,
+):
+    """Endpoint para previsualizar una plantilla."""
+    try:
+        return await template_service.preview_template(
+            request=request,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al previsualizar: {e!s}") from e
+
+
 @router.get(path="/{template_id}", status_code=status.HTTP_200_OK)
 async def get_template(
     template_id: int,
@@ -49,6 +126,24 @@ async def get_template(
         return template
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al obtener la plantilla: {e!s}") from e
+
+
+@router.post(path="/", status_code=status.HTTP_201_CREATED)
+async def create_template(
+    request: CreateTemplateRequest,
+    template_service: TemplateAuthoringServiceDep,
+    current_user: CurrentUserDep,
+):
+    """Endpoint para crear una plantilla."""
+    try:
+        return await template_service.create_template(
+            request=request,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al crear la plantilla: {e!s}") from e
 
 
 @router.get(path="/", status_code=status.HTTP_200_OK)
