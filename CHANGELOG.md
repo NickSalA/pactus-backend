@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.15.0 (2026-04-05)
+
+### Features
+
+- Enhance template management with draft generation, state handling, and API updates
+  ([`d77c15a`](https://github.com/NickSalA/ContractAI-Backend/commit/d77c15a21fd585a406c888b276567b0f7d687ee8))
+
+
 ## v0.14.0 (2026-04-04)
 
 ### Features
