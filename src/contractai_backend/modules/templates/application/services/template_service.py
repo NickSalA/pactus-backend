@@ -1,9 +1,8 @@
 """Service layer for handling template-related operations, including contract generation based on templates and organization data."""
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
-
-from git import Sequence
 
 from ...domain.entities import TemplateTable
 from ..repositories.base_generate import IDocumentGenerator

@@ -4,7 +4,8 @@ from collections.abc import Sequence
 from typing import Any
 
 from loguru import logger
-from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError, TimeoutError as SQLAlchemyTimeoutError
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import asc, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 

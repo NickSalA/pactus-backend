@@ -5,10 +5,11 @@ from typing import Any
 
 from pydantic import BaseModel, field_validator
 from sqlalchemy import Column, DateTime, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlmodel import Field
 
 from ....core.domain.base import BaseTable
+from .value_objs import TemplateState
 
 
 class TemplateField(BaseModel):
@@ -28,11 +29,14 @@ class TemplateTable(BaseTable, table=True):
     __tablename__ = "document_templates"
 
     organization_id: int = Field(sa_column=Column("organization_id", Integer, nullable=False, index=True))
-    name: str = Field(sa_column=Column("name", String(255), nullable=False))
+    name: str = Field(sa_column=Column("name", String(length=255), nullable=False))
     description: str | None = Field(default=None, sa_column=Column("description", Text, nullable=True))
     content: dict[str, Any] = Field(sa_column=Column("content", JSONB, nullable=False))
     created_at: datetime | None = Field(
         default_factory=lambda: datetime.now(tz=UTC), sa_column=Column("created_at", DateTime(timezone=True), nullable=False)
+    )
+    state: TemplateState = Field(
+        default=TemplateState.DRAFT, sa_column=Column("state", ENUM(TemplateState, name="document_template_state"), nullable=False)
     )
 
     @field_validator("content")

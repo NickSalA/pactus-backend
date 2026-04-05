@@ -16,9 +16,11 @@ from .dependencies import get_template_authoring_service, get_template_service
 from .schemas import (
     CreateTemplateRequest,
     GenerateTemplateDraftRequest,
+    PersistedTemplateDraftResponse,
     PreviewTemplateRequest,
     PreviewTemplateResponse,
-    TemplateDraftResponse,
+    TemplateResponse,
+    UpdateTemplateRequest,
 )
 
 router = APIRouter()
@@ -46,7 +48,7 @@ async def generate_template(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al generar el documento: {e!s}") from e
 
 
-@router.post(path="/drafts/from-prompt", response_model=TemplateDraftResponse, status_code=status.HTTP_201_CREATED)
+@router.post(path="/drafts/from-prompt", response_model=PersistedTemplateDraftResponse, status_code=status.HTTP_201_CREATED)
 async def generate_template_draft_from_prompt(
     request: GenerateTemplateDraftRequest,
     template_service: TemplateAuthoringServiceDep,
@@ -54,7 +56,7 @@ async def generate_template_draft_from_prompt(
 ):
     """Endpoint para generar un borrador de plantilla desde un formulario."""
     try:
-        return await template_service.generate_draft_from_prompt(
+        return await template_service.generate_and_save_draft_from_prompt(
             request=request,
             organization_id=current_user.organization_id,
         )
@@ -64,7 +66,7 @@ async def generate_template_draft_from_prompt(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al generar el borrador: {e!s}") from e
 
 
-@router.post(path="/drafts/from-file", response_model=TemplateDraftResponse, status_code=status.HTTP_201_CREATED)
+@router.post(path="/drafts/from-file", response_model=PersistedTemplateDraftResponse, status_code=status.HTTP_201_CREATED)
 async def generate_template_draft_from_file(
     file: UploadFile,
     template_service: TemplateAuthoringServiceDep,
@@ -82,7 +84,7 @@ async def generate_template_draft_from_file(
 
     try:
         file_content = await file.read()
-        return await template_service.generate_draft_from_file(
+        return await template_service.generate_and_save_draft_from_file(
             request=request_obj,
             file_content=file_content,
             filename=file.filename,
@@ -112,7 +114,7 @@ async def preview_template(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al previsualizar: {e!s}") from e
 
 
-@router.get(path="/{template_id}", status_code=status.HTTP_200_OK)
+@router.get(path="/{template_id}", response_model=TemplateResponse, status_code=status.HTTP_200_OK)
 async def get_template(
     template_id: int,
     template_service: TemplateServiceDep,
@@ -124,11 +126,13 @@ async def get_template(
         if template is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plantilla no encontrada")
         return template
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al obtener la plantilla: {e!s}") from e
 
 
-@router.post(path="/", status_code=status.HTTP_201_CREATED)
+@router.post(path="/", response_model=TemplateResponse, status_code=status.HTTP_201_CREATED)
 async def create_template(
     request: CreateTemplateRequest,
     template_service: TemplateAuthoringServiceDep,
@@ -146,7 +150,29 @@ async def create_template(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al crear la plantilla: {e!s}") from e
 
 
-@router.get(path="/", status_code=status.HTTP_200_OK)
+@router.patch(path="/{template_id}", response_model=TemplateResponse, status_code=status.HTTP_200_OK)
+async def update_template(
+    template_id: int,
+    request: UpdateTemplateRequest,
+    template_service: TemplateAuthoringServiceDep,
+    current_user: CurrentUserDep,
+):
+    """Endpoint para actualizar una plantilla en borrador."""
+    try:
+        return await template_service.update_template(
+            template_id=template_id,
+            request=request,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        detail = str(e)
+        status_code = status.HTTP_404_NOT_FOUND if detail == "Plantilla no encontrada" else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=detail) from e
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al actualizar la plantilla: {e!s}") from e
+
+
+@router.get(path="/", response_model=Sequence[TemplateResponse], status_code=status.HTTP_200_OK)
 async def list_templates(
     template_service: TemplateServiceDep,
     current_user: CurrentUserDep,

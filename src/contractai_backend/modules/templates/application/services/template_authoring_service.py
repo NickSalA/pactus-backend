@@ -8,11 +8,14 @@ from contractai_backend.modules.documents.application.repositories import Docume
 from ...api.schemas import (
     CreateTemplateRequest,
     GenerateTemplateDraftRequest,
+    PersistedTemplateDraftResponse,
     PreviewTemplateRequest,
     PreviewTemplateResponse,
     TemplateDraftResponse,
+    UpdateTemplateRequest,
 )
 from ...domain.entities import TemplateField, TemplateTable
+from ...domain.value_objs import TemplateState
 from ..repositories import IOrganizationRepository, ITemplateRenderer, ITemplateRepository
 from ..repositories.base_draft_generator import ITemplateDraftGenerator
 from .template_placeholder_validator import TemplatePlaceholderValidator
@@ -43,6 +46,15 @@ class TemplateAuthoringService:
         draft.warnings.extend(self.validator.validate(draft.content))
         return draft
 
+    async def generate_and_save_draft_from_prompt(
+        self,
+        request: GenerateTemplateDraftRequest,
+        organization_id: int,
+    ) -> PersistedTemplateDraftResponse:
+        draft = await self.generate_draft_from_prompt(request=request, organization_id=organization_id)
+        template = await self._persist_draft(draft=draft, organization_id=organization_id)
+        return PersistedTemplateDraftResponse(template=template, warnings=draft.warnings, source=draft.source)
+
     async def generate_draft_from_file(
         self,
         request: GenerateTemplateDraftRequest,
@@ -63,6 +75,22 @@ class TemplateAuthoringService:
         }
         draft.warnings.extend(self.validator.validate(draft.content))
         return draft
+
+    async def generate_and_save_draft_from_file(
+        self,
+        request: GenerateTemplateDraftRequest,
+        file_content: bytes,
+        filename: str,
+        organization_id: int,
+    ) -> PersistedTemplateDraftResponse:
+        draft = await self.generate_draft_from_file(
+            request=request,
+            file_content=file_content,
+            filename=filename,
+            organization_id=organization_id,
+        )
+        template = await self._persist_draft(draft=draft, organization_id=organization_id)
+        return PersistedTemplateDraftResponse(template=template, warnings=draft.warnings, source=draft.source)
 
     async def preview_template(
         self,
@@ -86,13 +114,63 @@ class TemplateAuthoringService:
         organization_id: int,
     ) -> TemplateTable:
         self.validator.validate(request.content)
-        template = TemplateTable(
+        template = self._build_template_entity(
             organization_id=organization_id,
             name=request.name,
             description=request.description,
-            content=request.content.model_dump(mode="python"),
+            content=request.content,
         )
         return await self.template_repo.save(entity=template)
+
+    async def update_template(
+        self,
+        template_id: int,
+        request: UpdateTemplateRequest,
+        organization_id: int,
+    ) -> TemplateTable:
+        template = await self._get_template_or_raise(template_id=template_id, organization_id=organization_id)
+        if template.state != TemplateState.DRAFT:
+            raise ValueError("Solo se pueden editar plantillas en estado DRAFT.")
+
+        if request.content is not None:
+            self.validator.validate(request.content)
+            template.content = request.content.model_dump(mode="python")
+        if request.name is not None:
+            template.name = request.name
+        if request.description is not None:
+            template.description = request.description
+
+        return await self.template_repo.update(entity=template)
+
+    async def _persist_draft(self, draft: TemplateDraftResponse, organization_id: int) -> TemplateTable:
+        template = self._build_template_entity(
+            organization_id=organization_id,
+            name=draft.name,
+            description=draft.description,
+            content=draft.content,
+        )
+        return await self.template_repo.save(entity=template)
+
+    async def _get_template_or_raise(self, template_id: int, organization_id: int) -> TemplateTable:
+        template = await self.template_repo.get_template_by_id(template_id=template_id, organization_id=organization_id)
+        if template is None:
+            raise ValueError("Plantilla no encontrada")
+        return template
+
+    def _build_template_entity(
+        self,
+        organization_id: int,
+        name: str,
+        description: str | None,
+        content,
+    ) -> TemplateTable:
+        return TemplateTable(
+            organization_id=organization_id,
+            name=name,
+            description=description,
+            content=content.model_dump(mode="python"),
+            state=TemplateState.DRAFT,
+        )
 
     def _build_time_payload(self) -> dict[str, int | str]:
         now = datetime.now()
