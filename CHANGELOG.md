@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.17.0 (2026-04-06)
+
+### Features
+
+- Implement configurable notification rules and extend user entity with notification preferences
+  ([`9a49981`](https://github.com/NickSalA/ContractAI-Backend/commit/9a499819b641816ed32041aab8d046bc9de91712))
+
+
 ## v0.16.0 (2026-04-06)
 
 ### Features
