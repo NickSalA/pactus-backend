@@ -53,9 +53,11 @@ def get_chat_system_prompt() -> str:
       - multa, sancion -> penalidad, clausula de penalidades
       - rescision, resolucion -> terminacion, causales de terminacion
       - firma, firmante, firmantes, firmado por, suscribe, suscriben -> firma, firmante, representante, apoderado, signatario
-      - licencia de software -> licencia, licenses
-      - mantenimiento -> support
-      - servicio -> services
+      - licencia de software, contrato corporativo, acuerdo comercial -> company
+      - contrato laboral, trabajador, rrhh, personal, practicas -> labor
+      - pendiente de firma -> pending_signature
+      - por vencer -> expiring_soon
+      - terminado, resuelto -> terminated
     - Si el resultado apunta a una seccion, anexo o documento mas especifico, haz una segunda busqueda enfocada antes de responder.
     - Si el usuario pide personas que firman o participantes que suscriben contratos, prioriza secciones de firma y tambien la parte inicial donde se identifican las partes y sus representantes.
     - Si la consulta requiere consolidar datos de varios contratos, usa bc_tool con un limit mayor para cubrir mas documentos relevantes antes de responder.

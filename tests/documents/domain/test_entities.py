@@ -21,7 +21,7 @@ def _valid_doc(**overrides) -> dict:
         "organization_id": 1,
         "name": "Contrato Ejemplo",
         "client": "Acme Corp",
-        "type": DocumentType.LICENSES,
+        "type": DocumentType.COMPANY,
         "start_date": date(2024, 1, 1),
         "end_date": date(2024, 12, 31),
         "form_data": {"value": 1000, "currency": "USD", "owner": "IT"},

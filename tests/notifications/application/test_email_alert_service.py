@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from contractai_backend.modules.documents.domain import DocumentState, DocumentTable, DocumentType
-from contractai_backend.modules.notifications.application.services.email_alert_service import EmailAlertService
+from contractai_backend.modules.notifications.application.services.email_alert_service import EmailAlertService, NotificationEvent
+from contractai_backend.modules.notifications.domain.value_objs import NotificationType
 from contractai_backend.modules.users.domain.entities import UserTable
 from contractai_backend.modules.users.domain.value_objs import UserRole
 
@@ -18,7 +19,7 @@ def _make_doc(name: str = "Contrato", days_offset: int = 3) -> DocumentTable:
         organization_id=1,
         name=name,
         client="Cliente",
-        type=DocumentType.LICENSES,
+        type=DocumentType.COMPANY,
         start_date=today,
         end_date=today + timedelta(days=days_offset),
         state=DocumentState.ACTIVE,
@@ -26,7 +27,14 @@ def _make_doc(name: str = "Contrato", days_offset: int = 3) -> DocumentTable:
 
 
 def _make_worker(email: str = "worker@example.com") -> UserTable:
-    return UserTable(id=1, organization_id=1, email=email, role=UserRole.WORKER, is_active=True)
+    return UserTable(
+        id=1,
+        organization_id=1,
+        email=email,
+        role=UserRole.WORKER,
+        receives_notifications=True,
+        is_active=True,
+    )
 
 
 def _make_service(session=None, gmail=None) -> EmailAlertService:
@@ -37,17 +45,20 @@ class TestSendDailyAlerts:
     @pytest.mark.asyncio
     async def test_returns_zero_when_no_expiring_contracts(self):
         service = _make_service()
-        with patch.object(service, "_get_expiring_documents", return_value=[]):
-            with patch.object(service, "_get_worker_users", return_value=[]):
-                result = await service.send_daily_alerts(organization_id=1)
+        with patch.object(service, "list_due_events", return_value=[]):
+            result = await service.send_daily_alerts(organization_id=1)
         assert result == 0
 
     @pytest.mark.asyncio
-    async def test_returns_zero_when_no_workers(self):
+    async def test_returns_zero_when_no_recipients(self):
         doc = _make_doc()
         service = _make_service()
-        with patch.object(service, "_get_expiring_documents", return_value=[doc]):
-            with patch.object(service, "_get_worker_users", return_value=[]):
+        with patch.object(
+            service,
+            "list_due_events",
+            return_value=[NotificationEvent(document=doc, days_remaining=3, notification_type=NotificationType.CRITICAL)],
+        ):
+            with patch.object(service, "_get_notification_recipients", return_value=[]):
                 result = await service.send_daily_alerts(organization_id=1)
         assert result == 0
 
@@ -58,8 +69,12 @@ class TestSendDailyAlerts:
         gmail = AsyncMock()
 
         service = _make_service(gmail=gmail)
-        with patch.object(service, "_get_expiring_documents", return_value=[doc]):
-            with patch.object(service, "_get_worker_users", return_value=workers):
+        with patch.object(
+            service,
+            "list_due_events",
+            return_value=[NotificationEvent(document=doc, days_remaining=3, notification_type=NotificationType.CRITICAL)],
+        ):
+            with patch.object(service, "_get_notification_recipients", return_value=workers):
                 result = await service.send_daily_alerts(organization_id=1)
 
         assert result == 2
@@ -73,8 +88,12 @@ class TestSendDailyAlerts:
         gmail.send_email.side_effect = [Exception("smtp error"), None]
 
         service = _make_service(gmail=gmail)
-        with patch.object(service, "_get_expiring_documents", return_value=[doc]):
-            with patch.object(service, "_get_worker_users", return_value=workers):
+        with patch.object(
+            service,
+            "list_due_events",
+            return_value=[NotificationEvent(document=doc, days_remaining=3, notification_type=NotificationType.CRITICAL)],
+        ):
+            with patch.object(service, "_get_notification_recipients", return_value=workers):
                 result = await service.send_daily_alerts(organization_id=1)
 
         assert result == 1  # solo el segundo tuvo éxito

@@ -37,7 +37,7 @@ def _make_doc(
         organization_id=organization_id,
         name="Contrato Test",
         client=client,
-        type=DocumentType.LICENSES,
+        type=DocumentType.COMPANY,
         start_date=start_date or date(2024, 1, 1),
         end_date=end_date or date(2024, 12, 31),
         form_data=form_data or {"value": 500.0, "currency": "USD", "owner": "IT"},
@@ -67,6 +67,7 @@ def _make_service(
     storage_repo=None,
 ) -> DocumentCommandService:
     relational_repo = sql_repo or AsyncMock()
+    relational_repo.sync_contract_states.return_value = 0
     return DocumentCommandService(
         command_repo=relational_repo,
         query_repo=relational_repo,
@@ -79,7 +80,9 @@ def _make_service(
 
 
 def _make_query_service(sql_repo=None) -> DocumentQueryService:
-    return DocumentQueryService(sql_repo=sql_repo or AsyncMock())
+    relational_repo = sql_repo or AsyncMock()
+    relational_repo.sync_contract_states.return_value = 0
+    return DocumentQueryService(sql_repo=relational_repo)
 
 
 def _make_catalog_service(sql_repo=None) -> ServiceCatalogService:
@@ -87,14 +90,16 @@ def _make_catalog_service(sql_repo=None) -> ServiceCatalogService:
 
 
 def _make_contract_query_service(sql_repo=None) -> ContractQueryService:
-    return ContractQueryService(sql_repo=sql_repo or AsyncMock())
+    relational_repo = sql_repo or AsyncMock()
+    relational_repo.sync_contract_states.return_value = 0
+    return ContractQueryService(sql_repo=relational_repo)
 
 
 def _create_request(service_items: list[DocumentServiceItemRequest] | None = None) -> CreateDocumentRequest:
     return CreateDocumentRequest(
         name="Contrato Test",
         client="Cliente Test",
-        type=DocumentType.LICENSES,
+        type=DocumentType.COMPANY,
         start_date=date(2024, 1, 1),
         end_date=date(2024, 12, 31),
         form_data={"value": 0.0, "currency": "USD", "owner": "IT"},
@@ -132,6 +137,7 @@ class TestCreateDocument:
         assert result.file_path == updated.file_path
         sql_repo.save.assert_called_once()
         sql_repo.replace_document_services.assert_called_once()
+        sql_repo.sync_contract_states.assert_called_once_with(organization_id=1)
         storage_repo.upload_file.assert_called_once()
         vector_repo.add_vectors.assert_called_once()
         sql_repo.update.assert_called_once()

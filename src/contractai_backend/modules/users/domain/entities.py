@@ -20,6 +20,10 @@ class UserTable(BaseTable, table=True):
     full_name: str | None = Field(default=None, sa_column=Column("full_name", String(255), nullable=True))
     avatar_url: str | None = Field(default=None, sa_column=Column("avatar_url", Text, nullable=True))
     role: UserRole = Field(default=UserRole.WORKER, sa_column=Column("role", ENUM(UserRole, name="user_role"), nullable=False))
+    receives_notifications: bool = Field(
+        default=False,
+        sa_column=Column("receives_notifications", Boolean, nullable=False, default=False),
+    )
     is_active: bool = Field(default=True, sa_column=Column("is_active", Boolean, nullable=False, default=True))
     created_at: datetime | None = Field(
         default_factory=lambda: datetime.now(UTC), sa_column=Column("created_at", DateTime(timezone=True), nullable=False)

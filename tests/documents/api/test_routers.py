@@ -45,7 +45,7 @@ def _make_doc(id: int = 1, file_path: str | None = "docs/1/file.pdf") -> Documen
         organization_id=1,
         name="Contrato Test",
         client="Cliente Test",
-        type=DocumentType.LICENSES,
+        type=DocumentType.COMPANY,
         start_date=date(2024, 1, 1),
         end_date=date(2024, 12, 31),
         form_data={"value": 500.0, "currency": "USD", "owner": "IT"},
@@ -60,7 +60,7 @@ def _doc_form_data() -> str:
         {
             "name": "Contrato Test",
             "client": "Cliente Test",
-            "type": "LICENSES",
+            "type": "COMPANY",
             "start_date": "2024-01-01",
             "end_date": "2024-12-31",
             "form_data": {"value": 500.0, "currency": "USD", "owner": "IT"},
@@ -112,7 +112,7 @@ class TestGetDocument:
 
         assert response.status_code == 200
         assert response.json()["id"] == 1
-        assert response.json()["type"] == "LICENSES"
+        assert response.json()["type"] == "COMPANY"
 
     @pytest.mark.asyncio
     async def test_get_document_not_found_returns_404(self):

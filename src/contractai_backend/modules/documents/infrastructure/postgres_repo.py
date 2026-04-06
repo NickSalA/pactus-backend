@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from datetime import date
 
 from loguru import logger
-from sqlalchemy import Float, asc, cast, desc, func, or_
+from sqlalchemy import Float, asc, cast, desc, func, or_, text
 from sqlalchemy.exc import OperationalError, SQLAlchemyError, TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col, delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -90,6 +90,18 @@ class SQLModelDocumentRepository(
         if direction == "desc":
             return ordered_expression.nulls_last()
         return ordered_expression.nulls_first()
+
+    @staticmethod
+    def _read_scalar_result(value: object) -> int:
+        if hasattr(value, "_mapping"):
+            mapping = value._mapping
+            if mapping:
+                return int(next(iter(mapping.values())) or 0)
+
+        if isinstance(value, tuple):
+            return int((value[0] if value else 0) or 0)
+
+        return int(value or 0)
 
     def _apply_contract_sorting(self, statement, query: ContractQueryDTO):
         sort_mapping = {
@@ -307,6 +319,19 @@ class SQLModelDocumentRepository(
             result = await self.session.exec(statement=statement)
             count = result.one()
             return int(count or 0)
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
+            raise DocumentDatabaseUnavailableError() from e
+        except SQLAlchemyError as e:
+            raise DocumentDatabaseError() from e
+
+    async def sync_contract_states(self, organization_id: int) -> int:
+        """Sincroniza estados documentales persistidos según reglas de notificación."""
+        try:
+            result = await self.session.exec(
+                text("select public.sync_document_states(:organization_id)"),
+                params={"organization_id": organization_id},
+            )
+            return self._read_scalar_result(result.one())
         except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:

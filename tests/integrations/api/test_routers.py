@@ -32,7 +32,7 @@ class TestImportDriveFiles:
                     "document": {
                         "name": "Contrato desde Drive",
                         "client": "Cliente Test",
-                        "type": "LICENSES",
+                        "type": "COMPANY",
                         "start_date": "2024-01-01",
                         "end_date": "2024-12-31",
                         "form_data": {"owner": "IT", "value": 1000, "currency": "USD"},

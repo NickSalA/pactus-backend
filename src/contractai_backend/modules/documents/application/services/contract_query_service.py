@@ -94,6 +94,7 @@ class ContractQueryService:
     async def run_query(self, organization_id: int, query: ContractQueryDTO) -> dict[str, Any]:
         """Ejecuta una consulta estructurada sobre los contratos de la organización con los filtros y operación especificados."""
         today = date.today()
+        await self.sql_repo.sync_contract_states(organization_id=organization_id)
 
         if (query.min_value is not None or query.max_value is not None) and not query.currency:
             return {

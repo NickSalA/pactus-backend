@@ -129,7 +129,13 @@ class DocumentCommandService:
             saved_document.file_path = storage_path
             saved_document.file_name = file_data.filename
             updated_document = await self.command_repo.update(entity=saved_document)
-            return self.response_assembler.serialize(document=updated_document, service_items=persisted_service_entities)
+            await self.query_repo.sync_contract_states(organization_id=organization_id)
+            refreshed_document = await self.query_repo.get_by_id(document_id)
+
+            if not isinstance(refreshed_document, DocumentTable):
+                return self.response_assembler.serialize(document=updated_document, service_items=persisted_service_entities)
+
+            return self.response_assembler.serialize(document=refreshed_document, service_items=persisted_service_entities)
 
         except Exception as exc:
             if vectors_added:
@@ -258,10 +264,18 @@ class DocumentCommandService:
         self,
         document: DocumentTable,
         payload: DocumentUpdatePayload,
+        organization_id: int,
     ) -> DocumentResponse:
         """Persists an update when no file replacement is requested."""
         await self._replace_document_services_if_needed(document_id=document.id, payload=payload)
         updated_document = await self.command_repo.update(entity=document)
+        await self.query_repo.sync_contract_states(organization_id=organization_id)
+
+        if updated_document.id is not None:
+            refreshed_document = await self.query_repo.get_by_id(updated_document.id)
+            if isinstance(refreshed_document, DocumentTable):
+                updated_document = refreshed_document
+
         return await self.response_assembler.build(document=updated_document)
 
     async def _extract_updated_chunks(
@@ -324,6 +338,13 @@ class DocumentCommandService:
                 except Exception:
                     pass
 
+            await self.query_repo.sync_contract_states(organization_id=organization_id)
+
+            if updated_document.id is not None:
+                refreshed_document = await self.query_repo.get_by_id(updated_document.id)
+                if isinstance(refreshed_document, DocumentTable):
+                    updated_document = refreshed_document
+
             return await self.response_assembler.build(document=updated_document)
 
         except Exception as exc:
@@ -352,7 +373,11 @@ class DocumentCommandService:
         self._apply_document_updates(document=document, validated_document=payload.validated_document)
 
         if file_data is None:
-            return await self._update_document_without_file(document=document, payload=payload)
+            return await self._update_document_without_file(
+                document=document,
+                payload=payload,
+                organization_id=organization_id,
+            )
 
         return await self._update_document_with_file(
             id=id,

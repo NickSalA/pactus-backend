@@ -16,6 +16,7 @@ class UserResponse(BaseModel):
     full_name: str | None
     avatar_url: str | None
     role: UserRole
+    receives_notifications: bool
     is_active: bool
     created_at: datetime
     updated_at: datetime

@@ -58,6 +58,11 @@ class DocumentQueryRepository(ABC):
         """Returns a client ranking based on filtered contracts."""
         pass
 
+    @abstractmethod
+    async def sync_contract_states(self, organization_id: int) -> int:
+        """Synchronizes persisted document states for one organization."""
+        pass
+
 
 class DocumentCommandRepository(ABC):
     @abstractmethod

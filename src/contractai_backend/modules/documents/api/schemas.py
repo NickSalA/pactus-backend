@@ -89,6 +89,8 @@ class CreateDocumentRequest(DocumentBase):
     def remove_legacy_license_key(cls, form_data: dict[str, Any]) -> dict[str, Any]:
         cleaned_form_data = dict(form_data)
         cleaned_form_data.pop("licenses", None)
+        cleaned_form_data.pop("services", None)
+        cleaned_form_data.pop("support", None)
         return cleaned_form_data
 
 
@@ -131,6 +133,8 @@ class UpdateDocumentRequest(BaseModel):
             return None
         cleaned_form_data = dict(form_data)
         cleaned_form_data.pop("licenses", None)
+        cleaned_form_data.pop("services", None)
+        cleaned_form_data.pop("support", None)
         return cleaned_form_data
 
 
