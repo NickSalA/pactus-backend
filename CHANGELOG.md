@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.16.0 (2026-04-06)
+
+### Features
+
+- Refactor template draft generation to support organization context and streamline request handling
+  ([`f00fd51`](https://github.com/NickSalA/ContractAI-Backend/commit/f00fd51ed031ef79bfb107aa77ca1360dc14e8a4))
+
+
 ## v0.15.0 (2026-04-05)
 
 ### Features
