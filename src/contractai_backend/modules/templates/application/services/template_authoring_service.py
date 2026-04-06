@@ -42,7 +42,8 @@ class TemplateAuthoringService:
         request: GenerateTemplateDraftRequest,
         organization_id: int,
     ) -> TemplateDraftResponse:
-        draft = await self.draft_generator.generate(request=request)
+        organization_context = await self._build_organization_context(organization_id=organization_id)
+        draft = await self.draft_generator.generate(request=request, organization_context=organization_context)
         draft.warnings.extend(self.validator.validate(draft.content))
         return draft
 
@@ -64,10 +65,12 @@ class TemplateAuthoringService:
     ) -> TemplateDraftResponse:
         extracted_pages = await self.extractor.extract(file=file_content, filename=filename)
         reference_markdown = "\n\n".join(page.text for page in extracted_pages if getattr(page, "text", "").strip())
+        organization_context = await self._build_organization_context(organization_id=organization_id)
 
         draft = await self.draft_generator.generate(
             request=request,
             reference_markdown=reference_markdown,
+            organization_context=organization_context,
         )
         draft.source = {
             "mode": "file_reference",
@@ -156,6 +159,25 @@ class TemplateAuthoringService:
         if template is None:
             raise ValueError("Plantilla no encontrada")
         return template
+
+    async def _build_organization_context(self, organization_id: int) -> dict[str, Any]:
+        org_data = await self.organization_repo.get_organization_data(organization_id=organization_id)
+        organization_profile = {
+            key: value
+            for key, value in {
+                "empleador_razon_social": org_data.get("empleador_razon_social"),
+                "empleador_descripcion": org_data.get("empleador_descripcion"),
+                "empleador_objeto_social": org_data.get("empleador_objeto_social"),
+                "jurisdiccion": org_data.get("jurisdiccion"),
+                "lugar_firma": org_data.get("lugar_firma"),
+            }.items()
+            if value not in (None, "")
+        }
+        available_auto_variables = sorted(key for key, value in org_data.items() if key in self.validator.AUTO_VARIABLES and value not in (None, ""))
+        return {
+            "organization_profile": organization_profile,
+            "available_auto_variables": available_auto_variables,
+        }
 
     def _build_template_entity(
         self,

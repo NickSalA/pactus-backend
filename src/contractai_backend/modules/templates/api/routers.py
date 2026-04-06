@@ -2,9 +2,10 @@
 
 import json
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import ValidationError
 
 from contractai_backend.modules.templates.domain.entities import TemplateTable
@@ -29,6 +30,24 @@ TemplateServiceDep = Annotated[TemplateService, Depends(get_template_service)]
 TemplateAuthoringServiceDep = Annotated[TemplateAuthoringService, Depends(get_template_authoring_service)]
 
 
+def _build_default_file_request(filename: str) -> GenerateTemplateDraftRequest:
+    base_name = Path(filename).stem.replace("_", " ").strip() or "Plantilla sin nombre"
+    return GenerateTemplateDraftRequest(
+        name=base_name,
+        description="Borrador generado desde archivo de referencia",
+    )
+
+
+def _parse_draft_request(raw_request: str | None) -> GenerateTemplateDraftRequest | None:
+    if raw_request is None:
+        return None
+
+    try:
+        return GenerateTemplateDraftRequest(**json.loads(raw_request))
+    except (json.JSONDecodeError, ValidationError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Payload invalido: {e}") from e
+
+
 @router.post(path="/{template_id}/generate", status_code=status.HTTP_201_CREATED)
 async def generate_template(
     template_id: int,
@@ -48,48 +67,42 @@ async def generate_template(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al generar el documento: {e!s}") from e
 
 
-@router.post(path="/drafts/from-prompt", response_model=PersistedTemplateDraftResponse, status_code=status.HTTP_201_CREATED)
-async def generate_template_draft_from_prompt(
-    request: GenerateTemplateDraftRequest,
+@router.post(path="/drafts", response_model=PersistedTemplateDraftResponse, status_code=status.HTTP_201_CREATED)
+async def generate_template_draft(
     template_service: TemplateAuthoringServiceDep,
     current_user: CurrentUserDep,
+    file: UploadFile | None = File(None),
+    request: str | None = Form(None),
 ):
-    """Endpoint para generar un borrador de plantilla desde un formulario."""
+    """Endpoint para generar un borrador de plantilla desde request, archivo o ambos."""
+    if file is None and request is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes enviar un archivo, un request o ambos.")
+
     try:
+        request_obj = _parse_draft_request(request)
+
+        if file is not None:
+            if file.filename is None:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Archivo invalido.")
+
+            draft_request = request_obj or _build_default_file_request(file.filename)
+            file_content = await file.read()
+            return await template_service.generate_and_save_draft_from_file(
+                request=draft_request,
+                file_content=file_content,
+                filename=file.filename,
+                organization_id=current_user.organization_id,
+            )
+
+        if request_obj is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes enviar un request valido cuando no subas archivo.")
+
         return await template_service.generate_and_save_draft_from_prompt(
-            request=request,
-            organization_id=current_user.organization_id,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al generar el borrador: {e!s}") from e
-
-
-@router.post(path="/drafts/from-file", response_model=PersistedTemplateDraftResponse, status_code=status.HTTP_201_CREATED)
-async def generate_template_draft_from_file(
-    file: UploadFile,
-    template_service: TemplateAuthoringServiceDep,
-    current_user: CurrentUserDep,
-    request: str = Form(...),
-):
-    """Endpoint para generar un borrador de plantilla desde un archivo de referencia."""
-    try:
-        request_obj = GenerateTemplateDraftRequest(**json.loads(request))
-    except (json.JSONDecodeError, ValidationError) as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Payload invalido: {e}") from e
-
-    if file.filename is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Archivo invalido.")
-
-    try:
-        file_content = await file.read()
-        return await template_service.generate_and_save_draft_from_file(
             request=request_obj,
-            file_content=file_content,
-            filename=file.filename,
             organization_id=current_user.organization_id,
         )
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:

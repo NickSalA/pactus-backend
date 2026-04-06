@@ -23,9 +23,14 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
         self,
         request: GenerateTemplateDraftRequest,
         reference_markdown: str | None = None,
+        organization_context: dict[str, Any] | None = None,
     ) -> TemplateDraftResponse:
         """Genera un borrador de plantilla a partir de instrucciones y, opcionalmente, un contrato de referencia."""
-        prompt = self._build_prompt(request=request, reference_markdown=reference_markdown)
+        prompt = self._build_prompt(
+            request=request,
+            reference_markdown=reference_markdown,
+            organization_context=organization_context,
+        )
         response = await self.llm.ainvoke(prompt)
 
         raw_content: Any = response.content if hasattr(response, "content") else response
@@ -73,8 +78,8 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
         self,
         request: GenerateTemplateDraftRequest,
         reference_markdown: str | None = None,
+        organization_context: dict[str, Any] | None = None,
     ) -> str:
-        preferred_fields = ", ".join(request.preferred_fields) if request.preferred_fields else ""
         instructions = request.instructions or ""
         name_hint = request.name or ""
         description_hint = request.description or ""
@@ -84,6 +89,10 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
         reference_section = ""
         if reference_markdown:
             reference_section = "\nREFERENCE_DOCUMENT:\n" + reference_markdown[:12000]
+
+        organization_section = ""
+        if organization_context:
+            organization_section = "\nORGANIZATION_CONTEXT:\n" + json.dumps(organization_context, ensure_ascii=True, indent=2)
 
         return (
             "You are a legal template generator. Return ONLY valid JSON.\n"
@@ -110,6 +119,8 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "  empleador_objeto_social, representante_nombre, representante_dni, jurisdiccion,\n"
             "  lugar_firma, autorizacion_entidad, autorizacion_fecha, autorizacion_emitida_por,\n"
             "  empleador_email, empleador_telefono, day_sign, month_sign, year_sign.\n"
+            "- If ORGANIZATION_CONTEXT is present, use it only as drafting context. Do not hardcode those values in body_md when an auto variable exists.\n"
+            "- Use only the auto variables that are relevant for the contract. Do not force every available variable into the template.\n"
             "- Do not use filters inside placeholders.\n"
             "- Keep structure and clauses from the reference when provided.\n"
             "- Use Spanish legal language in body_md.\n\n"
@@ -117,7 +128,7 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             f"DESCRIPTION_HINT: {description_hint}\n"
             f"CONTRACT_TYPE: {contract_type}\n"
             f"JURISDICTION: {jurisdiction}\n"
-            f"PREFERRED_FIELDS: {preferred_fields}\n"
             f"INSTRUCTIONS: {instructions}\n"
+            f"{organization_section}"
             f"{reference_section}"
         )

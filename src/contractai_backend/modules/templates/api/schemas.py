@@ -15,7 +15,6 @@ class GenerateTemplateDraftRequest(BaseModel):
     instructions: str | None = None
     contract_type: str | None = None
     jurisdiction: str | None = None
-    preferred_fields: list[str] = Field(default_factory=list)
 
 
 class TemplateDraftResponse(BaseModel):

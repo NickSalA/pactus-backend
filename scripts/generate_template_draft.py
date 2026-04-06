@@ -42,8 +42,6 @@ def _build_request_payload(args: argparse.Namespace) -> dict:
         payload["contract_type"] = args.contract_type
     if args.jurisdiction:
         payload["jurisdiction"] = args.jurisdiction
-    if args.preferred_fields:
-        payload["preferred_fields"] = [field.strip() for field in args.preferred_fields.split(",") if field.strip()]
 
     return payload
 
@@ -98,7 +96,6 @@ def main() -> None:
     parser.add_argument("--instructions", help="Authoring instructions")
     parser.add_argument("--contract-type", help="Contract type")
     parser.add_argument("--jurisdiction", help="Jurisdiction")
-    parser.add_argument("--preferred-fields", help="Comma-separated field keys")
     parser.add_argument("--output", help="Write draft JSON to this file")
     parser.add_argument("--organization-id", type=int, default=1, help="Organization ID (default: 1)")
 
