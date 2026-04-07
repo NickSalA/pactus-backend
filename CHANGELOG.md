@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.18.0 (2026-04-07)
+
+### Features
+
+- Enhance template generation with improved request handling and response serialization
+  ([`2e8ff78`](https://github.com/NickSalA/ContractAI-Backend/commit/2e8ff78d96eea8af1cc49c34d08c6e53df0988ae))
+
+
 ## v0.17.0 (2026-04-06)
 
 ### Features
