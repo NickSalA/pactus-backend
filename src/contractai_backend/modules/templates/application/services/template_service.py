@@ -19,6 +19,7 @@ class TemplateService:
         document_generator: IDocumentGenerator,
         document_adapter: IDocumentModuleAdapter,
     ):
+        """Stores dependencies for template reads and rendering."""
         self.template_repo: ITemplateRepository = template_repo
         self.organization_repo: IOrganizationRepository = organization_repo
         self.renderer: ITemplateRenderer = renderer
@@ -26,7 +27,7 @@ class TemplateService:
         self.document_adapter: IDocumentModuleAdapter = document_adapter
 
     async def generate_contract(self, template_id: int, organization_id: int, form_data: dict[str, Any]):
-        """Genera un contrato a partir de una plantilla, los datos de la organización y los datos del formulario."""
+        """Genera un contrato a partir de una plantilla."""
         template: TemplateTable | None = await self.template_repo.get_template_by_id(template_id=template_id, organization_id=organization_id)
         if not template:
             raise ValueError("Template not found or does not belong to the organization.")
@@ -77,11 +78,11 @@ class TemplateService:
         return nuevo_documento
 
     async def get_template(self, template_id: int, organization_id: int) -> TemplateTable | None:
-        """Obtiene los detalles de una plantilla asegurando que pertenezca a la organización."""
+        """Obtiene una plantilla de la organización."""
         template: TemplateTable | None = await self.template_repo.get_template_by_id(template_id=template_id, organization_id=organization_id)
         return template
 
     async def list_templates(self, organization_id: int) -> Sequence[TemplateTable]:
-        """Lista todas las plantillas disponibles para una organización."""
+        """Lista las plantillas de una organización."""
         templates: Sequence[TemplateTable] = await self.template_repo.list_by_organization(organization_id=organization_id)
         return templates

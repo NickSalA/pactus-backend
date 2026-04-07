@@ -6,12 +6,13 @@ from typing import Any
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from ....shared.config import settings
-from ..api.schemas import GenerateTemplateDraftRequest, TemplateDraftResponse
+from ..api.schemas import GenerateTemplateDraftRequest, TemplateDraftResponse, TemplateUsage
 from ..application.repositories.base_draft_generator import ITemplateDraftGenerator
 
 
 class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
     def __init__(self):
+        """Configura el cliente Gemini."""
         self.llm = ChatGoogleGenerativeAI(
             model=settings.GEMINI_MODEL_NAME,
             api_key=settings.GEMINI_API_KEY,
@@ -51,9 +52,13 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             content = str(raw_content)
 
         payload = self._parse_json(content)
+        usage = self._extract_usage(response)
+        if usage is not None:
+            payload["usage"] = usage.model_dump()
         return TemplateDraftResponse.model_validate(payload)
 
     def _parse_json(self, raw: str) -> dict[str, Any]:
+        """Extrae el JSON valido desde la respuesta del LLM."""
         cleaned = raw.strip()
         if cleaned.startswith("```"):
             cleaned = cleaned.strip("`")
@@ -74,12 +79,28 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             except json.JSONDecodeError as exc:
                 raise ValueError(f"LLM response is not valid JSON: {exc}") from exc
 
+    def _extract_usage(self, response: Any) -> TemplateUsage | None:
+        """Extrae el uso de tokens de la respuesta del modelo."""
+        usage_metadata = getattr(response, "usage_metadata", None)
+        if not usage_metadata:
+            return None
+
+        input_tokens = int(usage_metadata.get("input_tokens", 0))
+        output_tokens = int(usage_metadata.get("output_tokens", 0))
+        total_tokens = int(usage_metadata.get("total_tokens", input_tokens + output_tokens))
+        return TemplateUsage(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
+        )
+
     def _build_prompt(
         self,
         request: GenerateTemplateDraftRequest,
         reference_markdown: str | None = None,
         organization_context: dict[str, Any] | None = None,
     ) -> str:
+        """Construye el prompt final para Gemini."""
         instructions = request.instructions or ""
         name_hint = request.name or ""
         description_hint = request.description or ""

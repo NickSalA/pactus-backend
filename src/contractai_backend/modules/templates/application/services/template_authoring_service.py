@@ -12,9 +12,11 @@ from ...api.schemas import (
     PreviewTemplateRequest,
     PreviewTemplateResponse,
     TemplateDraftResponse,
+    TemplateResponse,
     UpdateTemplateRequest,
+    build_template_response,
 )
-from ...domain.entities import TemplateField, TemplateTable
+from ...domain.entities import TemplateContent, TemplateField, TemplateTable
 from ...domain.value_objs import TemplateState
 from ..repositories import IOrganizationRepository, ITemplateRenderer, ITemplateRepository
 from ..repositories.base_draft_generator import ITemplateDraftGenerator
@@ -30,6 +32,7 @@ class TemplateAuthoringService:
         extractor: DocumentExtractor,
         draft_generator: ITemplateDraftGenerator,
     ):
+        """Stores dependencies for template authoring."""
         self.template_repo = template_repo
         self.organization_repo = organization_repo
         self.renderer = renderer
@@ -42,6 +45,7 @@ class TemplateAuthoringService:
         request: GenerateTemplateDraftRequest,
         organization_id: int,
     ) -> TemplateDraftResponse:
+        """Genera un borrador guiado por formulario."""
         organization_context = await self._build_organization_context(organization_id=organization_id)
         draft = await self.draft_generator.generate(request=request, organization_context=organization_context)
         draft.warnings.extend(self.validator.validate(draft.content))
@@ -52,9 +56,10 @@ class TemplateAuthoringService:
         request: GenerateTemplateDraftRequest,
         organization_id: int,
     ) -> PersistedTemplateDraftResponse:
+        """Genera y persiste un borrador desde formulario."""
         draft = await self.generate_draft_from_prompt(request=request, organization_id=organization_id)
         template = await self._persist_draft(draft=draft, organization_id=organization_id)
-        return PersistedTemplateDraftResponse(template=template, warnings=draft.warnings, source=draft.source)
+        return PersistedTemplateDraftResponse(template=template, warnings=draft.warnings, source=draft.source, usage=draft.usage)
 
     async def generate_draft_from_file(
         self,
@@ -63,6 +68,7 @@ class TemplateAuthoringService:
         filename: str,
         organization_id: int,
     ) -> TemplateDraftResponse:
+        """Genera un borrador a partir de un archivo."""
         extracted_pages = await self.extractor.extract(file=file_content, filename=filename)
         reference_markdown = "\n\n".join(page.text for page in extracted_pages if getattr(page, "text", "").strip())
         organization_context = await self._build_organization_context(organization_id=organization_id)
@@ -86,6 +92,7 @@ class TemplateAuthoringService:
         filename: str,
         organization_id: int,
     ) -> PersistedTemplateDraftResponse:
+        """Genera y persiste un borrador desde archivo."""
         draft = await self.generate_draft_from_file(
             request=request,
             file_content=file_content,
@@ -93,13 +100,14 @@ class TemplateAuthoringService:
             organization_id=organization_id,
         )
         template = await self._persist_draft(draft=draft, organization_id=organization_id)
-        return PersistedTemplateDraftResponse(template=template, warnings=draft.warnings, source=draft.source)
+        return PersistedTemplateDraftResponse(template=template, warnings=draft.warnings, source=draft.source, usage=draft.usage)
 
     async def preview_template(
         self,
         request: PreviewTemplateRequest,
         organization_id: int,
     ) -> PreviewTemplateResponse:
+        """Renderiza una vista previa de la plantilla."""
         warnings = self.validator.validate(request.content)
         org_data = await self.organization_repo.get_organization_data(organization_id=organization_id)
         payload = {
@@ -115,7 +123,8 @@ class TemplateAuthoringService:
         self,
         request: CreateTemplateRequest,
         organization_id: int,
-    ) -> TemplateTable:
+    ) -> TemplateResponse:
+        """Crea una plantilla manual en borrador."""
         self.validator.validate(request.content)
         template = self._build_template_entity(
             organization_id=organization_id,
@@ -123,14 +132,16 @@ class TemplateAuthoringService:
             description=request.description,
             content=request.content,
         )
-        return await self.template_repo.save(entity=template)
+        saved_template = await self.template_repo.save(entity=template)
+        return build_template_response(saved_template)
 
     async def update_template(
         self,
         template_id: int,
         request: UpdateTemplateRequest,
         organization_id: int,
-    ) -> TemplateTable:
+    ) -> TemplateResponse:
+        """Actualiza una plantilla en borrador."""
         template = await self._get_template_or_raise(template_id=template_id, organization_id=organization_id)
         if template.state != TemplateState.DRAFT:
             raise ValueError("Solo se pueden editar plantillas en estado DRAFT.")
@@ -143,24 +154,29 @@ class TemplateAuthoringService:
         if request.description is not None:
             template.description = request.description
 
-        return await self.template_repo.update(entity=template)
+        updated_template = await self.template_repo.update(entity=template)
+        return build_template_response(updated_template)
 
-    async def _persist_draft(self, draft: TemplateDraftResponse, organization_id: int) -> TemplateTable:
+    async def _persist_draft(self, draft: TemplateDraftResponse, organization_id: int) -> TemplateResponse:
+        """Guarda un borrador generado en la base de datos."""
         template = self._build_template_entity(
             organization_id=organization_id,
             name=draft.name,
             description=draft.description,
             content=draft.content,
         )
-        return await self.template_repo.save(entity=template)
+        saved_template = await self.template_repo.save(entity=template)
+        return build_template_response(saved_template)
 
     async def _get_template_or_raise(self, template_id: int, organization_id: int) -> TemplateTable:
+        """Carga una plantilla o falla si no existe."""
         template = await self.template_repo.get_template_by_id(template_id=template_id, organization_id=organization_id)
         if template is None:
             raise ValueError("Plantilla no encontrada")
         return template
 
     async def _build_organization_context(self, organization_id: int) -> dict[str, Any]:
+        """Construye contexto util para la generacion."""
         org_data = await self.organization_repo.get_organization_data(organization_id=organization_id)
         organization_profile = {
             key: value
@@ -184,8 +200,9 @@ class TemplateAuthoringService:
         organization_id: int,
         name: str,
         description: str | None,
-        content,
+        content: TemplateContent,
     ) -> TemplateTable:
+        """Crea la entidad base de plantilla."""
         return TemplateTable(
             organization_id=organization_id,
             name=name,
@@ -195,6 +212,7 @@ class TemplateAuthoringService:
         )
 
     def _build_time_payload(self) -> dict[str, int | str]:
+        """Genera variables automaticas de fecha."""
         now = datetime.now()
         months = [
             "enero",
@@ -217,12 +235,14 @@ class TemplateAuthoringService:
         }
 
     def _build_mock_payload(self, fields: list[TemplateField]) -> dict[str, Any]:
+        """Genera datos mock para una preview."""
         payload: dict[str, Any] = {}
         for field in fields:
             payload[field.key] = self._mock_value(field)
         return payload
 
     def _mock_value(self, field: TemplateField) -> Any:
+        """Devuelve un valor mock por tipo de campo."""
         if field.type == "date":
             return "2026-01-01"
         if field.type == "number":

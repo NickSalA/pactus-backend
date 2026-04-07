@@ -6,8 +6,8 @@ from .base_render import ITemplateRenderer
 __all__ = [
     "IDocumentGenerator",
     "IDocumentModuleAdapter",
-    "ITemplateDraftGenerator",
     "IOrganizationRepository",
+    "ITemplateDraftGenerator",
     "ITemplateRenderer",
     "ITemplateRepository",
 ]

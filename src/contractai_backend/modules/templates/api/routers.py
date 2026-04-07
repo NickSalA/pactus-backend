@@ -22,6 +22,7 @@ from .schemas import (
     PreviewTemplateResponse,
     TemplateResponse,
     UpdateTemplateRequest,
+    build_template_response,
 )
 
 router = APIRouter()
@@ -31,6 +32,7 @@ TemplateAuthoringServiceDep = Annotated[TemplateAuthoringService, Depends(get_te
 
 
 def _build_default_file_request(filename: str) -> GenerateTemplateDraftRequest:
+    """Construye un request minimo desde el nombre del archivo."""
     base_name = Path(filename).stem.replace("_", " ").strip() or "Plantilla sin nombre"
     return GenerateTemplateDraftRequest(
         name=base_name,
@@ -39,6 +41,7 @@ def _build_default_file_request(filename: str) -> GenerateTemplateDraftRequest:
 
 
 def _parse_draft_request(raw_request: str | None) -> GenerateTemplateDraftRequest | None:
+    """Parsea el JSON opcional del draft."""
     if raw_request is None:
         return None
 
@@ -73,7 +76,7 @@ async def generate_template_draft(
     current_user: CurrentUserDep,
     file: UploadFile | None = File(None),
     request: str | None = Form(None),
-):
+) -> PersistedTemplateDraftResponse:
     """Endpoint para generar un borrador de plantilla desde request, archivo o ambos."""
     if file is None and request is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes enviar un archivo, un request o ambos.")
@@ -114,7 +117,7 @@ async def preview_template(
     request: PreviewTemplateRequest,
     template_service: TemplateAuthoringServiceDep,
     current_user: CurrentUserDep,
-):
+) -> PreviewTemplateResponse:
     """Endpoint para previsualizar una plantilla."""
     try:
         return await template_service.preview_template(
@@ -132,13 +135,13 @@ async def get_template(
     template_id: int,
     template_service: TemplateServiceDep,
     current_user: CurrentUserDep,
-):
+) -> TemplateResponse:
     """Endpoint para obtener los detalles de una plantilla."""
     try:
         template: TemplateTable | None = await template_service.get_template(template_id=template_id, organization_id=current_user.organization_id)
         if template is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plantilla no encontrada")
-        return template
+        return build_template_response(template)
     except HTTPException:
         raise
     except Exception as e:
@@ -150,7 +153,7 @@ async def create_template(
     request: CreateTemplateRequest,
     template_service: TemplateAuthoringServiceDep,
     current_user: CurrentUserDep,
-):
+) -> TemplateResponse:
     """Endpoint para crear una plantilla."""
     try:
         return await template_service.create_template(
@@ -169,7 +172,7 @@ async def update_template(
     request: UpdateTemplateRequest,
     template_service: TemplateAuthoringServiceDep,
     current_user: CurrentUserDep,
-):
+) -> TemplateResponse:
     """Endpoint para actualizar una plantilla en borrador."""
     try:
         return await template_service.update_template(
@@ -189,10 +192,10 @@ async def update_template(
 async def list_templates(
     template_service: TemplateServiceDep,
     current_user: CurrentUserDep,
-):
+) -> Sequence[TemplateResponse]:
     """Endpoint para listar las plantillas de la organización."""
     try:
         templates: Sequence[TemplateTable] = await template_service.list_templates(organization_id=current_user.organization_id)
-        return templates
+        return [build_template_response(template) for template in templates]
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al listar las plantillas: {e!s}") from e

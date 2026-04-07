@@ -11,15 +11,18 @@ from contractai_backend.modules.templates.infrastructure import GeminiTemplateDr
 
 class DummyTemplateRepository:
     async def save(self, entity):
+        """Blocks persistence in the local script."""
         raise NotImplementedError("save is not supported in this script")
 
 
 class DummyOrganizationRepository:
     async def get_organization_data(self, organization_id: int):
+        """Returns empty organization context for local runs."""
         return {}
 
 
 def _load_request_payload(raw: str | None) -> dict:
+    """Loads a JSON payload from inline text or file."""
     if not raw:
         return {}
 
@@ -30,6 +33,7 @@ def _load_request_payload(raw: str | None) -> dict:
 
 
 def _build_request_payload(args: argparse.Namespace) -> dict:
+    """Builds the final request payload from CLI args."""
     payload = _load_request_payload(args.request)
 
     if args.name:
@@ -47,6 +51,7 @@ def _build_request_payload(args: argparse.Namespace) -> dict:
 
 
 async def _run(args: argparse.Namespace) -> None:
+    """Runs the draft generation flow."""
     file_path = Path(args.file)
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
@@ -88,6 +93,7 @@ async def _run(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    """Parses CLI args and launches the script."""
     parser = argparse.ArgumentParser(description="Generate a template draft from a reference file.")
     parser.add_argument("--file", required=True, help="Path to reference file (pdf/docx/md/txt)")
     parser.add_argument("--request", help="JSON string or path to JSON file with draft request")
