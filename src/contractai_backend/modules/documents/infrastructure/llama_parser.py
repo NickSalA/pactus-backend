@@ -39,7 +39,10 @@ class LlamaParseExtractor(DocumentExtractor):
                 tier="agentic",
                 version="latest",
                 agentic_options={
-                    "custom_prompt": ("Este es un contrato laboral peruano oficial. Conserva las negritas de los títulos y las cláusulas originales.")
+                    "custom_prompt": (
+                        "Extrae el documento preservando negritas, titulos, numeracion de clausulas y texto original. "
+                        "No resumas ni reescribas el contenido."
+                    )
                 },
                 processing_options={"ocr_parameters": {"languages": ["es"]}},
                 expand=["markdown"],

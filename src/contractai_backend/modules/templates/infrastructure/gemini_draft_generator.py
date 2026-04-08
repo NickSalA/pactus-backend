@@ -23,14 +23,18 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
     async def generate(
         self,
         request: GenerateTemplateDraftRequest,
-        reference_markdown: str | None = None,
+        reference_context: str | None = None,
+        reference_outline: dict[str, Any] | None = None,
         organization_context: dict[str, Any] | None = None,
+        validation_feedback: list[str] | None = None,
     ) -> TemplateDraftResponse:
         """Genera un borrador de plantilla a partir de instrucciones y, opcionalmente, un contrato de referencia."""
         prompt = self._build_prompt(
             request=request,
-            reference_markdown=reference_markdown,
+            reference_context=reference_context,
+            reference_outline=reference_outline,
             organization_context=organization_context,
+            validation_feedback=validation_feedback,
         )
         response = await self.llm.ainvoke(prompt)
 
@@ -97,8 +101,10 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
     def _build_prompt(
         self,
         request: GenerateTemplateDraftRequest,
-        reference_markdown: str | None = None,
+        reference_context: str | None = None,
+        reference_outline: dict[str, Any] | None = None,
         organization_context: dict[str, Any] | None = None,
+        validation_feedback: list[str] | None = None,
     ) -> str:
         """Construye el prompt final para Gemini."""
         instructions = request.instructions or ""
@@ -108,12 +114,21 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
         jurisdiction = request.jurisdiction or ""
 
         reference_section = ""
-        if reference_markdown:
-            reference_section = "\nREFERENCE_DOCUMENT:\n" + reference_markdown[:12000]
+        if reference_context:
+            reference_section = "\nREFERENCE_CONTEXT:\n" + reference_context[:8000]
+
+        reference_outline_section = ""
+        if reference_outline:
+            reference_outline_section = "\nREFERENCE_OUTLINE:\n" + json.dumps(reference_outline, ensure_ascii=True, indent=2)
 
         organization_section = ""
         if organization_context:
             organization_section = "\nORGANIZATION_CONTEXT:\n" + json.dumps(organization_context, ensure_ascii=True, indent=2)
+
+        feedback_section = ""
+        if validation_feedback:
+            feedback_lines = "\n".join(f"- {issue}" for issue in validation_feedback)
+            feedback_section = "\nVALIDATION_FEEDBACK:\n" + feedback_lines
 
         return (
             "You are a legal template generator. Return ONLY valid JSON.\n"
@@ -143,7 +158,11 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "- If ORGANIZATION_CONTEXT is present, use it only as drafting context. Do not hardcode those values in body_md when an auto variable exists.\n"
             "- Use only the auto variables that are relevant for the contract. Do not force every available variable into the template.\n"
             "- Do not use filters inside placeholders.\n"
-            "- Keep structure and clauses from the reference when provided.\n"
+            "- If REFERENCE_CONTEXT is present, preserve the original contract structure as faithfully as possible. Replace variable values with placeholders, but do not freely rewrite or summarize clauses.\n"
+            "- If REFERENCE_OUTLINE is present, preserve every item in clause_sequence when available, and otherwise preserve the order of structure_sequence. Do not omit structural markers that appear in the reference.\n"
+            "- Preserve section titles and the closing section when they appear in the reference.\n"
+            "- When the reference mode is full_clean, stay as close as possible to the original wording and only abstract variable data into placeholders.\n"
+            "- If VALIDATION_FEEDBACK is present, correct every listed issue in this attempt.\n"
             "- Use Spanish legal language in body_md.\n\n"
             f"NAME_HINT: {name_hint}\n"
             f"DESCRIPTION_HINT: {description_hint}\n"
@@ -151,5 +170,7 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             f"JURISDICTION: {jurisdiction}\n"
             f"INSTRUCTIONS: {instructions}\n"
             f"{organization_section}"
+            f"{reference_outline_section}"
+            f"{feedback_section}"
             f"{reference_section}"
         )

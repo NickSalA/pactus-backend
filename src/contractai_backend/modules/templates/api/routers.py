@@ -74,7 +74,7 @@ async def generate_template(
 async def generate_template_draft(
     template_service: TemplateAuthoringServiceDep,
     current_user: CurrentUserDep,
-    file: UploadFile | None = File(None),
+    file: UploadFile | None = None,
     request: str | None = Form(None),
 ) -> PersistedTemplateDraftResponse:
     """Endpoint para generar un borrador de plantilla desde request, archivo o ambos."""

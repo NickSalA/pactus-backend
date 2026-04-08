@@ -11,8 +11,10 @@ class ITemplateDraftGenerator(ABC):
     async def generate(
         self,
         request: GenerateTemplateDraftRequest,
-        reference_markdown: str | None = None,
+        reference_context: str | None = None,
+        reference_outline: dict[str, Any] | None = None,
         organization_context: dict[str, Any] | None = None,
+        validation_feedback: list[str] | None = None,
     ) -> TemplateDraftResponse:
-        """Genera un borrador de plantilla a partir de instrucciones y, opcionalmente, un contrato de referencia."""
+        """Genera un borrador de plantilla con contexto opcional."""
         pass

@@ -21,6 +21,7 @@ from ...domain.value_objs import TemplateState
 from ..repositories import IOrganizationRepository, ITemplateRenderer, ITemplateRepository
 from ..repositories.base_draft_generator import ITemplateDraftGenerator
 from .template_placeholder_validator import TemplatePlaceholderValidator
+from .template_reference_preprocessor import TemplateReferenceContext, TemplateReferencePreprocessor
 
 
 class TemplateAuthoringService:
@@ -39,6 +40,7 @@ class TemplateAuthoringService:
         self.extractor = extractor
         self.draft_generator = draft_generator
         self.validator = TemplatePlaceholderValidator()
+        self.reference_preprocessor = TemplateReferencePreprocessor()
 
     async def generate_draft_from_prompt(
         self,
@@ -70,19 +72,30 @@ class TemplateAuthoringService:
     ) -> TemplateDraftResponse:
         """Genera un borrador a partir de un archivo."""
         extracted_pages = await self.extractor.extract(file=file_content, filename=filename)
-        reference_markdown = "\n\n".join(page.text for page in extracted_pages if getattr(page, "text", "").strip())
+        reference_context = self.reference_preprocessor.build(extracted_pages)
         organization_context = await self._build_organization_context(organization_id=organization_id)
 
-        draft = await self.draft_generator.generate(
+        draft, retries_used = await self._generate_validated_file_draft(
             request=request,
-            reference_markdown=reference_markdown,
+            reference_context=reference_context,
             organization_context=organization_context,
         )
         draft.source = {
             "mode": "file_reference",
             "filename": filename,
+            "reference_mode": reference_context.mode,
+            "section_titles": list(reference_context.section_titles),
+            "reference_chars": len(reference_context.prompt_text),
+            "original_chars": reference_context.original_chars,
+            "clean_chars": reference_context.clean_chars,
+            "clause_count": len(reference_context.clause_sequence),
+            "first_clause": reference_context.clause_sequence[0] if reference_context.clause_sequence else None,
+            "last_clause": reference_context.clause_sequence[-1] if reference_context.clause_sequence else None,
+            "clause_sequence": list(reference_context.clause_sequence),
+            "structure_count": len(reference_context.structure_sequence),
+            "structure_sequence": list(reference_context.structure_sequence),
+            "retries_used": retries_used,
         }
-        draft.warnings.extend(self.validator.validate(draft.content))
         return draft
 
     async def generate_and_save_draft_from_file(
@@ -167,6 +180,56 @@ class TemplateAuthoringService:
         )
         saved_template = await self.template_repo.save(entity=template)
         return build_template_response(saved_template)
+
+    async def _generate_validated_file_draft(
+        self,
+        request: GenerateTemplateDraftRequest,
+        reference_context: TemplateReferenceContext,
+        organization_context: dict[str, Any],
+    ) -> tuple[TemplateDraftResponse, int]:
+        """Genera un draft de archivo con autocorreccion estructural."""
+        retry_feedback: list[str] = []
+        max_attempts = 2
+
+        for attempt in range(max_attempts):
+            draft = await self.draft_generator.generate(
+                request=request,
+                reference_context=reference_context.prompt_text,
+                reference_outline=reference_context.to_prompt_outline(),
+                organization_context=organization_context,
+                validation_feedback=retry_feedback or None,
+            )
+
+            try:
+                warnings = self.validator.validate(draft.content)
+            except ValueError as exc:
+                if attempt == max_attempts - 1:
+                    raise
+                retry_feedback = [str(exc)]
+                continue
+
+            reference_warnings = self.validator.validate_against_reference(
+                draft.content.body_md,
+                reference_context.clause_sequence,
+            )
+            if not reference_warnings and not reference_context.clause_sequence:
+                reference_warnings = self.validator.validate_structure_against_reference(
+                    draft.content.body_md,
+                    reference_context.structure_sequence,
+                )
+            retryable_issues = [warning for warning in warnings if warning.startswith("Numeración de cláusulas")] + reference_warnings
+            if not retryable_issues:
+                draft.warnings.extend(warnings)
+                return draft, attempt
+
+            if attempt == max_attempts - 1:
+                draft.warnings.extend(warnings)
+                draft.warnings.extend(reference_warnings)
+                return draft, attempt
+
+            retry_feedback = retryable_issues
+
+        raise ValueError("No se pudo generar un borrador valido desde el archivo de referencia.")
 
     async def _get_template_or_raise(self, template_id: int, organization_id: int) -> TemplateTable:
         """Carga una plantilla o falla si no existe."""
