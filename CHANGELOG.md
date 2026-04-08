@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.25.0 (2026-04-08)
+
+### Features
+
+- Implement catalog and folders modules, refactor document services, and update authentication logic
+  ([`b24f778`](https://github.com/NickSalA/ContractAI-Backend/commit/b24f7780a007b37db7de08d06c2210b34ccfa390))
+
+
 ## v0.24.0 (2026-04-08)
 
 ### Features
