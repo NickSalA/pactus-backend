@@ -27,6 +27,8 @@ from ..infrastructure import (
 )
 from ...catalog.api.dependencies import get_service_repository
 from ...catalog.application.repositories import ServiceRepository
+from ...folders.api.dependencies import get_folder_repository
+from ...folders.application.repositories import FolderRepository
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 AsyncQdrantDep = Annotated[AsyncQdrantClient, Depends(get_aclient)]
@@ -75,6 +77,7 @@ async def get_chunk_enricher() -> DocumentChunkEnricher:
 DocumentQueryRepoDep = Annotated[DocumentQueryRepository, Depends(get_document_query_repository)]
 DocumentCommandRepoDep = Annotated[DocumentCommandRepository, Depends(get_document_command_repository)]
 ServiceRepoDep = Annotated[ServiceRepository, Depends(get_service_repository)]
+FolderRepoDep = Annotated[FolderRepository, Depends(get_folder_repository)]
 VectorRepoDep = Annotated[VectorRepository, Depends(get_vector_repository)]
 ExtractorDep = Annotated[DocumentExtractor, Depends(get_extractor)]
 StorageRepoDep = Annotated[DocumentStorageRepository, Depends(get_storage_repository)]
@@ -85,6 +88,7 @@ async def get_document_command_service(
     command_repo: DocumentCommandRepoDep,
     query_repo: DocumentQueryRepoDep,
     service_repo: ServiceRepoDep,
+    folder_repo: FolderRepoDep,
     vector_repo: VectorRepoDep,
     extractor: ExtractorDep,
     storage_repo: StorageRepoDep,
@@ -95,6 +99,7 @@ async def get_document_command_service(
         command_repo=command_repo,
         query_repo=query_repo,
         service_repo=service_repo,
+        folder_repo=folder_repo,
         vector_repo=vector_repo,
         extractor=extractor,
         storage_repo=storage_repo,

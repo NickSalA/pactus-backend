@@ -52,6 +52,7 @@ class DocumentResponseAssembler:
             end_date=document.end_date,
             form_data=document.form_data,
             state=document.state,
+            folder_id=document.folder_id,
             file_path=document.file_path,
             file_name=document.file_name,
             service_items=[DocumentServiceItemResponse.model_validate(item) for item in resolved_service_items],

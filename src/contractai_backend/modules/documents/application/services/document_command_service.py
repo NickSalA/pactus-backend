@@ -7,16 +7,18 @@ from typing import Any
 from loguru import logger
 
 from .....core.exceptions.base import ForbiddenError
+from ....folders.application.repositories import FolderRepository
 from ....users.domain.value_objs import UserRole
 from ...api.schemas import CreateDocumentRequest, DocumentResponse, DocumentServiceItemRequest, FileRequest, UpdateDocumentRequest
 from ...domain import DocumentTable, validate_service_currency_alignment, validate_service_periods
-from ...domain.access_policy import can_read_document_type, can_write_document_type
+from ...domain.access_policy import can_manage_folder, can_read_document_type, can_write_document_type
 from ...domain.value_objs import DocumentType
 from ...domain.exceptions import (
     DocumentExtractionError,
     DocumentFileMissingError,
     DocumentNotFoundError,
     DocumentTransactionError,
+    DocumentValidationError,
     InvalidDocumentFileError,
 )
 from ..repositories import (
@@ -47,6 +49,7 @@ class DocumentCommandService:
         command_repo: DocumentCommandRepository,
         query_repo: DocumentQueryRepository,
         service_repo: ServiceRepository,
+        folder_repo: FolderRepository,
         vector_repo: VectorRepository,
         extractor: DocumentExtractor,
         storage_repo: DocumentStorageRepository,
@@ -56,12 +59,30 @@ class DocumentCommandService:
         self.command_repo = command_repo
         self.query_repo = query_repo
         self.service_repo = service_repo
+        self.folder_repo = folder_repo
         self.vector_repo = vector_repo
         self.extractor = extractor
         self.storage_repo = storage_repo
         self.chunk_enricher = chunk_enricher
         self.policy = DocumentCommandPolicy(service_repo=service_repo)
         self.response_assembler = DocumentResponseAssembler(sql_repo=query_repo)
+
+    async def _validate_folder_access(
+        self,
+        *,
+        organization_id: int,
+        folder_id: int | None,
+        user_role: UserRole | None,
+    ) -> None:
+        """Ensures the requested folder belongs to the org and can be managed by the role."""
+        if folder_id is None:
+            return
+
+        folder = await self.folder_repo.get_folder_by_id(folder_id)
+        if folder is None or folder.organization_id != organization_id:
+            raise DocumentValidationError(message="La carpeta seleccionada no existe en la organización actual.")
+        if not can_manage_folder(user_role=user_role, owner_role=folder.owner_role):
+            raise ForbiddenError("No tiene permisos para asignar esta carpeta")
 
     @staticmethod
     def _ensure_write_access(document_type: DocumentType, user_role: UserRole | None) -> None:
@@ -91,6 +112,7 @@ class DocumentCommandService:
     ) -> DocumentResponse:
         """Creates a document and syncs all external stores."""
         self._ensure_write_access(document_type=DocumentType(data.type), user_role=user_role)
+        await self._validate_folder_access(organization_id=organization_id, folder_id=data.folder_id, user_role=user_role)
         await self.policy.validate_requested_services(organization_id=organization_id, service_items=data.service_items)
         validate_service_currency_alignment(service_items=data.service_items)
         validate_service_periods(
@@ -111,6 +133,7 @@ class DocumentCommandService:
                 "end_date": data.end_date,
                 "form_data": normalized_form_data,
                 "state": data.state,
+                "folder_id": data.folder_id,
             }
         )
 
@@ -205,11 +228,19 @@ class DocumentCommandService:
         document: DocumentTable,
         data: UpdateDocumentRequest,
         organization_id: int,
+        user_role: UserRole | None,
     ) -> DocumentUpdatePayload:
         """Builds normalized data needed before persisting an update."""
         update_data: dict[str, Any] = data.model_dump(exclude_unset=True)
         service_items_provided = "service_items" in update_data
         requested_service_items = data.service_items or []
+
+        if "folder_id" in update_data:
+            await self._validate_folder_access(
+                organization_id=organization_id,
+                folder_id=update_data["folder_id"],
+                user_role=user_role,
+            )
 
         if service_items_provided:
             await self.policy.validate_requested_services(
@@ -244,6 +275,7 @@ class DocumentCommandService:
                 "end_date": final_end_date,
                 "form_data": final_form_data,
                 "state": update_data.get("state", document.state),
+                "folder_id": update_data.get("folder_id", document.folder_id),
                 "file_path": document.file_path,
                 "file_name": document.file_name,
                 "created_at": document.created_at,
@@ -267,6 +299,7 @@ class DocumentCommandService:
         document.end_date = validated_document.end_date
         document.form_data = validated_document.form_data
         document.state = validated_document.state
+        document.folder_id = validated_document.folder_id
         document.updated_at = validated_document.updated_at
 
     async def _replace_document_services_if_needed(
@@ -397,7 +430,12 @@ class DocumentCommandService:
         if data.type is not None:
             self._ensure_write_access(document_type=DocumentType(data.type), user_role=user_role)
 
-        payload = await self._prepare_document_update(document=document, data=data, organization_id=organization_id)
+        payload = await self._prepare_document_update(
+            document=document,
+            data=data,
+            organization_id=organization_id,
+            user_role=user_role,
+        )
         self._apply_document_updates(document=document, validated_document=payload.validated_document)
 
         if file_data is None:

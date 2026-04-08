@@ -63,6 +63,7 @@ class CreateDocumentRequest(DocumentBase):
     """Request schema for creating a new document."""
 
     state: DocumentState = Field(default=DocumentState.ACTIVE, description="Initial document state")
+    folder_id: int | None = Field(default=None, gt=0, description="Optional folder assigned to the document")
     service_items: list[DocumentServiceItemRequest] = Field(
         default_factory=list,
         description="Services associated to the document through documents_services",
@@ -96,6 +97,7 @@ class UpdateDocumentRequest(BaseModel):
     end_date: date | None = None
     form_data: dict[str, Any] | None = None
     state: DocumentState | None = None
+    folder_id: int | None = Field(default=None, gt=0)
     service_items: list[DocumentServiceItemRequest] | None = None
 
     @field_validator("name", "client")
@@ -135,6 +137,7 @@ class DocumentResponse(DocumentBase):
 
     id: int = Field(..., description="Unique identifier of the document")
     state: DocumentState = Field(..., description="Current state of the document")
+    folder_id: int | None = Field(default=None, description="Folder assigned to the document")
     file_path: str | None = Field(default=None, description="Storage path of the associated file")
     file_name: str | None = Field(default=None, description="Original name of the associated file")
     service_items: list[DocumentServiceItemResponse] = Field(
