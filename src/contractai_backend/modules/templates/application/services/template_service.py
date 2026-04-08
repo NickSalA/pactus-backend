@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from ...domain.entities import TemplateTable
+from ...domain.value_objs import TemplateState
 from ..repositories.base_generate import IDocumentGenerator
 from ..repositories.base_relational import IDocumentModuleAdapter, IOrganizationRepository, ITemplateRepository
 from ..repositories.base_render import ITemplateRenderer
@@ -31,6 +32,8 @@ class TemplateService:
         template: TemplateTable | None = await self.template_repo.get_template_by_id(template_id=template_id, organization_id=organization_id)
         if not template:
             raise ValueError("Template not found or does not belong to the organization.")
+        if template.state != TemplateState.PUBLISHED:
+            raise ValueError("Solo se pueden generar documentos desde plantillas en estado PUBLISHED.")
         org_data = await self.organization_repo.get_organization_data(organization_id=organization_id)
         now: datetime = datetime.now()
         months: list[str] = [

@@ -155,13 +155,13 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "  empleador_objeto_social, representante_nombre, representante_dni, jurisdiccion,\n"
             "  lugar_firma, autorizacion_entidad, autorizacion_fecha, autorizacion_emitida_por,\n"
             "  empleador_email, empleador_telefono, day_sign, month_sign, year_sign.\n"
-            "- If ORGANIZATION_CONTEXT is present, use it only as drafting context. Do not hardcode those values in body_md when an auto variable exists.\n"
+            "- If ORGANIZATION_CONTEXT is present, use it only as drafting context. Do not hardcode those values in body_md when an auto variable exists.\n"  # noqa: E501
             "- Use only the auto variables that are relevant for the contract. Do not force every available variable into the template.\n"
             "- Do not use filters inside placeholders.\n"
-            "- If REFERENCE_CONTEXT is present, preserve the original contract structure as faithfully as possible. Replace variable values with placeholders, but do not freely rewrite or summarize clauses.\n"
-            "- If REFERENCE_OUTLINE is present, preserve every item in clause_sequence when available, and otherwise preserve the order of structure_sequence. Do not omit structural markers that appear in the reference.\n"
+            "- If REFERENCE_CONTEXT is present, preserve the original contract structure as faithfully as possible. Replace variable values with placeholders, but do not freely rewrite or summarize clauses.\n"  # noqa: E501
+            "- If REFERENCE_OUTLINE is present, preserve every item in clause_sequence when available, and otherwise preserve the order of structure_sequence. Do not omit structural markers that appear in the reference.\n"  # noqa: E501
             "- Preserve section titles and the closing section when they appear in the reference.\n"
-            "- When the reference mode is full_clean, stay as close as possible to the original wording and only abstract variable data into placeholders.\n"
+            "- When the reference mode is full_clean, stay as close as possible to the original wording and only abstract variable data into placeholders.\n"  # noqa: E501
             "- If VALIDATION_FEEDBACK is present, correct every listed issue in this attempt.\n"
             "- Use Spanish legal language in body_md.\n\n"
             f"NAME_HINT: {name_hint}\n"

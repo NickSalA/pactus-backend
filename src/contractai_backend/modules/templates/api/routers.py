@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 from pydantic import ValidationError
 
 from contractai_backend.modules.templates.domain.entities import TemplateTable
@@ -65,7 +65,11 @@ async def generate_template(
         )
         return generated_document
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        detail = str(e)
+        status_code = (
+            status.HTTP_404_NOT_FOUND if detail == "Template not found or does not belong to the organization." else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from e
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al generar el documento: {e!s}") from e
 
@@ -186,6 +190,26 @@ async def update_template(
         raise HTTPException(status_code=status_code, detail=detail) from e
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al actualizar la plantilla: {e!s}") from e
+
+
+@router.post(path="/{template_id}/publish", response_model=TemplateResponse, status_code=status.HTTP_200_OK)
+async def publish_template(
+    template_id: int,
+    template_service: TemplateAuthoringServiceDep,
+    current_user: CurrentUserDep,
+) -> TemplateResponse:
+    """Endpoint para publicar una plantilla en borrador."""
+    try:
+        return await template_service.publish_template(
+            template_id=template_id,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        detail = str(e)
+        status_code = status.HTTP_404_NOT_FOUND if detail == "Plantilla no encontrada" else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=detail) from e
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al publicar la plantilla: {e!s}") from e
 
 
 @router.get(path="/", response_model=Sequence[TemplateResponse], status_code=status.HTTP_200_OK)

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ..domain.entities import TemplateContent, TemplateTable
 from ..domain.value_objs import TemplateState
@@ -81,6 +81,15 @@ class CreateTemplateRequest(BaseModel):
             raise ValueError("Name cannot be empty")
         return cleaned
 
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, value: str | None) -> str | None:
+        """Normaliza la descripcion opcional."""
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
 
 class UpdateTemplateRequest(BaseModel):
     name: str | None = None
@@ -97,3 +106,19 @@ class UpdateTemplateRequest(BaseModel):
         if not cleaned:
             raise ValueError("Name cannot be empty")
         return cleaned
+
+    @field_validator("description")
+    @classmethod
+    def validate_optional_description(cls, value: str | None) -> str | None:
+        """Normaliza la descripcion opcional."""
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    @model_validator(mode="after")
+    def validate_non_empty_patch(self) -> "UpdateTemplateRequest":
+        """Verifica que el patch incluya al menos un cambio."""
+        if not self.model_fields_set:
+            raise ValueError("Patch request cannot be empty")
+        return self

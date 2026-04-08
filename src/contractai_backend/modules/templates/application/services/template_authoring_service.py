@@ -20,6 +20,7 @@ from ...domain.entities import TemplateContent, TemplateField, TemplateTable
 from ...domain.value_objs import TemplateState
 from ..repositories import IOrganizationRepository, ITemplateRenderer, ITemplateRepository
 from ..repositories.base_draft_generator import ITemplateDraftGenerator
+from .template_content_synchronizer import TemplateContentSynchronizer
 from .template_placeholder_validator import TemplatePlaceholderValidator
 from .template_reference_preprocessor import TemplateReferenceContext, TemplateReferencePreprocessor
 
@@ -39,6 +40,7 @@ class TemplateAuthoringService:
         self.renderer = renderer
         self.extractor = extractor
         self.draft_generator = draft_generator
+        self.content_synchronizer = TemplateContentSynchronizer()
         self.validator = TemplatePlaceholderValidator()
         self.reference_preprocessor = TemplateReferencePreprocessor()
 
@@ -50,6 +52,7 @@ class TemplateAuthoringService:
         """Genera un borrador guiado por formulario."""
         organization_context = await self._build_organization_context(organization_id=organization_id)
         draft = await self.draft_generator.generate(request=request, organization_context=organization_context)
+        draft.content = self.content_synchronizer.sync(draft.content)
         draft.warnings.extend(self.validator.validate(draft.content))
         return draft
 
@@ -121,15 +124,16 @@ class TemplateAuthoringService:
         organization_id: int,
     ) -> PreviewTemplateResponse:
         """Renderiza una vista previa de la plantilla."""
-        warnings = self.validator.validate(request.content)
+        synced_content = self.content_synchronizer.sync(request.content)
+        warnings = self.validator.validate(synced_content)
         org_data = await self.organization_repo.get_organization_data(organization_id=organization_id)
         payload = {
-            **self._build_mock_payload(request.content.fields),
+            **self._build_mock_payload(synced_content.fields),
             **org_data,
             **self._build_time_payload(),
             **request.sample_data,
         }
-        markdown = await self.renderer.render(template_md=request.content.body_md, payload=payload)
+        markdown = await self.renderer.render(template_md=synced_content.body_md, payload=payload)
         return PreviewTemplateResponse(markdown=markdown, resolved_payload=payload, warnings=warnings)
 
     async def create_template(
@@ -138,12 +142,13 @@ class TemplateAuthoringService:
         organization_id: int,
     ) -> TemplateResponse:
         """Crea una plantilla manual en borrador."""
-        self.validator.validate(request.content)
+        synced_content = self.content_synchronizer.sync(request.content)
+        self.validator.validate(synced_content)
         template = self._build_template_entity(
             organization_id=organization_id,
             name=request.name,
             description=request.description,
-            content=request.content,
+            content=synced_content,
         )
         saved_template = await self.template_repo.save(entity=template)
         return build_template_response(saved_template)
@@ -159,16 +164,38 @@ class TemplateAuthoringService:
         if template.state != TemplateState.DRAFT:
             raise ValueError("Solo se pueden editar plantillas en estado DRAFT.")
 
-        if request.content is not None:
-            self.validator.validate(request.content)
-            template.content = request.content.model_dump(mode="python")
-        if request.name is not None:
+        fields_set = request.model_fields_set
+
+        if "content" in fields_set:
+            if request.content is None:
+                raise ValueError("Content cannot be null")
+            synced_content = self.content_synchronizer.sync(request.content)
+            self.validator.validate(synced_content)
+            template.content = synced_content.model_dump(mode="python")
+        if "name" in fields_set:
+            if request.name is None:
+                raise ValueError("Name cannot be null")
             template.name = request.name
-        if request.description is not None:
+        if "description" in fields_set:
             template.description = request.description
 
         updated_template = await self.template_repo.update(entity=template)
         return build_template_response(updated_template)
+
+    async def publish_template(self, template_id: int, organization_id: int) -> TemplateResponse:
+        """Publica una plantilla en borrador."""
+        template = await self._get_template_or_raise(template_id=template_id, organization_id=organization_id)
+        if template.state != TemplateState.DRAFT:
+            raise ValueError("Solo se pueden publicar plantillas en estado DRAFT.")
+
+        content = self.content_synchronizer.sync(TemplateContent.model_validate(template.content))
+        self.validator.validate(content)
+        content.version = self._resolve_publish_version(content.version)
+
+        template.content = content.model_dump(mode="python")
+        template.state = TemplateState.PUBLISHED
+        published_template = await self.template_repo.update(entity=template)
+        return build_template_response(published_template)
 
     async def _persist_draft(self, draft: TemplateDraftResponse, organization_id: int) -> TemplateResponse:
         """Guarda un borrador generado en la base de datos."""
@@ -199,6 +226,7 @@ class TemplateAuthoringService:
                 organization_context=organization_context,
                 validation_feedback=retry_feedback or None,
             )
+            draft.content = self.content_synchronizer.sync(draft.content)
 
             try:
                 warnings = self.validator.validate(draft.content)
@@ -237,6 +265,11 @@ class TemplateAuthoringService:
         if template is None:
             raise ValueError("Plantilla no encontrada")
         return template
+
+    def _resolve_publish_version(self, version: str | None) -> str:
+        """Normaliza la version al momento de publicar."""
+        normalized_version = (version or "").strip()
+        return normalized_version or "1.0"
 
     async def _build_organization_context(self, organization_id: int) -> dict[str, Any]:
         """Construye contexto util para la generacion."""
