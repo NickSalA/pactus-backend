@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.21.0 (2026-04-08)
+
+### Features
+
+- Restrict worker document access
+  ([`a2fd269`](https://github.com/NickSalA/ContractAI-Backend/commit/a2fd26958e15654ad23706df2ef6b25667b7622f))
+
+
 ## v0.20.0 (2026-04-08)
 
 ### Features
