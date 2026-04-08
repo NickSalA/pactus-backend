@@ -16,7 +16,9 @@ from .modules.chatbot.api import chat_router, conversation_router
 from .modules.chatbot.infrastructure.agent import init_checkpointer
 from .modules.documents.api.routers import router as documents_router
 from .modules.documents.infrastructure import configure_embedding
+from .modules.folders.api.routers import router as folders_router
 from .modules.notifications.api.routers import router as notifications_router
+from .modules.catalog.api.routers import router as services_router
 from .modules.templates.api.routers import router as templates_router
 from .modules.users.api.routers import auth_router, users_router
 from .shared.api.error_handlers import app_error_handler, global_exception_handler, http_exception_handler, validation_exception_handler
@@ -45,6 +47,8 @@ def create() -> FastAPI:
     app = FastAPI(title=settings.PROJECT_NAME, version=__version__, lifespan=lifespan)
 
     app.include_router(router=documents_router, prefix="/documents", tags=["Documentos"])
+    app.include_router(router=services_router, prefix="/services", tags=["Catálogo de Servicios"])
+    app.include_router(router=folders_router, prefix="/folders", tags=["Carpetas"])
     app.include_router(router=auth_router, prefix="/login", tags=["Autenticación"])
     app.include_router(router=users_router, prefix="/user", tags=["Usuarios"])
     app.include_router(router=chat_router, prefix="/chatbot", tags=["Chatbot"])

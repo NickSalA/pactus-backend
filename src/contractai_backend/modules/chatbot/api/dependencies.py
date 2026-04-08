@@ -8,6 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....modules.documents.application.services import ContractQueryService
 from ....modules.documents.infrastructure import SQLModelDocumentRepository
+from ....modules.catalog.infrastructure.postgres_repo import SQLModelServiceRepository
 from ....modules.users.domain.entities import UserTable
 from ....shared.api.dependencies.security import get_current_user
 from ....shared.config import settings
@@ -38,7 +39,8 @@ async def get_llm_provider(
         organization_id=current_user.organization_id,
     )
     contract_repo = SQLModelDocumentRepository(session=session)
-    contract_query_service = ContractQueryService(sql_repo=contract_repo)
+    service_catalog_repo = SQLModelServiceRepository(session=session)
+    contract_query_service = ContractQueryService(sql_repo=contract_repo, service_repo=service_catalog_repo)
 
     bc_tool = build_bc_tool(repo=vector_repo)
     contracts_query_tool = build_contracts_query_tool(service=contract_query_service, organization_id=current_user.organization_id)

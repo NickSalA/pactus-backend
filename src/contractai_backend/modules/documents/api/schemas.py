@@ -3,9 +3,10 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from ....modules.documents.domain import CurrencyType, DocumentState, DocumentType
+from ....modules.users.domain.value_objs import UserRole
 
 
 class DocumentServiceItemBase(BaseModel):
@@ -35,15 +36,6 @@ class DocumentServiceItemResponse(DocumentServiceItemBase):
     """Response schema for document-service associations."""
 
     id: int = Field(..., description="Unique identifier of the document-service association")
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class ServiceCatalogItemResponse(BaseModel):
-    """Schema for service catalog items available to the frontend."""
-
-    id: int = Field(..., description="Unique identifier of the service")
-    name: str = Field(..., description="Display name of the service")
 
     model_config = ConfigDict(from_attributes=True)
 

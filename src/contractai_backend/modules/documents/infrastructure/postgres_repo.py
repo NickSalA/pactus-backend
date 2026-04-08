@@ -1,4 +1,4 @@
-"""Repositorio de Documentos utilizando SQLModel y AsyncSession para Supabase."""
+"""PostgreSQL implementation of document query and command repositories."""
 
 from collections import defaultdict
 from collections.abc import Sequence
@@ -12,29 +12,26 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....core.infrastructure.base import PostgresBaseRepository
 from ..application.dto import ContractQueryDTO
-from ..application.repositories import DocumentCommandRepository, DocumentQueryRepository, ServiceCatalogRepository
-from ..domain import DocumentServiceTable, DocumentTable, ServiceTable
+from ..application.repositories import DocumentCommandRepository, DocumentQueryRepository
+from ..domain import DocumentServiceTable, DocumentTable
 from ..domain.exceptions import DocumentDatabaseError, DocumentDatabaseUnavailableError
+from ....shared.infrastructure.sqlmodel_utils import RelationalHelpersMixin
 
 
 class SQLModelDocumentRepository(
+    RelationalHelpersMixin,
     PostgresBaseRepository[DocumentTable],
     DocumentQueryRepository,
     DocumentCommandRepository,
-    ServiceCatalogRepository,
 ):
-    """Repositorio de Documentos utilizando SQLModel y AsyncSession para Supabase."""
+    """Document repository for query and command operations via SQLModel."""
 
     def __init__(self, session: AsyncSession):
         super().__init__(model=DocumentTable, session=session)
 
-    @staticmethod
-    def _normalize_text_filter(value: str | None) -> str | None:
-        if value is None:
-            return None
-
-        cleaned = value.strip().lower()
-        return cleaned or None
+    # ──────────────────────────────────────
+    #  Private filter / sort helpers
+    # ──────────────────────────────────────
 
     @staticmethod
     def _build_contract_value_expression():
@@ -90,18 +87,6 @@ class SQLModelDocumentRepository(
         if direction == "desc":
             return ordered_expression.nulls_last()
         return ordered_expression.nulls_first()
-
-    @staticmethod
-    def _read_scalar_result(value: object) -> int:
-        if hasattr(value, "_mapping"):
-            mapping = value._mapping
-            if mapping:
-                return int(next(iter(mapping.values())) or 0)
-
-        if isinstance(value, tuple):
-            return int((value[0] if value else 0) or 0)
-
-        return int(value or 0)
 
     def _apply_contract_sorting(self, statement, query: ContractQueryDTO):
         sort_mapping = {
@@ -191,6 +176,10 @@ class SQLModelDocumentRepository(
 
         statement = self._apply_period_filters(statement=statement, filters=filters)
         return self._apply_current_activity_filter(statement=statement, filters=filters)
+
+    # ──────────────────────────────────────
+    #  DocumentQueryRepository
+    # ──────────────────────────────────────
 
     async def get_document_services(self, doc_id: int) -> Sequence[DocumentServiceTable]:
         """Obtiene los servicios asociados a un documento."""
@@ -337,6 +326,10 @@ class SQLModelDocumentRepository(
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
 
+    # ──────────────────────────────────────
+    #  DocumentCommandRepository
+    # ──────────────────────────────────────
+
     async def replace_document_services(self, doc_id: int, service_items: Sequence[DocumentServiceTable]) -> Sequence[DocumentServiceTable]:
         """Reemplaza el conjunto de servicios asociados a un documento."""
         try:
@@ -357,36 +350,4 @@ class SQLModelDocumentRepository(
         except SQLAlchemyError as e:
             await self.session.rollback()
             logger.debug(f"SQLAlchemyError replacing services for document {doc_id}: {e}")
-            raise DocumentDatabaseError() from e
-
-    async def get_services_by_ids(self, organization_id: int, service_ids: Sequence[int]) -> Sequence[ServiceTable]:
-        """Obtiene los servicios existentes por sus IDs dentro de una organización."""
-        if not service_ids:
-            return []
-
-        try:
-            query = select(ServiceTable).where(
-                col(ServiceTable.organization_id) == organization_id,
-                col(ServiceTable.id).in_(service_ids),
-            )
-            result = await self.session.exec(statement=query)
-            return result.all()
-        except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise DocumentDatabaseUnavailableError() from e
-        except SQLAlchemyError as e:
-            raise DocumentDatabaseError() from e
-
-    async def get_services(self, organization_id: int) -> Sequence[ServiceTable]:
-        """Obtiene el catálogo de servicios de una organización."""
-        try:
-            query = (
-                select(ServiceTable)
-                .where(col(ServiceTable.organization_id) == organization_id)
-                .order_by(col(ServiceTable.name), col(ServiceTable.id))
-            )
-            result = await self.session.exec(statement=query)
-            return result.all()
-        except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise DocumentDatabaseUnavailableError() from e
-        except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e

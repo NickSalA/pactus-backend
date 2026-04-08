@@ -2,16 +2,22 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 
-from contractai_backend.modules.notifications.api.dependencies import get_email_alert_service
-from contractai_backend.modules.notifications.api.schemas import NotificationResponse
-from contractai_backend.modules.notifications.application.services.email_alert_service import EmailAlertService
-from contractai_backend.shared.api.dependencies.security import CurrentUserDep
+from ....shared.api.dependencies.security import CurrentUserDep
+from ..application.services import EmailAlertService, NotificationRuleService
+from .dependencies import get_email_alert_service, get_notification_rule_service
+from .schemas import (
+    NotificationResponse,
+    NotificationRuleCreateRequest,
+    NotificationRuleResponse,
+    NotificationRuleUpdateRequest,
+)
 
 router = APIRouter()
 
 EmailAlertServiceDep = Annotated[EmailAlertService, Depends(get_email_alert_service)]
+NotificationRuleServiceDep = Annotated[NotificationRuleService, Depends(get_notification_rule_service)]
 
 
 @router.get(path="/", response_model=list[NotificationResponse])
@@ -48,3 +54,43 @@ async def send_email_alerts(
         organization_id=current_user.organization_id,
     )
     return {"emails_sent": sent}
+
+
+@router.get(path="/rules", response_model=list[NotificationRuleResponse])
+async def list_notification_rules(
+    rule_service: NotificationRuleServiceDep,
+    current_user: CurrentUserDep,
+) -> list[NotificationRuleResponse]:
+    """Lists notification rules for the current organization."""
+    return await rule_service.list_rules(current_user=current_user)
+
+
+@router.post(path="/rules", response_model=NotificationRuleResponse, status_code=status.HTTP_201_CREATED)
+async def create_notification_rule(
+    payload: NotificationRuleCreateRequest,
+    rule_service: NotificationRuleServiceDep,
+    current_user: CurrentUserDep,
+) -> NotificationRuleResponse:
+    """Creates a notification rule for the current organization."""
+    return await rule_service.create_rule(current_user=current_user, data=payload)
+
+
+@router.patch(path="/rules/{rule_id}", response_model=NotificationRuleResponse)
+async def update_notification_rule(
+    rule_id: int,
+    payload: NotificationRuleUpdateRequest,
+    rule_service: NotificationRuleServiceDep,
+    current_user: CurrentUserDep,
+) -> NotificationRuleResponse:
+    """Updates one notification rule for the current organization."""
+    return await rule_service.update_rule(current_user=current_user, rule_id=rule_id, data=payload)
+
+
+@router.delete(path="/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+async def delete_notification_rule(
+    rule_id: int,
+    rule_service: NotificationRuleServiceDep,
+    current_user: CurrentUserDep,
+) -> None:
+    """Deletes one notification rule for the current organization."""
+    await rule_service.delete_rule(current_user=current_user, rule_id=rule_id)

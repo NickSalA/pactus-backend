@@ -4,10 +4,9 @@ from .repositories import (
     DocumentCommandRepository,
     DocumentExtractor,
     DocumentQueryRepository,
-    ServiceCatalogRepository,
     VectorRepository,
 )
-from .services import ContractQueryService, DocumentCommandService, DocumentQueryService, ServiceCatalogService
+from .services import ContractQueryService, DocumentCommandService, DocumentQueryService
 
 __all__ = [
     "ContractQueryDTO",
@@ -18,7 +17,5 @@ __all__ = [
     "DocumentExtractor",
     "DocumentQueryRepository",
     "DocumentQueryService",
-    "ServiceCatalogRepository",
-    "ServiceCatalogService",
     "VectorRepository",
 ]

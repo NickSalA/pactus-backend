@@ -4,19 +4,18 @@ import json
 from collections.abc import Sequence
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, Response, UploadFile, status
+from fastapi import APIRouter, Depends, Form, UploadFile, status, Response
 from pydantic import ValidationError
 
 from ....shared.api.dependencies.security import CurrentUserDep
-from ..application.services import DocumentCommandService, DocumentQueryService, ServiceCatalogService
+from ..application.services import DocumentCommandService, DocumentQueryService
 from ..domain.exceptions import DocumentNotFoundError, DocumentValidationError, InvalidDocumentFileError
-from .dependencies import get_document_command_service, get_document_query_service, get_service_catalog_service
+from .dependencies import get_document_command_service, get_document_query_service
 from .schemas import (
     CreateDocumentRequest,
     DocumentFileUrlResponse,
     DocumentResponse,
     FileRequest,
-    ServiceCatalogItemResponse,
     UpdateDocumentRequest,
 )
 
@@ -63,16 +62,6 @@ async def list_documents(
         user_role=current_user.role,
     )
     return documents
-
-
-@router.get(path="/services", response_model=Sequence[ServiceCatalogItemResponse])
-async def list_services(
-    service: Annotated[ServiceCatalogService, Depends(get_service_catalog_service)],
-    current_user: CurrentUserDep,
-) -> Sequence[ServiceCatalogItemResponse]:
-    """Endpoint to list available services for the current organization."""
-    services = await service.list_services(organization_id=current_user.organization_id)
-    return [ServiceCatalogItemResponse.model_validate(item) for item in services]
 
 
 @router.get(path="/{document_id}", response_model=DocumentResponse)

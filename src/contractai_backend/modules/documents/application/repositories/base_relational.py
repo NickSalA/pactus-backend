@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import Any
 
-from ...domain import DocumentServiceTable, DocumentTable, ServiceTable
 from ..dto import ContractQueryDTO
+from ...domain import DocumentServiceTable, DocumentTable
 
 
 class DocumentQueryRepository(ABC):
@@ -88,16 +88,4 @@ class DocumentCommandRepository(ABC):
     @abstractmethod
     async def replace_document_services(self, doc_id: int, service_items: Sequence[DocumentServiceTable]) -> Sequence[DocumentServiceTable]:
         """Replaces all service items for a document."""
-        pass
-
-
-class ServiceCatalogRepository(ABC):
-    @abstractmethod
-    async def get_services_by_ids(self, organization_id: int, service_ids: Sequence[int]) -> Sequence[ServiceTable]:
-        """Returns catalog services for the given ids."""
-        pass
-
-    @abstractmethod
-    async def get_services(self, organization_id: int) -> Sequence[ServiceTable]:
-        """Lists the catalog for one organization."""
         pass

@@ -9,13 +9,13 @@ from .....core.application.validation import format_pydantic_validation_error
 from ...api.schemas import DocumentServiceItemRequest
 from ...domain import DocumentServiceTable, DocumentTable
 from ...domain.exceptions import DocumentValidationError
-from ..repositories import ServiceCatalogRepository
+from ....catalog.application.repositories import ServiceRepository
 
 
 class DocumentCommandPolicy:
     """Holds command-side validation that needs application context."""
 
-    def __init__(self, service_repo: ServiceCatalogRepository):
+    def __init__(self, service_repo: ServiceRepository):
         """Stores the repository used by policy checks."""
         self.service_repo = service_repo
 

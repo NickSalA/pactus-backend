@@ -6,7 +6,8 @@ from typing import Any
 
 from ...domain import DocumentServiceTable, DocumentTable
 from ..dto import ContractQueryDTO
-from ..repositories import DocumentQueryRepository, ServiceCatalogRepository
+from ..repositories import DocumentQueryRepository
+from ....catalog.application.repositories import ServiceRepository
 
 DEFAULT_LIST_LIMIT = 20
 MAX_LIST_LIMIT = 50
@@ -15,7 +16,7 @@ MAX_LIST_LIMIT = 50
 class ContractQueryService:
     """Executes structured contract queries backed by the relational store."""
 
-    def __init__(self, sql_repo: DocumentQueryRepository, service_repo: ServiceCatalogRepository | None = None):
+    def __init__(self, sql_repo: DocumentQueryRepository, service_repo: ServiceRepository | None = None):
         self.sql_repo = sql_repo
         self.service_repo = service_repo or sql_repo
 

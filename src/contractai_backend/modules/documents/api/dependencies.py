@@ -1,4 +1,4 @@
-"""Dependency Injection para el modulo de documentos."""
+"""Dependency Injection for the documents module."""
 
 from typing import Annotated
 
@@ -15,10 +15,9 @@ from ..application.repositories import (
     DocumentExtractor,
     DocumentQueryRepository,
     DocumentStorageRepository,
-    ServiceCatalogRepository,
     VectorRepository,
 )
-from ..application.services import DocumentCommandService, DocumentQueryService, ServiceCatalogService
+from ..application.services import DocumentCommandService, DocumentQueryService
 from ..infrastructure import (
     LlamaIndexQdrantRepository,
     LlamaParseExtractor,
@@ -26,6 +25,8 @@ from ..infrastructure import (
     SupabaseStorageRepository,
     VectorChunkMetadataEnricher,
 )
+from ...catalog.api.dependencies import get_service_repository
+from ...catalog.application.repositories import ServiceRepository
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 AsyncQdrantDep = Annotated[AsyncQdrantClient, Depends(get_aclient)]
@@ -33,7 +34,7 @@ SyncQdrantDep = Annotated[QdrantClient, Depends(get_client)]
 
 
 async def get_document_relational_repository(session: SessionDep) -> SQLModelDocumentRepository:
-    """Construye el repositorio SQL compartido del modulo."""
+    """Construye el repositorio SQL de documentos."""
     return SQLModelDocumentRepository(session=session)
 
 
@@ -48,13 +49,6 @@ async def get_document_command_repository(
     repo: Annotated[SQLModelDocumentRepository, Depends(get_document_relational_repository)],
 ) -> DocumentCommandRepository:
     """Exposes the SQL repo through the command port."""
-    return repo
-
-
-async def get_service_catalog_repository(
-    repo: Annotated[SQLModelDocumentRepository, Depends(get_document_relational_repository)],
-) -> ServiceCatalogRepository:
-    """Exposes the SQL repo through the service catalog port."""
     return repo
 
 
@@ -80,7 +74,7 @@ async def get_chunk_enricher() -> DocumentChunkEnricher:
 
 DocumentQueryRepoDep = Annotated[DocumentQueryRepository, Depends(get_document_query_repository)]
 DocumentCommandRepoDep = Annotated[DocumentCommandRepository, Depends(get_document_command_repository)]
-ServiceCatalogRepoDep = Annotated[ServiceCatalogRepository, Depends(get_service_catalog_repository)]
+ServiceRepoDep = Annotated[ServiceRepository, Depends(get_service_repository)]
 VectorRepoDep = Annotated[VectorRepository, Depends(get_vector_repository)]
 ExtractorDep = Annotated[DocumentExtractor, Depends(get_extractor)]
 StorageRepoDep = Annotated[DocumentStorageRepository, Depends(get_storage_repository)]
@@ -90,7 +84,7 @@ ChunkEnricherDep = Annotated[DocumentChunkEnricher, Depends(get_chunk_enricher)]
 async def get_document_command_service(
     command_repo: DocumentCommandRepoDep,
     query_repo: DocumentQueryRepoDep,
-    service_repo: ServiceCatalogRepoDep,
+    service_repo: ServiceRepoDep,
     vector_repo: VectorRepoDep,
     extractor: ExtractorDep,
     storage_repo: StorageRepoDep,
@@ -111,8 +105,3 @@ async def get_document_command_service(
 async def get_document_query_service(sql_repo: DocumentQueryRepoDep) -> DocumentQueryService:
     """Construye un servicio de lectura para documentos."""
     return DocumentQueryService(sql_repo=sql_repo)
-
-
-async def get_service_catalog_service(sql_repo: ServiceCatalogRepoDep) -> ServiceCatalogService:
-    """Construye un servicio de lectura para el catalogo de servicios."""
-    return ServiceCatalogService(sql_repo=sql_repo)

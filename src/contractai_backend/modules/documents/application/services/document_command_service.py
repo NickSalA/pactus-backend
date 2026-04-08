@@ -25,9 +25,9 @@ from ..repositories import (
     DocumentExtractor,
     DocumentQueryRepository,
     DocumentStorageRepository,
-    ServiceCatalogRepository,
     VectorRepository,
 )
+from ....catalog.application.repositories import ServiceRepository
 from .document_command_policy import DocumentCommandPolicy
 from .document_response_assembler import DocumentResponseAssembler
 
@@ -46,7 +46,7 @@ class DocumentCommandService:
         self,
         command_repo: DocumentCommandRepository,
         query_repo: DocumentQueryRepository,
-        service_repo: ServiceCatalogRepository,
+        service_repo: ServiceRepository,
         vector_repo: VectorRepository,
         extractor: DocumentExtractor,
         storage_repo: DocumentStorageRepository,

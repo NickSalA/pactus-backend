@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from pydantic import ValidationInfo, field_validator
-from sqlalchemy import Column, Date, DateTime, Integer, String, Text
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlmodel import Field
 
@@ -30,6 +30,10 @@ class DocumentTable(BaseTable, table=True):
     )
     file_path: str | None = Field(default=None, sa_column=Column("file_path", Text, nullable=True))
     file_name: str | None = Field(default=None, sa_column=Column("file_name", Text, nullable=True))
+    folder_id: int | None = Field(
+        default=None,
+        sa_column=Column("folder_id", Integer, ForeignKey("document_folders.id", ondelete="SET NULL"), nullable=True, index=True),
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column("created_at", DateTime(timezone=True), nullable=False),
