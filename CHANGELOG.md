@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.20.0 (2026-04-08)
+
+### Features
+
+- Implement template content synchronization and enhance error handling in template operations
+  ([`2162bd8`](https://github.com/NickSalA/ContractAI-Backend/commit/2162bd8081c60b849c3dab8a55780a1240f8a123))
+
+
 ## v0.19.0 (2026-04-08)
 
 ### Features
