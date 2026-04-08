@@ -152,6 +152,13 @@ class FolderService:
         if not can_manage_folder(current_user.role, folder.owner_role):
             raise ForbiddenError("No tiene permisos para eliminar esta carpeta")
 
+        document_counts = await self.sql_repo.count_documents_by_folder_ids(
+            organization_id=current_user.organization_id,
+            folder_ids=[folder_id],
+        )
+        if document_counts.get(folder_id, 0) > 0:
+            raise ConflictError("No se puede eliminar la carpeta porque tiene contratos asociados")
+
         deleted = await self.sql_repo.delete_folder(folder_id)
         if not deleted:
             raise NotFoundError("La carpeta solicitada no existe en la organización actual")

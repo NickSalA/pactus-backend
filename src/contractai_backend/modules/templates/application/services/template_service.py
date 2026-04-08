@@ -71,6 +71,7 @@ class TemplateService:
             "content": pdf_bytes,
             "start_date": form_data.get("contrato_fecha_inicio", now.date().isoformat()),
             "end_date": form_data.get("contrato_fecha_fin", now.date().isoformat()),
+            "folder_id": form_data.get("folder_id"),
             "service_items": form_data.get("service_items", []),
             "form_data": master_dict,
             "file_name": generated_file_name,

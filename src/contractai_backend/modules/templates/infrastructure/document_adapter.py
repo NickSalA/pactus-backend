@@ -20,6 +20,7 @@ class DocumentModuleAdapter(IDocumentModuleAdapter):
             end_date=document_payload["end_date"],
             form_data=document_payload["form_data"],
             state=DocumentState(document_payload.get("state")),
+            folder_id=document_payload.get("folder_id"),
             service_items=document_payload.get("service_items", []),
         )
 
