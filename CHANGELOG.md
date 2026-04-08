@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.23.0 (2026-04-08)
+
+### Features
+
+- Register organizations router, implement member service, and update auth service to enforce
+  admin-only user registration
+  ([`fd7eee5`](https://github.com/NickSalA/ContractAI-Backend/commit/fd7eee5d36b185dcf70c3593ea7f8218d1b6b8bd))
+
+
 ## v0.22.0 (2026-04-08)
 
 ### Features
