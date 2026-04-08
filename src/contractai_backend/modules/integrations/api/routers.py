@@ -1,7 +1,8 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 
+from contractai_backend.modules.documents.domain.access_policy import can_write_document_type
 from contractai_backend.modules.integrations.application import IntegrationService
 from contractai_backend.shared.config import settings
 from contractai_backend.shared.api.dependencies.security import CurrentUserDep
@@ -32,6 +33,12 @@ async def download_drive_file(file_id: str, request: DriveRequest, service: Inte
 
 @router.post("/import", response_model=ImportResponse)
 async def import_drive_files(request: ImportRequest, background_tasks: BackgroundTasks, current_user: CurrentUserDep):
+    if any(not can_write_document_type(current_user.role, file_item.document.type) for file_item in request.files):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tiene permisos para importar este tipo de contrato",
+        )
+
     files_payload = [file_item.model_dump(mode="python") for file_item in request.files]
     background_tasks.add_task(process_drive_import_in_background, request.token, files_payload, current_user.organization_id, current_user.id)
     return ImportResponse(

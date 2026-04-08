@@ -47,6 +47,7 @@ async def create_document(
         data=doc_obj,
         file_data=file_data,
         organization_id=current_user.organization_id,
+        user_role=current_user.role,
     )
     return saved_document
 
@@ -57,7 +58,10 @@ async def list_documents(
     current_user: CurrentUserDep,
 ) -> Sequence[DocumentResponse]:
     """Endpoint to list documents with optional filters."""
-    documents: Sequence[DocumentResponse] = await service.get_documents(organization_id=current_user.organization_id)
+    documents: Sequence[DocumentResponse] = await service.get_documents(
+        organization_id=current_user.organization_id,
+        user_role=current_user.role,
+    )
     return documents
 
 
@@ -78,7 +82,11 @@ async def get_document(
     current_user: CurrentUserDep,
 ) -> DocumentResponse:
     """Endpoint to retrieve a document by its ID."""
-    doc: DocumentResponse | None = await service.get_document(id=document_id, organization_id=current_user.organization_id)
+    doc: DocumentResponse | None = await service.get_document(
+        id=document_id,
+        organization_id=current_user.organization_id,
+        user_role=current_user.role,
+    )
     if not doc:
         raise DocumentNotFoundError(document_id=document_id)
     return doc
@@ -91,7 +99,11 @@ async def get_document_file_url(
     current_user: CurrentUserDep,
 ) -> DocumentFileUrlResponse:
     """Endpoint to generate a signed URL for a stored document file."""
-    url = await service.get_document_signed_url(id=document_id, organization_id=current_user.organization_id)
+    url = await service.get_document_signed_url(
+        id=document_id,
+        organization_id=current_user.organization_id,
+        user_role=current_user.role,
+    )
     return DocumentFileUrlResponse(url=url)
 
 
@@ -121,6 +133,7 @@ async def update_document(
         id=document_id,
         data=doc_obj,
         organization_id=current_user.organization_id,
+        user_role=current_user.role,
         file_data=file_data,
     )
     return updated_doc
@@ -133,4 +146,4 @@ async def delete_document(
     current_user: CurrentUserDep,
 ) -> None:
     """Endpoint to delete a document by its ID."""
-    await service.delete_document(id=document_id, organization_id=current_user.organization_id)
+    await service.delete_document(id=document_id, organization_id=current_user.organization_id, user_role=current_user.role)

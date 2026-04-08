@@ -6,8 +6,12 @@ from typing import Any
 
 from loguru import logger
 
+from .....core.exceptions.base import ForbiddenError
+from ....users.domain.value_objs import UserRole
 from ...api.schemas import CreateDocumentRequest, DocumentResponse, DocumentServiceItemRequest, FileRequest, UpdateDocumentRequest
 from ...domain import DocumentTable, validate_service_currency_alignment, validate_service_periods
+from ...domain.access_policy import can_read_document_type, can_write_document_type
+from ...domain.value_objs import DocumentType
 from ...domain.exceptions import (
     DocumentExtractionError,
     DocumentFileMissingError,
@@ -59,6 +63,17 @@ class DocumentCommandService:
         self.policy = DocumentCommandPolicy(service_repo=service_repo)
         self.response_assembler = DocumentResponseAssembler(sql_repo=query_repo)
 
+    @staticmethod
+    def _ensure_write_access(document_type: DocumentType, user_role: UserRole | None) -> None:
+        """Raises when the role cannot mutate the given document type."""
+        if not can_write_document_type(user_role=user_role, document_type=document_type):
+            raise ForbiddenError("No tiene permisos para gestionar este tipo de contrato")
+
+    @staticmethod
+    def _can_read_document(document: DocumentTable, user_role: UserRole | None) -> bool:
+        """Returns whether the role can read the given document."""
+        return can_read_document_type(user_role=user_role, document_type=DocumentType(document.type))
+
     async def _get_document_entity(self, id: int, organization_id: int) -> DocumentTable | None:
         """Loads a document only if it belongs to the org."""
         document = await self.query_repo.get_by_id(id)
@@ -71,9 +86,11 @@ class DocumentCommandService:
         data: CreateDocumentRequest,
         file_data: FileRequest,
         organization_id: int,
+        user_role: UserRole | None = None,
         index_name: str = "contracts_index",
     ) -> DocumentResponse:
         """Creates a document and syncs all external stores."""
+        self._ensure_write_access(document_type=DocumentType(data.type), user_role=user_role)
         await self.policy.validate_requested_services(organization_id=organization_id, service_items=data.service_items)
         validate_service_currency_alignment(service_items=data.service_items)
         validate_service_periods(
@@ -157,11 +174,18 @@ class DocumentCommandService:
 
             raise DocumentTransactionError(operation="create", details=str(object=exc)) from exc
 
-    async def delete_document(self, id: int, organization_id: int, index_name: str = "contracts_index") -> bool:
+    async def delete_document(
+        self,
+        id: int,
+        organization_id: int,
+        user_role: UserRole | None = None,
+        index_name: str = "contracts_index",
+    ) -> bool:
         """Deletes a document from SQL, vector store and storage."""
         document = await self._get_document_entity(id=id, organization_id=organization_id)
         if not document:
             raise DocumentNotFoundError(document_id=id)
+        self._ensure_write_access(document_type=DocumentType(document.type), user_role=user_role)
 
         try:
             await self.vector_repo.delete_vectors(index_name=index_name, document_id=id)
@@ -361,6 +385,7 @@ class DocumentCommandService:
         id: int,
         data: UpdateDocumentRequest,
         organization_id: int,
+        user_role: UserRole | None = None,
         file_data: FileRequest | None = None,
         index_name: str = "contracts_index",
     ) -> DocumentResponse:
@@ -368,6 +393,9 @@ class DocumentCommandService:
         document = await self._get_document_entity(id=id, organization_id=organization_id)
         if not document:
             raise DocumentNotFoundError(document_id=id)
+        self._ensure_write_access(document_type=DocumentType(document.type), user_role=user_role)
+        if data.type is not None:
+            self._ensure_write_access(document_type=DocumentType(data.type), user_role=user_role)
 
         payload = await self._prepare_document_update(document=document, data=data, organization_id=organization_id)
         self._apply_document_updates(document=document, validated_document=payload.validated_document)
@@ -388,10 +416,18 @@ class DocumentCommandService:
             index_name=index_name,
         )
 
-    async def get_document_signed_url(self, id: int, organization_id: int, expires_in: int = 3600) -> str:
+    async def get_document_signed_url(
+        self,
+        id: int,
+        organization_id: int,
+        user_role: UserRole | None = None,
+        expires_in: int = 3600,
+    ) -> str:
         """Returns a signed URL for a stored document file."""
         document = await self._get_document_entity(id=id, organization_id=organization_id)
         if not document:
+            raise DocumentNotFoundError(document_id=id)
+        if not self._can_read_document(document=document, user_role=user_role):
             raise DocumentNotFoundError(document_id=id)
         if document.file_path is None:
             raise DocumentFileMissingError(document_id=id)
