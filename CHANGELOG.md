@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.24.0 (2026-04-08)
+
+### Features
+
+- Implement role-manager access control for document imports
+  ([`4ef2711`](https://github.com/NickSalA/ContractAI-Backend/commit/4ef2711fe9dfeacd5571113eaa5091ed8f3a81ff))
+
+
 ## v0.23.0 (2026-04-08)
 
 ### Features
