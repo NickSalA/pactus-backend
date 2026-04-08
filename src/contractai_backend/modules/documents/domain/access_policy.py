@@ -10,11 +10,13 @@ T = TypeVar("T")
 
 READABLE_DOCUMENT_TYPES_BY_ROLE: dict[UserRole, frozenset[DocumentType]] = {
     UserRole.HR: frozenset({DocumentType.LABOR}),
+    UserRole.MANAGER: frozenset({DocumentType.COMPANY}),
     UserRole.WORKER: frozenset({DocumentType.COMPANY}),
 }
 
 WRITABLE_DOCUMENT_TYPES_BY_ROLE: dict[UserRole, frozenset[DocumentType]] = {
     UserRole.HR: frozenset({DocumentType.LABOR}),
+    UserRole.MANAGER: frozenset({DocumentType.COMPANY}),
     UserRole.WORKER: frozenset(),
 }
 
