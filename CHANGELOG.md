@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.19.0 (2026-04-08)
+
+### Features
+
+- Enhance markdown extraction and processing for contract templates
+  ([`697a789`](https://github.com/NickSalA/ContractAI-Backend/commit/697a78938363ca67243d9c9c651c672c4db5b8af))
+
+
 ## v0.18.0 (2026-04-07)
 
 ### Features
