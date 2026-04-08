@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.22.0 (2026-04-08)
+
+### Features
+
+- Implement role-HR access control for document operations based on contract type
+  ([`f72194f`](https://github.com/NickSalA/ContractAI-Backend/commit/f72194f6514e4aa915a6260b183ddb7ee3c69e63))
+
+
 ## v0.21.0 (2026-04-08)
 
 ### Features
