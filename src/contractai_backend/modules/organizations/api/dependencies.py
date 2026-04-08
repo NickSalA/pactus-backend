@@ -6,8 +6,10 @@ from fastapi import Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from contractai_backend.modules.organizations.application.repositories.base_organization import OrganizationRepository
-from contractai_backend.modules.organizations.application.services.organization_service import OrganizationService
+from contractai_backend.modules.organizations.application.services import OrganizationMemberService, OrganizationService
 from contractai_backend.modules.organizations.infrastructure.postgres_repo import SQLModelOrganizationRepository
+from contractai_backend.modules.users.api.dependencies import get_user_repository
+from contractai_backend.modules.users.application.repositories.user_repo import IUserRepository
 from contractai_backend.shared.infrastructure.database import get_session
 
 
@@ -21,3 +23,10 @@ async def get_organization_service(
 ) -> OrganizationService:
     """Provide the organizations application service."""
     return OrganizationService(repository=repository)
+
+
+async def get_organization_member_service(
+    user_repository: Annotated[IUserRepository, Depends(get_user_repository)],
+) -> OrganizationMemberService:
+    """Provide the organization member application service."""
+    return OrganizationMemberService(user_repository=user_repository)

@@ -4,6 +4,9 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from contractai_backend.modules.users.api.schemas import UserResponse
+from contractai_backend.modules.users.domain.value_objs import UserRole
+
 
 class OrganizationResponse(BaseModel):
     """Read model for organization responses."""
@@ -15,3 +18,16 @@ class OrganizationResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+
+class OrganizationMemberCreateRequest(BaseModel):
+    email: str
+    role: UserRole
+
+
+class OrganizationMemberRoleUpdateRequest(BaseModel):
+    role: UserRole
+
+
+class OrganizationMemberResponse(UserResponse):
+    pass

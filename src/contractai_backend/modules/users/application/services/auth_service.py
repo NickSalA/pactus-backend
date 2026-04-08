@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from contractai_backend.modules.users.application.dto.auth_dto import ExternalUserDTO
 
-from .....core.exceptions.base import ForbiddenError  # , UnauthorizedError
+from .....core.exceptions.base import ForbiddenError
 from ...domain.entities import UserTable
 from ..repositories.token_service import IAuthRepository
 from ..repositories.user_repo import IUserRepository
@@ -21,16 +21,7 @@ class AuthService:
 
         user: UserTable | None = await self.repo.get_by_email(email=auth_user.email)
         if user is None:
-            # raise UnauthorizedError("Usuario no encontrado en la base de datos")
-            # Momentaneo hasta tener un endpoint de registro o sincronización de usuarios
-            new_user = UserTable(
-                email=auth_user.email,
-                organization_id=2,
-                full_name=auth_user.full_name,
-                supabase_user_id=auth_user.id,
-                avatar_url=auth_user.avatar_url,
-            )
-            user: UserTable = await self.repo.save(entity=new_user)
+            raise ForbiddenError("El usuario no fue registrado por un administrador de organización")
         if not user.is_active:
             raise ForbiddenError("Acceso denegado para este usuario")
 
@@ -42,6 +33,10 @@ class AuthService:
 
         if auth_user.full_name and user.full_name != auth_user.full_name:
             user.full_name = auth_user.full_name
+            needs_update = True
+
+        if auth_user.avatar_url != user.avatar_url:
+            user.avatar_url = auth_user.avatar_url
             needs_update = True
 
         if needs_update:
