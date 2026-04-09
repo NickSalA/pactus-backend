@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, status
 
+from ....core.domain.access import ensure_admin
 from ....shared.api.dependencies.security import CurrentUserDep
 from ..application.services import EmailAlertService, NotificationRuleService
 from .dependencies import get_email_alert_service, get_notification_rule_service
@@ -29,7 +30,7 @@ async def list_notifications(
     if not current_user.is_active or not current_user.receives_notifications:
         return []
 
-    events = await email_service.list_due_events(organization_id=current_user.organization_id)
+    events = await email_service.list_due_events_for_user(current_user=current_user)
     return [
         NotificationResponse(
             id=f"contract-{event.document.id}-{event.days_remaining}",
@@ -50,6 +51,7 @@ async def send_email_alerts(
     current_user: CurrentUserDep,
 ) -> dict:
     """Sends consolidated expiring-contract emails to subscribed users."""
+    ensure_admin(current_user, "Solo los administradores pueden enviar alertas por correo")
     sent = await email_service.send_daily_alerts(
         organization_id=current_user.organization_id,
     )

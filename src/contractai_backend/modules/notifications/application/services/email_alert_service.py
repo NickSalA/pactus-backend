@@ -12,8 +12,9 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from contractai_backend.core.exceptions.base import InternalServerError, ServiceUnavailableError
+from contractai_backend.modules.documents.domain.access_policy import can_read_document_type
 from contractai_backend.modules.documents.domain import DocumentTable
-from contractai_backend.modules.documents.domain.value_objs import DocumentState
+from contractai_backend.modules.documents.domain.value_objs import DocumentState, DocumentType
 from contractai_backend.modules.notifications.domain import NotificationRuleTable, NotificationType
 from contractai_backend.modules.notifications.infrastructure.gmail_service import GmailService
 from contractai_backend.modules.users.domain.entities import UserTable
@@ -64,6 +65,13 @@ class EmailAlertService:
         }
         return style_mapping[notification_type]
 
+    @staticmethod
+    def _filter_events_for_user(events: list[NotificationEvent], user: UserTable) -> list[NotificationEvent]:
+        if not user.is_active or not user.receives_notifications:
+            return []
+
+        return [event for event in events if can_read_document_type(user.role, DocumentType(event.document.type))]
+
     async def sync_document_states(self, organization_id: int) -> int:
         """Updates persisted contract states using the DB synchronization function."""
         try:
@@ -102,6 +110,11 @@ class EmailAlertService:
 
         return sorted(events, key=lambda event: (event.days_remaining, event.document.end_date, event.document.id or 0))
 
+    async def list_due_events_for_user(self, current_user: UserTable) -> list[NotificationEvent]:
+        """Returns only the alerts visible to one authenticated user."""
+        events = await self.list_due_events(organization_id=current_user.organization_id)
+        return self._filter_events_for_user(events=events, user=current_user)
+
     async def send_daily_alerts(self, organization_id: int) -> int:
         """Sends one consolidated expiring-contract email per subscribed user."""
         events = await self.list_due_events(organization_id=organization_id)
@@ -114,19 +127,23 @@ class EmailAlertService:
             logger.info("Sin usuarios suscritos a notificaciones para org {}.", organization_id)
             return 0
 
-        events_by_days: dict[int, list[DocumentTable]] = defaultdict(list)
-        for event in events:
-            events_by_days[event.days_remaining].append(event.document)
-
-        total_contracts = len(events)
-        sections_html = self._build_sections(events_by_days)
         date_str = date.today().strftime("%d/%m/%Y")
-        subject = f"ContractAI - {total_contracts} contrato(s) con alertas hoy"
         gmail_service = self.gmail_service or GmailService()
         self.gmail_service = gmail_service
 
         sent = 0
         for recipient in recipients:
+            recipient_events = self._filter_events_for_user(events=events, user=recipient)
+            if not recipient_events:
+                continue
+
+            recipient_events_by_days: dict[int, list[DocumentTable]] = defaultdict(list)
+            for event in recipient_events:
+                recipient_events_by_days[event.days_remaining].append(event.document)
+
+            total_contracts = len(recipient_events)
+            sections_html = self._build_sections(recipient_events_by_days)
+            subject = f"ContractAI - {total_contracts} contrato(s) con alertas hoy"
             name = html.escape(recipient.full_name or recipient.email)
             body = self._build_email_html(
                 name=name,

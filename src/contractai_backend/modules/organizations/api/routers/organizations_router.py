@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, status
 from contractai_backend.modules.organizations.api.dependencies import get_organization_member_service
 from contractai_backend.modules.organizations.api.schemas import (
     OrganizationMemberCreateRequest,
+    OrganizationMemberNotificationsUpdateRequest,
     OrganizationMemberResponse,
     OrganizationMemberRoleUpdateRequest,
 )
@@ -47,4 +48,20 @@ async def update_member_role(
 ) -> OrganizationMemberResponse:
     """Updates the role of a member in the current user's organization."""
     member = await service.update_member_role(current_user=current_user, member_id=member_id, role=payload.role)
+    return OrganizationMemberResponse.model_validate(member)
+
+
+@router.patch(path="/me/members/{member_id}/notifications", response_model=OrganizationMemberResponse)
+async def update_member_notifications(
+    member_id: int,
+    payload: OrganizationMemberNotificationsUpdateRequest,
+    service: Annotated[OrganizationMemberService, Depends(get_organization_member_service)],
+    current_user: CurrentUserDep,
+) -> OrganizationMemberResponse:
+    """Updates whether a member should receive expiration notifications."""
+    member = await service.update_member_notifications(
+        current_user=current_user,
+        member_id=member_id,
+        receives_notifications=payload.receives_notifications,
+    )
     return OrganizationMemberResponse.model_validate(member)

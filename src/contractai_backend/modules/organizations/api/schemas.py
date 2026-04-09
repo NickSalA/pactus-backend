@@ -29,5 +29,9 @@ class OrganizationMemberRoleUpdateRequest(BaseModel):
     role: UserRole
 
 
+class OrganizationMemberNotificationsUpdateRequest(BaseModel):
+    receives_notifications: bool
+
+
 class OrganizationMemberResponse(UserResponse):
     pass

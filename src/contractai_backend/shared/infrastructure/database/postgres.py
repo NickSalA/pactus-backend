@@ -1,6 +1,7 @@
 """Database configuration and session management for ContractAI Backend."""
 
 import ssl
+from urllib.parse import urlparse
 from contextlib import asynccontextmanager
 from typing import Literal
 
@@ -11,6 +12,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from contractai_backend.shared.config import settings
 
 DATABASE_URL: str = settings.DATABASE_URL
+parsed_database_url = urlparse(DATABASE_URL)
 
 connect_args = {}
 if DATABASE_URL and "localhost" not in DATABASE_URL:
@@ -18,6 +20,10 @@ if DATABASE_URL and "localhost" not in DATABASE_URL:
     ctx.check_hostname = False
     ctx.verify_mode: Literal[ssl.VerifyMode.CERT_NONE] = ssl.CERT_NONE
     connect_args: dict[str, ssl.SSLContext] = {"ssl": ctx}
+
+# Supavisor transaction mode does not support prepared statements.
+if parsed_database_url.port == 6543 and parsed_database_url.hostname and parsed_database_url.hostname.endswith(".pooler.supabase.com"):
+    connect_args["statement_cache_size"] = 0
 
 engine: AsyncEngine = create_async_engine(
     url=DATABASE_URL,

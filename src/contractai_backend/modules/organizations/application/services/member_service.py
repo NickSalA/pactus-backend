@@ -58,3 +58,14 @@ class OrganizationMemberService:
 
         member.role = role
         return await self.user_repository.update(member)
+
+    async def update_member_notifications(self, current_user: UserTable, member_id: int, receives_notifications: bool) -> UserTable:
+        """Updates whether an existing user receives expiration notifications."""
+        self._ensure_admin(current_user)
+
+        member = await self.user_repository.get_by_id(member_id)
+        if member is None or member.organization_id != current_user.organization_id:
+            raise NotFoundError("El usuario solicitado no existe en la organización actual")
+
+        member.receives_notifications = receives_notifications
+        return await self.user_repository.update(member)
