@@ -2,6 +2,26 @@
 
 <!-- version list -->
 
+## v0.26.0 (2026-04-09)
+
+### Features
+
+- Implement role-based access control for document notifications and restrict email alert triggers
+  to administrators
+  ([`3bc22e2`](https://github.com/NickSalA/ContractAI-Backend/commit/3bc22e2118d9b01875e388a674f5890b096a88b0))
+
+### Refactoring
+
+- Decouple service catalog from documents, add folder deletion constraints, and expand test coverage
+  for organizations and notifications.
+  ([`e5ee8cf`](https://github.com/NickSalA/ContractAI-Backend/commit/e5ee8cf53762f3fc041d33e16157e406a79682dd))
+
+### Testing
+
+- Implement comprehensive unit test suite for notification and folder management modules
+  ([`250da47`](https://github.com/NickSalA/ContractAI-Backend/commit/250da47c17833226f4d5dd98efc8246cf981b5ba))
+
+
 ## v0.25.0 (2026-04-08)
 
 ### Features
