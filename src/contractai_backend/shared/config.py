@@ -15,7 +15,6 @@ class Settings(BaseSettings):
     GLOBAL_PREFIX: str = "/api/v1"
     CORS_ORIGINS: list[str] = ["http://localhost:8000", "http://localhost:3000", "http://localhost:9002"]
     DEBUG: bool = Field(default=False)
-
     SECRET_KEY: str = Field(default_factory=lambda: get_secret("SECRET_KEY"))
     ALGORITHM: str | None = None
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=1440)
@@ -31,7 +30,7 @@ class Settings(BaseSettings):
     OPENAI_CHAT_MODEL_NAME: str = Field(default="gpt-4.1-mini")
     OPENAI_EMBEDDING_MODEL_NAME: str = Field(default="text-embedding-3-small")
     OPENAI_API_KEY: str = Field(default_factory=lambda: get_secret("OPENAI_API_KEY"))
-
+    AZURE_OPENAI_API_KEY: str = Field(default_factory=lambda: get_secret("AZURE-OPENAI-API-KEY"))
     # BETTER_STACK_TOKEN: str = Field(default=...)
     # BETTER_STACK_HOST: str = Field(default=...)
 

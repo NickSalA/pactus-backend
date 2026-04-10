@@ -4,24 +4,24 @@ from collections.abc import Sequence
 
 from langchain.chat_models import BaseChatModel
 from langchain_core.tools import BaseTool
-from langchain_openai import ChatOpenAI
+from langchain_openai import AzureChatOpenAI
 
-from ...domain import LLMInitializationError
 from .....shared.config import settings
+from ...domain import LLMInitializationError
 
 
-def get_llm() -> ChatOpenAI:
+def get_llm() -> AzureChatOpenAI:
     """Build the chatbot LLM using OpenAI GPT."""
     try:
-        return ChatOpenAI(
-            model=settings.OPENAI_CHAT_MODEL_NAME,
-            api_key=settings.OPENAI_API_KEY,
+        return AzureChatOpenAI(
+            api_version="2024-12-01-preview",
+            azure_endpoint="https://AgenteAI-Instance.openai.azure.com/",
+            api_key=settings.AZURE_OPENAI_API_KEY,
             temperature=settings.MODEL_TEMPERATURE,
-            max_retries=1,
-            timeout=20,
+            azure_deployment="geopoint-agent-model",
         )
     except Exception as e:
-        raise LLMInitializationError(message=f"Fallo en credenciales o modelo: {str(e)}") from e
+        raise LLMInitializationError(message=f"Fallo en credenciales o modelo: {e!s}") from e
 
 
 def bind_tools_for_llm(llm: BaseChatModel, tools: Sequence[BaseTool]):
