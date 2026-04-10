@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.27.0 (2026-04-10)
+
+### Features
+
+- Implement Azure Key Vault integration for secret management and update configuration settings
+  ([`56fa6de`](https://github.com/NickSalA/ContractAI-Backend/commit/56fa6de5f01b1c1ec51e7b46a1e4484f2906d614))
+
+
 ## v0.26.0 (2026-04-09)
 
 ### Features
