@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.28.0 (2026-04-10)
+
+### Features
+
+- Integrate multi agent system
+  ([`108a8ac`](https://github.com/NickSalA/ContractAI-Backend/commit/108a8aca0c5840a57b55bc82086e54b5030b1d75))
+
+
 ## v0.27.0 (2026-04-10)
 
 ### Features
