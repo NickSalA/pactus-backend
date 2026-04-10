@@ -42,7 +42,7 @@ class TestImportDriveFiles:
             ],
         }
         import_request = ImportRequest.model_validate(payload)
-        expected_files_payload = [file_item.model_dump(mode="python") for file_item in import_request.files]
+        expected_files_payload = [file_item.model_dump(mode="python", exclude_unset=True, exclude_none=True) for file_item in import_request.files]
 
         with patch(
             "contractai_backend.modules.integrations.api.routers.process_drive_import_in_background",
@@ -58,3 +58,89 @@ class TestImportDriveFiles:
             "index_name": settings.DRIVE_INDEX_NAME,
         }
         mock_background_import.assert_awaited_once_with(import_request.token, expected_files_payload, 9, 5)
+
+    @pytest.mark.asyncio
+    async def test_import_route_accepts_files_without_document_payload(self):
+        app = _make_app()
+        payload = {
+            "token": {"token": "drive-token"},
+            "files": [
+                {
+                    "file_id": "drive-file-1",
+                }
+            ],
+        }
+        import_request = ImportRequest.model_validate(payload)
+        expected_files_payload = [file_item.model_dump(mode="python", exclude_unset=True, exclude_none=True) for file_item in import_request.files]
+
+        with patch(
+            "contractai_backend.modules.integrations.api.routers.process_drive_import_in_background",
+            new_callable=AsyncMock,
+        ) as mock_background_import:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.post("/integrations/drive/import", json=payload)
+
+        assert response.status_code == 200
+        mock_background_import.assert_awaited_once_with(import_request.token, expected_files_payload, 9, 5)
+
+    @pytest.mark.asyncio
+    async def test_import_route_preserves_empty_document_overrides_as_empty_object(self):
+        app = _make_app()
+        payload = {
+            "token": {"token": "drive-token"},
+            "files": [
+                {
+                    "file_id": "drive-file-1",
+                    "document": {},
+                }
+            ],
+        }
+
+        with patch(
+            "contractai_backend.modules.integrations.api.routers.process_drive_import_in_background",
+            new_callable=AsyncMock,
+        ) as mock_background_import:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.post("/integrations/drive/import", json=payload)
+
+        assert response.status_code == 200
+        mock_background_import.assert_awaited_once_with(
+            {"token": "drive-token"},
+            [{"file_id": "drive-file-1", "document": {}}],
+            9,
+            5,
+        )
+
+    @pytest.mark.asyncio
+    async def test_import_route_drops_null_document_fields_before_background_job(self):
+        app = _make_app()
+        payload = {
+            "token": {"token": "drive-token"},
+            "files": [
+                {
+                    "file_id": "drive-file-1",
+                    "document": {
+                        "name": None,
+                        "client": None,
+                        "type": None,
+                        "start_date": None,
+                        "end_date": None,
+                    },
+                }
+            ],
+        }
+
+        with patch(
+            "contractai_backend.modules.integrations.api.routers.process_drive_import_in_background",
+            new_callable=AsyncMock,
+        ) as mock_background_import:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.post("/integrations/drive/import", json=payload)
+
+        assert response.status_code == 200
+        mock_background_import.assert_awaited_once_with(
+            {"token": "drive-token"},
+            [{"file_id": "drive-file-1", "document": {}}],
+            9,
+            5,
+        )

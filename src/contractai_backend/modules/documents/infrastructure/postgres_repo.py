@@ -101,8 +101,8 @@ class SQLModelDocumentRepository(
         sort_expression = sort_mapping.get(query.sort_by or "")
         if sort_expression is None:
             return statement.order_by(
-                col(DocumentTable.start_date),
-                col(DocumentTable.end_date),
+                asc(col(DocumentTable.start_date)).nulls_last(),
+                asc(col(DocumentTable.end_date)).nulls_last(),
                 col(DocumentTable.id),
             )
 

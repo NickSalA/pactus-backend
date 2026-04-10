@@ -1,9 +1,9 @@
-"""Gemini-based template draft generator."""
+"""GPT-based template draft generator."""
 
 import json
 from typing import Any
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 
 from ....shared.config import settings
 from ..api.schemas import GenerateTemplateDraftRequest, TemplateDraftResponse, TemplateUsage
@@ -12,12 +12,13 @@ from ..application.repositories.base_draft_generator import ITemplateDraftGenera
 
 class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
     def __init__(self):
-        """Configura el cliente Gemini."""
-        self.llm = ChatGoogleGenerativeAI(
-            model=settings.GEMINI_MODEL_NAME,
-            api_key=settings.GEMINI_API_KEY,
+        """Configura el cliente GPT."""
+        self.llm = ChatOpenAI(
+            model=settings.OPENAI_CHAT_MODEL_NAME,
+            api_key=settings.OPENAI_API_KEY,
             temperature=settings.MODEL_TEMPERATURE,
-            max_retries=0,
+            max_retries=1,
+            timeout=30,
         )
 
     async def generate(
@@ -106,7 +107,7 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
         organization_context: dict[str, Any] | None = None,
         validation_feedback: list[str] | None = None,
     ) -> str:
-        """Construye el prompt final para Gemini."""
+        """Construye el prompt final para GPT."""
         instructions = request.instructions or ""
         name_hint = request.name or ""
         description_hint = request.description or ""

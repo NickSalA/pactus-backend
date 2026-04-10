@@ -50,7 +50,7 @@ class DocumentResponseAssembler:
             type=document.type,
             start_date=document.start_date,
             end_date=document.end_date,
-            form_data=document.form_data,
+            form_data=document.form_data or {},
             state=document.state,
             folder_id=document.folder_id,
             file_path=document.file_path,

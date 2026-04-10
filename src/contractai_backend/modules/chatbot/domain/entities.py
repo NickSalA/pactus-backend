@@ -1,5 +1,6 @@
 """Domain entities for chatbot module."""
 
+from typing import Any
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, field_validator
@@ -15,6 +16,10 @@ class Message(BaseModel):
     content: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(tz=UTC))
 
+    def as_record(self) -> dict[str, Any]:
+        """Serialize the message into the JSON-compatible payload stored in the DB."""
+        return self.model_dump(mode="json")
+
 
 class ConversationTable(BaseTable, table=True):
     __tablename__: str = "conversations"
@@ -22,7 +27,7 @@ class ConversationTable(BaseTable, table=True):
     organization_id: int = Field(sa_column=Column("organization_id", Integer, nullable=False))
     user_id: int = Field(sa_column=Column("user_id", Integer, nullable=False))
     title: str = Field(sa_column=Column("title", String, nullable=False))
-    content: list[Message] = Field(default_factory=list, sa_column=Column("content", JSONB, nullable=False, server_default="[]"))
+    content: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column("content", JSONB, nullable=False, server_default="[]"))
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(tz=UTC), sa_column=Column("created_at", DateTime(timezone=True), nullable=False)
     )

@@ -14,7 +14,7 @@ from .domain import (
     VectorSearchError,
 )
 from .infrastructure import ConversationRepository, QdrantVectorRepository
-from .infrastructure.agent import ContractAgentGraph, LangGraphGeminiAdapter, build_bc_tool, build_contracts_query_tool, get_llm, init_checkpointer
+from .infrastructure.agent import ContractAgentGraph, LangGraphLLMAdapter, build_bc_tool, build_contracts_query_tool, get_llm, init_checkpointer
 
 __all__ = [
     "ChatbotDatabaseUnavailableError",
@@ -31,7 +31,7 @@ __all__ = [
     "LLMExecutionError",
     "LLMInitializationError",
     "LLMQuotaExceededError",
-    "LangGraphGeminiAdapter",
+    "LangGraphLLMAdapter",
     "Message",
     "QdrantVectorRepository",
     "VectorDatabaseUnavailableError",

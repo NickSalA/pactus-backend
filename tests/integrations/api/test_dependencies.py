@@ -46,8 +46,11 @@ class TestBuildBackgroundIntegrationService:
                 return_value=_AsyncContextManager(mock_session),
             ),
             patch("contractai_backend.modules.integrations.api.dependencies.SQLModelDocumentRepository") as mock_sql_repo_cls,
+            patch("contractai_backend.modules.integrations.api.dependencies.SQLModelServiceRepository") as mock_service_repo_cls,
+            patch("contractai_backend.modules.integrations.api.dependencies.SQLModelFolderRepository") as mock_folder_repo_cls,
             patch("contractai_backend.modules.integrations.api.dependencies.LlamaIndexQdrantRepository") as mock_vector_repo_cls,
             patch("contractai_backend.modules.integrations.api.dependencies.LlamaParseExtractor") as mock_extractor_cls,
+            patch("contractai_backend.modules.integrations.api.dependencies.GeminiDocumentStructuredExtractor") as mock_structured_extractor_cls,
             patch("contractai_backend.modules.integrations.api.dependencies.SupabaseStorageRepository") as mock_storage_repo_cls,
             patch("contractai_backend.modules.integrations.api.dependencies.VectorChunkMetadataEnricher") as mock_chunk_enricher_cls,
             patch(
@@ -67,16 +70,21 @@ class TestBuildBackgroundIntegrationService:
                 assert service is mock_integration_service
 
         mock_sql_repo_cls.assert_called_once_with(session=mock_session)
+        mock_service_repo_cls.assert_called_once_with(session=mock_session)
+        mock_folder_repo_cls.assert_called_once_with(session=mock_session)
         mock_vector_repo_cls.assert_called_once_with(async_client=mock_async_qdrant, sync_client=mock_sync_qdrant)
         mock_storage_repo_cls.assert_called_once_with(client=mock_http_client)
         mock_extractor_cls.assert_called_once_with()
+        mock_structured_extractor_cls.assert_called_once_with()
         mock_chunk_enricher_cls.assert_called_once_with()
         mock_get_document_command_service.assert_awaited_once_with(
             command_repo=mock_sql_repo_cls.return_value,
             query_repo=mock_sql_repo_cls.return_value,
-            service_repo=mock_sql_repo_cls.return_value,
+            service_repo=mock_service_repo_cls.return_value,
+            folder_repo=mock_folder_repo_cls.return_value,
             vector_repo=mock_vector_repo_cls.return_value,
             extractor=mock_extractor_cls.return_value,
+            structured_extractor=mock_structured_extractor_cls.return_value,
             storage_repo=mock_storage_repo_cls.return_value,
             chunk_enricher=mock_chunk_enricher_cls.return_value,
         )

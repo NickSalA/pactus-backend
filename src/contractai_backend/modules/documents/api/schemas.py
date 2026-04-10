@@ -59,10 +59,50 @@ class DocumentBase(BaseModel):
         return cleaned
 
 
-class CreateDocumentRequest(DocumentBase):
-    """Request schema for creating a new document."""
+class DocumentDraftBase(BaseModel):
+    """Nullable contract metadata accepted during upload/import autofill flows."""
 
-    state: DocumentState = Field(default=DocumentState.ACTIVE, description="Initial document state")
+    name: str | None = Field(default=None, description="Name of the document")
+    client: str | None = Field(default=None, description="Client associated with the document")
+    type: DocumentType | None = Field(default=None, description="Type of the document")
+    start_date: date | None = Field(default=None, description="Start date of the document period")
+    end_date: date | None = Field(default=None, description="End date of the document period")
+    form_data: dict[str, Any] = Field(default_factory=dict, description="Structured JSON payload stored in the form_data column")
+
+    @field_validator("name", "client")
+    @classmethod
+    def validate_optional_text_fields(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Field cannot be empty.")
+        return cleaned
+
+    @field_validator("end_date")
+    @classmethod
+    def validate_optional_end_date(cls, end_date: date | None, info: ValidationInfo) -> date | None:
+        if end_date is None:
+            return None
+        start_date = info.data.get("start_date")
+        if start_date and end_date < start_date:
+            raise ValueError("End date cannot be earlier than start date.")
+        return end_date
+
+    @field_validator("form_data")
+    @classmethod
+    def clean_form_data(cls, form_data: dict[str, Any]) -> dict[str, Any]:
+        cleaned_form_data = dict(form_data)
+        cleaned_form_data.pop("licenses", None)
+        cleaned_form_data.pop("services", None)
+        cleaned_form_data.pop("support", None)
+        return cleaned_form_data
+
+
+class CreateDocumentDraftRequest(DocumentDraftBase):
+    """Request schema for creating a document with backend autofill."""
+
+    state: DocumentState | None = Field(default=None, description="Optional manual document state")
     folder_id: int | None = Field(default=None, gt=0, description="Optional folder assigned to the document")
     service_items: list[DocumentServiceItemRequest] = Field(
         default_factory=list,
@@ -77,14 +117,16 @@ class CreateDocumentRequest(DocumentBase):
             raise ValueError("service_items contains duplicated service_id values.")
         return service_items
 
-    @field_validator("form_data")
-    @classmethod
-    def remove_legacy_license_key(cls, form_data: dict[str, Any]) -> dict[str, Any]:
-        cleaned_form_data = dict(form_data)
-        cleaned_form_data.pop("licenses", None)
-        cleaned_form_data.pop("services", None)
-        cleaned_form_data.pop("support", None)
-        return cleaned_form_data
+
+class CreateDocumentRequest(CreateDocumentDraftRequest):
+    """Request schema for creating a new document."""
+
+    name: str = Field(..., description="Name of the document")
+    client: str = Field(..., description="Client associated with the document")
+    type: DocumentType = Field(..., description="Type of the document")
+    start_date: date = Field(..., description="Start date of the document period")
+    end_date: date = Field(..., description="End date of the document period")
+    form_data: dict[str, Any] = Field(..., description="Structured JSON payload stored in the form_data column")
 
 
 class UpdateDocumentRequest(BaseModel):
@@ -132,11 +174,17 @@ class UpdateDocumentRequest(BaseModel):
         return cleaned_form_data
 
 
-class DocumentResponse(DocumentBase):
+class DocumentResponse(BaseModel):
     """Response schema for document data."""
 
     id: int = Field(..., description="Unique identifier of the document")
-    state: DocumentState = Field(..., description="Current state of the document")
+    name: str | None = Field(default=None, description="Name of the document")
+    client: str | None = Field(default=None, description="Client associated with the document")
+    type: DocumentType | None = Field(default=None, description="Type of the document")
+    start_date: date | None = Field(default=None, description="Start date of the document period")
+    end_date: date | None = Field(default=None, description="End date of the document period")
+    form_data: dict[str, Any] = Field(default_factory=dict, description="Structured JSON payload stored in the form_data column")
+    state: DocumentState | None = Field(default=None, description="Current state of the document")
     folder_id: int | None = Field(default=None, description="Folder assigned to the document")
     file_path: str | None = Field(default=None, description="Storage path of the associated file")
     file_name: str | None = Field(default=None, description="Original name of the associated file")
@@ -146,6 +194,15 @@ class DocumentResponse(DocumentBase):
     )
     created_at: datetime = Field(..., description="Document creation timestamp")
     updated_at: datetime = Field(..., description="Last document update timestamp")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DocumentCatalogServiceResponse(BaseModel):
+    """Backward-compatible lightweight service catalog response."""
+
+    id: int = Field(..., description="Unique identifier of the service")
+    name: str = Field(..., description="Display name of the service")
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -4,15 +4,18 @@ import json
 from collections.abc import Sequence
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, UploadFile, status, Response
+from fastapi import APIRouter, Depends, Form, Query, Response, UploadFile, status
 from pydantic import ValidationError
 
 from ....shared.api.dependencies.security import CurrentUserDep
+from ...catalog.application.services import ServiceCatalogService
+from ...users.domain.value_objs import UserRole
 from ..application.services import DocumentCommandService, DocumentQueryService
 from ..domain.exceptions import DocumentNotFoundError, DocumentValidationError, InvalidDocumentFileError
-from .dependencies import get_document_command_service, get_document_query_service
+from .dependencies import get_document_command_service, get_document_query_service, get_service_catalog_service
 from .schemas import (
-    CreateDocumentRequest,
+    CreateDocumentDraftRequest,
+    DocumentCatalogServiceResponse,
     DocumentFileUrlResponse,
     DocumentResponse,
     FileRequest,
@@ -22,17 +25,32 @@ from .schemas import (
 router = APIRouter()
 
 
+@router.get(path="/services", response_model=Sequence[DocumentCatalogServiceResponse], include_in_schema=False)
+async def list_document_services_compat(
+    service: Annotated[ServiceCatalogService, Depends(get_service_catalog_service)],
+    current_user: CurrentUserDep,
+    include_inactive: bool = Query(default=False),
+) -> Sequence[DocumentCatalogServiceResponse]:
+    """Backward-compatible alias for legacy /documents/services consumers."""
+    user_role = getattr(current_user, "role", None)
+    services = await service.list_services(
+        organization_id=current_user.organization_id,
+        include_inactive=include_inactive and user_role == UserRole.ADMIN,
+    )
+    return [DocumentCatalogServiceResponse(id=item.id, name=item.name) for item in services if item.id is not None]
+
+
 @router.post(path="/", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def create_document(
     file: UploadFile,
     service: Annotated[DocumentCommandService, Depends(get_document_command_service)],
     current_user: CurrentUserDep,
-    document: str = Form(...),
+    document: str = Form("{}"),
 ) -> DocumentResponse:
     """Endpoint to create a new document."""
     try:
         doc_data = json.loads(document)
-        doc_obj = CreateDocumentRequest(**doc_data)
+        doc_obj = CreateDocumentDraftRequest(**doc_data)
     except (json.JSONDecodeError, ValidationError) as e:
         raise DocumentValidationError(f"Datos del documento invalidos: {e}") from e
 
@@ -41,12 +59,13 @@ async def create_document(
 
     file_content: bytes = await file.read()
     file_data = FileRequest(content=file_content, filename=file.filename, content_type=file.content_type)
+    user_role = getattr(current_user, "role", None)
 
     saved_document = await service.create_document(
         data=doc_obj,
         file_data=file_data,
         organization_id=current_user.organization_id,
-        user_role=current_user.role,
+        user_role=user_role,
     )
     return saved_document
 
@@ -57,9 +76,10 @@ async def list_documents(
     current_user: CurrentUserDep,
 ) -> Sequence[DocumentResponse]:
     """Endpoint to list documents with optional filters."""
+    user_role = getattr(current_user, "role", None)
     documents: Sequence[DocumentResponse] = await service.get_documents(
         organization_id=current_user.organization_id,
-        user_role=current_user.role,
+        user_role=user_role,
     )
     return documents
 
@@ -71,10 +91,11 @@ async def get_document(
     current_user: CurrentUserDep,
 ) -> DocumentResponse:
     """Endpoint to retrieve a document by its ID."""
+    user_role = getattr(current_user, "role", None)
     doc: DocumentResponse | None = await service.get_document(
         id=document_id,
         organization_id=current_user.organization_id,
-        user_role=current_user.role,
+        user_role=user_role,
     )
     if not doc:
         raise DocumentNotFoundError(document_id=document_id)
@@ -88,10 +109,11 @@ async def get_document_file_url(
     current_user: CurrentUserDep,
 ) -> DocumentFileUrlResponse:
     """Endpoint to generate a signed URL for a stored document file."""
+    user_role = getattr(current_user, "role", None)
     url = await service.get_document_signed_url(
         id=document_id,
         organization_id=current_user.organization_id,
-        user_role=current_user.role,
+        user_role=user_role,
     )
     return DocumentFileUrlResponse(url=url)
 
@@ -118,11 +140,13 @@ async def update_document(
             raise InvalidDocumentFileError()
         file_data = FileRequest(content=file_content, filename=file.filename, content_type=file.content_type)
 
+    user_role = getattr(current_user, "role", None)
+
     updated_doc = await service.update_document(
         id=document_id,
         data=doc_obj,
         organization_id=current_user.organization_id,
-        user_role=current_user.role,
+        user_role=user_role,
         file_data=file_data,
     )
     return updated_doc
@@ -135,4 +159,5 @@ async def delete_document(
     current_user: CurrentUserDep,
 ) -> None:
     """Endpoint to delete a document by its ID."""
-    await service.delete_document(id=document_id, organization_id=current_user.organization_id, user_role=current_user.role)
+    user_role = getattr(current_user, "role", None)
+    await service.delete_document(id=document_id, organization_id=current_user.organization_id, user_role=user_role)

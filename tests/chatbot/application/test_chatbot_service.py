@@ -1,18 +1,21 @@
 """Tests unitarios para ChatbotService."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 
 from contractai_backend.modules.chatbot.application.services.chatbot_service import ChatbotService
 from contractai_backend.modules.chatbot.domain.entities import ConversationTable
 from contractai_backend.modules.chatbot.domain.exceptions import ConversationNotFoundError
+from contractai_backend.modules.users.domain.value_objs import UserRole
 
 
 def _make_user(id: int = 1, org_id: int = 1):
     user = MagicMock()
     user.id = id
     user.organization_id = org_id
+    user.role = UserRole.WORKER
+    user.full_name = "Test User"
     return user
 
 
@@ -41,12 +44,14 @@ class TestProcessUserMessage:
         assert response == "Respuesta del bot"
         assert thread_id == 5
         conv_service.create_conversation.assert_called_once()
+        conv_service.append_messages.assert_awaited_once()
+        llm.invoke.assert_awaited_once_with(message="Hola", thread_id=5, user_context=ANY)
 
     @pytest.mark.asyncio
     async def test_uses_existing_thread_id(self):
         conv = _make_conv(id=10)
         conv_service = AsyncMock()
-        conv_service.append_messages.return_value = conv
+        conv_service.append_messages.side_effect = [conv, conv]
 
         llm = AsyncMock()
         llm.invoke.return_value = ("Respuesta", 10)
@@ -56,6 +61,7 @@ class TestProcessUserMessage:
 
         assert thread_id == 10
         conv_service.create_conversation.assert_not_called()
+        assert conv_service.append_messages.await_count == 2
 
     @pytest.mark.asyncio
     async def test_title_truncated_at_30_chars(self):
@@ -71,11 +77,24 @@ class TestProcessUserMessage:
         service = _make_service(llm=llm, conv_service=conv_service)
         await service.process_user_message(long_message, thread_id=None, current_user=_make_user())
 
-        call_args = conv_service.create_conversation.call_args.args[0] if conv_service.create_conversation.call_args.args else conv_service.create_conversation.call_args.kwargs.get("data")
-        assert len(call_args.title) <= 33  # 30 chars + "..."
+        call_kwargs = conv_service.create_conversation.call_args.kwargs
+        assert len(call_kwargs["title"]) <= 33  # 30 chars + "..."
 
     @pytest.mark.asyncio
-    async def test_raises_when_append_returns_none(self):
+    async def test_raises_when_existing_thread_is_not_owned_or_not_found(self):
+        conv_service = AsyncMock()
+        conv_service.append_messages.return_value = None
+
+        llm = AsyncMock()
+
+        service = _make_service(llm=llm, conv_service=conv_service)
+        with pytest.raises(ConversationNotFoundError):
+            await service.process_user_message("Hola", thread_id=10, current_user=_make_user())
+
+        llm.invoke.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_raises_when_bot_append_returns_none(self):
         conv = _make_conv()
         conv_service = AsyncMock()
         conv_service.create_conversation.return_value = conv

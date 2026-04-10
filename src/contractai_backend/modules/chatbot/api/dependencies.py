@@ -7,6 +7,7 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....modules.documents.application.services import ContractQueryService
+from ....modules.documents.domain.access_policy import get_readable_document_types
 from ....modules.documents.infrastructure import SQLModelDocumentRepository
 from ....modules.catalog.infrastructure.postgres_repo import SQLModelServiceRepository
 from ....modules.users.domain.entities import UserTable
@@ -15,7 +16,7 @@ from ....shared.config import settings
 from ....shared.infrastructure.database import get_aclient, get_session
 from ..application import ChatbotService, ConversationService, ILLMProvider
 from ..infrastructure import ConversationRepository, QdrantVectorRepository
-from ..infrastructure.agent import ContractAgentGraph, LangGraphGeminiAdapter, build_bc_tool, build_contracts_query_tool, get_llm
+from ..infrastructure.agent import ContractAgentGraph, LangGraphLLMAdapter, build_bc_tool, build_contracts_query_tool, get_llm
 
 
 async def get_conversation_service(session: Annotated[AsyncSession, Depends(get_session)]) -> ConversationService:
@@ -41,14 +42,26 @@ async def get_llm_provider(
     contract_repo = SQLModelDocumentRepository(session=session)
     service_catalog_repo = SQLModelServiceRepository(session=session)
     contract_query_service = ContractQueryService(sql_repo=contract_repo, service_repo=service_catalog_repo)
+    readable_document_types = get_readable_document_types(current_user.role)
 
-    bc_tool = build_bc_tool(repo=vector_repo)
-    contracts_query_tool = build_contracts_query_tool(service=contract_query_service, organization_id=current_user.organization_id)
+    allowed_document_ids: set[int] | None = None
+    if readable_document_types is not None:
+        allowed_document_ids = set()
+        for document_type in readable_document_types:
+            documents = await contract_repo.get_all(filters={"organization_id": current_user.organization_id, "type": document_type})
+            allowed_document_ids.update(document.id for document in documents if document.id is not None)
+
+    bc_tool = build_bc_tool(repo=vector_repo, user_role=current_user.role, allowed_document_ids=allowed_document_ids)
+    contracts_query_tool = build_contracts_query_tool(
+        service=contract_query_service,
+        organization_id=current_user.organization_id,
+        user_role=current_user.role,
+    )
 
     graph_builder = ContractAgentGraph(tools=[contracts_query_tool, bc_tool], llm=get_llm())
     compiled_graph = graph_builder.build_graph(checkpointer=checkpointer)
 
-    return LangGraphGeminiAdapter(compiled_graph=compiled_graph)
+    return LangGraphLLMAdapter(compiled_graph=compiled_graph)
 
 
 async def get_chatbot_service(

@@ -33,13 +33,14 @@ async def download_drive_file(file_id: str, request: DriveRequest, service: Inte
 
 @router.post("/import", response_model=ImportResponse)
 async def import_drive_files(request: ImportRequest, background_tasks: BackgroundTasks, current_user: CurrentUserDep):
-    if any(not can_write_document_type(current_user.role, file_item.document.type) for file_item in request.files):
+    user_role = getattr(current_user, "role", None)
+    if any(file_item.document.type is not None and not can_write_document_type(user_role, file_item.document.type) for file_item in request.files):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tiene permisos para importar este tipo de contrato",
         )
 
-    files_payload = [file_item.model_dump(mode="python") for file_item in request.files]
+    files_payload = [file_item.model_dump(mode="python", exclude_unset=True, exclude_none=True) for file_item in request.files]
     background_tasks.add_task(process_drive_import_in_background, request.token, files_payload, current_user.organization_id, current_user.id)
     return ImportResponse(
         message="La importación ha comenzado en segundo plano.",

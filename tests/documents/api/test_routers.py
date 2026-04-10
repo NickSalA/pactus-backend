@@ -158,6 +158,22 @@ class TestCreateDocument:
 
         assert response.status_code == 400
 
+    @pytest.mark.asyncio
+    async def test_create_document_accepts_missing_document_payload(self):
+        doc = _make_doc()
+        mock_document_service = AsyncMock()
+        mock_document_service.create_document.return_value = doc
+
+        app = _make_app(mock_document_service=mock_document_service)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/documents/",
+                files={"file": ("file.pdf", b"pdf content", "application/pdf")},
+            )
+
+        assert response.status_code == 201
+        assert response.json()["id"] == 1
+
 
 class TestDeleteDocument:
     @pytest.mark.asyncio

@@ -22,12 +22,13 @@ class Settings(BaseSettings):
 
     PENDING_DAYS: int = Field(default=30)
 
-    GEMINI_MODEL_NAME: str = Field(default="gemini-2.5-flash")
+    GEMINI_MODEL_NAME: str = Field(default="gemini-2.5-flash-lite")
     GEMINI_MINI_MODEL_NAME: str = Field(default="gemini-2.5-flash-lite")
     GEMINI_API_KEY: str = Field(default="your-gemini-api-key")
     # MODEL_SECOND_API_KEY: str = Field(default="your-second-model-api-key")
     MODEL_TEMPERATURE: float = Field(default=0.7)
 
+    OPENAI_CHAT_MODEL_NAME: str = Field(default="gpt-4.1-mini")
     OPENAI_EMBEDDING_MODEL_NAME: str = Field(default="text-embedding-3-small")
     OPENAI_API_KEY: str = Field(default_factory=lambda: get_secret("OPENAI_API_KEY"))
 

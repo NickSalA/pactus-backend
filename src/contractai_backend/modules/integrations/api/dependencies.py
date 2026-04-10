@@ -6,13 +6,16 @@ from fastapi import Depends
 
 from contractai_backend.modules.documents.api.dependencies import get_document_command_service
 from contractai_backend.modules.documents.application.services import DocumentCommandService
+from contractai_backend.modules.catalog.infrastructure.postgres_repo import SQLModelServiceRepository
 from contractai_backend.modules.documents.infrastructure import (
+    GeminiDocumentStructuredExtractor,
     LlamaIndexQdrantRepository,
     LlamaParseExtractor,
     SQLModelDocumentRepository,
     SupabaseStorageRepository,
     VectorChunkMetadataEnricher,
 )
+from contractai_backend.modules.folders.infrastructure.postgres_repo import SQLModelFolderRepository
 from contractai_backend.modules.integrations.application import IntegrationService
 from contractai_backend.modules.integrations.infrastructure import DocumentIngestionAdapter, GoogleDriveProvider
 from contractai_backend.shared.config import settings
@@ -53,19 +56,24 @@ async def build_background_integration_service() -> AsyncIterator[IntegrationSer
 
         async with get_session_context() as session:
             sql_repo = SQLModelDocumentRepository(session=session)
+            service_repo = SQLModelServiceRepository(session=session)
+            folder_repo = SQLModelFolderRepository(session=session)
             vector_repo = LlamaIndexQdrantRepository(async_client=async_qdrant, sync_client=sync_qdrant)
             extractor = LlamaParseExtractor()
+            structured_extractor = GeminiDocumentStructuredExtractor()
             storage_repo = SupabaseStorageRepository(client=http_client)
             chunk_enricher = VectorChunkMetadataEnricher()
 
             document_service = await get_document_command_service(
                 command_repo=sql_repo,
                 query_repo=sql_repo,
-                service_repo=sql_repo,
+                service_repo=service_repo,
+                folder_repo=folder_repo,
                 vector_repo=vector_repo,
                 extractor=extractor,
                 storage_repo=storage_repo,
                 chunk_enricher=chunk_enricher,
+                structured_extractor=structured_extractor,
             )
             ingestion_target = get_document_ingestion_target(document_service=document_service)
 

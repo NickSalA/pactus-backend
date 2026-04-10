@@ -9,23 +9,25 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....shared.infrastructure.database import get_aclient, get_client, get_session
 from ....shared.infrastructure.http import get_http_client
+from ...catalog.api.dependencies import get_service_catalog_service, get_service_repository
 from ..application.repositories import (
     DocumentChunkEnricher,
     DocumentCommandRepository,
     DocumentExtractor,
     DocumentQueryRepository,
+    DocumentStructuredExtractor,
     DocumentStorageRepository,
     VectorRepository,
 )
 from ..application.services import DocumentCommandService, DocumentQueryService
 from ..infrastructure import (
+    GeminiDocumentStructuredExtractor,
     LlamaIndexQdrantRepository,
     LlamaParseExtractor,
     SQLModelDocumentRepository,
     SupabaseStorageRepository,
     VectorChunkMetadataEnricher,
 )
-from ...catalog.api.dependencies import get_service_repository
 from ...catalog.application.repositories import ServiceRepository
 from ...folders.api.dependencies import get_folder_repository
 from ...folders.application.repositories import FolderRepository
@@ -74,6 +76,11 @@ async def get_chunk_enricher() -> DocumentChunkEnricher:
     return VectorChunkMetadataEnricher()
 
 
+async def get_structured_extractor() -> DocumentStructuredExtractor:
+    """Construye el extractor estructurado para autofill best-effort."""
+    return GeminiDocumentStructuredExtractor()
+
+
 DocumentQueryRepoDep = Annotated[DocumentQueryRepository, Depends(get_document_query_repository)]
 DocumentCommandRepoDep = Annotated[DocumentCommandRepository, Depends(get_document_command_repository)]
 ServiceRepoDep = Annotated[ServiceRepository, Depends(get_service_repository)]
@@ -82,6 +89,7 @@ VectorRepoDep = Annotated[VectorRepository, Depends(get_vector_repository)]
 ExtractorDep = Annotated[DocumentExtractor, Depends(get_extractor)]
 StorageRepoDep = Annotated[DocumentStorageRepository, Depends(get_storage_repository)]
 ChunkEnricherDep = Annotated[DocumentChunkEnricher, Depends(get_chunk_enricher)]
+StructuredExtractorDep = Annotated[DocumentStructuredExtractor, Depends(get_structured_extractor)]
 
 
 async def get_document_command_service(
@@ -93,17 +101,19 @@ async def get_document_command_service(
     extractor: ExtractorDep,
     storage_repo: StorageRepoDep,
     chunk_enricher: ChunkEnricherDep,
+    structured_extractor: StructuredExtractorDep,
 ) -> DocumentCommandService:
     """Construye el servicio de comandos para documentos."""
     return DocumentCommandService(
         command_repo=command_repo,
         query_repo=query_repo,
         service_repo=service_repo,
-        folder_repo=folder_repo,
         vector_repo=vector_repo,
         extractor=extractor,
         storage_repo=storage_repo,
         chunk_enricher=chunk_enricher,
+        folder_repo=folder_repo,
+        structured_extractor=structured_extractor,
     )
 
 

@@ -1,10 +1,18 @@
 """Archivo principal para la aplicación FastAPI de ContractAI-Backend."""
+
+import asyncio
+import sys
+
 from fastapi import FastAPI
 from loguru import logger
 from uvicorn import run
 
 from .shared.config import settings
 from .shared.logger import setup
+
+# Psycopg async is not compatible with the default Proactor loop on Windows.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 setup()
 

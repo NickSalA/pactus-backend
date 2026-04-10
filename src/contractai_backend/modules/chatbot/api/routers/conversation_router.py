@@ -4,6 +4,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
+from .....core.exceptions.base import ForbiddenError
+from .....shared.api.dependencies.security import CurrentUserDep
 from ...api.dependencies import get_conversation_service
 from ...api.schemas import ConversationList, ConversationRead
 from ...application import ConversationService
@@ -14,15 +16,26 @@ ConversationServiceDep = Annotated[ConversationService, Depends(get_conversation
 
 
 @router.get(path="/user/{user_id}", response_model=list[ConversationList])
-async def list_my_conversations(user_id: int, service: ConversationServiceDep):
+async def list_my_conversations(user_id: int, service: ConversationServiceDep, current_user: CurrentUserDep):
     """Endpoint para listar las conversaciones de un usuario específico."""
-    return await service.list_user_conversations(user_id)
+    if user_id != current_user.id:
+        raise ForbiddenError("No tiene permisos para acceder a las conversaciones de otro usuario")
+
+    conversations = await service.list_user_conversations(
+        organization_id=current_user.organization_id,
+        user_id=current_user.id,
+    )
+    return [ConversationList.model_validate(conversation) for conversation in conversations]
 
 
 @router.get(path="/{conversation_id}", response_model=ConversationRead)
-async def get_single_conversation(conversation_id: int, service: ConversationServiceDep):
+async def get_single_conversation(conversation_id: int, service: ConversationServiceDep, current_user: CurrentUserDep):
     """Endpoint para obtener una conversación específica."""
-    conversation: ConversationRead | None = await service.get_conversation(conversation_id)
+    conversation = await service.get_conversation(
+        conversation_id=conversation_id,
+        organization_id=current_user.organization_id,
+        user_id=current_user.id,
+    )
     if not conversation:
         raise ConversationNotFoundError()
-    return conversation
+    return ConversationRead.model_validate(conversation)

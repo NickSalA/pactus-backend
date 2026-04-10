@@ -9,10 +9,18 @@ from loguru import logger
 from .....core.exceptions.base import ForbiddenError
 from ....folders.application.repositories import FolderRepository
 from ....users.domain.value_objs import UserRole
-from ...api.schemas import CreateDocumentRequest, DocumentResponse, DocumentServiceItemRequest, FileRequest, UpdateDocumentRequest
+from ...api.schemas import (
+    CreateDocumentDraftRequest,
+    CreateDocumentRequest,
+    DocumentResponse,
+    DocumentServiceItemRequest,
+    FileRequest,
+    UpdateDocumentRequest,
+)
+from ..dto import ExtractedDocumentData
 from ...domain import DocumentTable, validate_service_currency_alignment, validate_service_periods
 from ...domain.access_policy import can_manage_folder, can_read_document_type, can_write_document_type
-from ...domain.value_objs import DocumentType
+from ...domain.value_objs import DocumentState, DocumentType
 from ...domain.exceptions import (
     DocumentExtractionError,
     DocumentFileMissingError,
@@ -26,6 +34,7 @@ from ..repositories import (
     DocumentCommandRepository,
     DocumentExtractor,
     DocumentQueryRepository,
+    DocumentStructuredExtractor,
     DocumentStorageRepository,
     VectorRepository,
 )
@@ -49,11 +58,12 @@ class DocumentCommandService:
         command_repo: DocumentCommandRepository,
         query_repo: DocumentQueryRepository,
         service_repo: ServiceRepository,
-        folder_repo: FolderRepository,
         vector_repo: VectorRepository,
         extractor: DocumentExtractor,
         storage_repo: DocumentStorageRepository,
         chunk_enricher: DocumentChunkEnricher,
+        folder_repo: FolderRepository | None = None,
+        structured_extractor: DocumentStructuredExtractor | None = None,
     ):
         """Stores dependencies needed by document commands."""
         self.command_repo = command_repo
@@ -62,6 +72,7 @@ class DocumentCommandService:
         self.folder_repo = folder_repo
         self.vector_repo = vector_repo
         self.extractor = extractor
+        self.structured_extractor = structured_extractor
         self.storage_repo = storage_repo
         self.chunk_enricher = chunk_enricher
         self.policy = DocumentCommandPolicy(service_repo=service_repo)
@@ -78,6 +89,9 @@ class DocumentCommandService:
         if folder_id is None:
             return
 
+        if self.folder_repo is None:
+            raise DocumentValidationError(message="No se puede validar la carpeta solicitada en este entorno.")
+
         folder = await self.folder_repo.get_folder_by_id(folder_id)
         if folder is None or folder.organization_id != organization_id:
             raise DocumentValidationError(message="La carpeta seleccionada no existe en la organización actual.")
@@ -93,6 +107,8 @@ class DocumentCommandService:
     @staticmethod
     def _can_read_document(document: DocumentTable, user_role: UserRole | None) -> bool:
         """Returns whether the role can read the given document."""
+        if document.type is None:
+            return True
         return can_read_document_type(user_role=user_role, document_type=DocumentType(document.type))
 
     async def _get_document_entity(self, id: int, organization_id: int) -> DocumentTable | None:
@@ -102,44 +118,201 @@ class DocumentCommandService:
             return None
         return document
 
+    @staticmethod
+    def _serialize_optional_enum(value: Any) -> Any:
+        return value.value if hasattr(value, "value") else value
+
+    @staticmethod
+    def _is_draft_request(data: CreateDocumentRequest | CreateDocumentDraftRequest) -> bool:
+        return not isinstance(data, CreateDocumentRequest)
+
+    async def _extract_structured_data(
+        self,
+        *,
+        data: CreateDocumentRequest | CreateDocumentDraftRequest,
+        filename: str,
+        parsed_document: list[Any],
+        organization_id: int,
+    ) -> ExtractedDocumentData:
+        if not self._is_draft_request(data) or self.structured_extractor is None:
+            return ExtractedDocumentData()
+
+        available_services = await self.service_repo.get_services(organization_id=organization_id)
+        return await self.structured_extractor.extract(
+            filename=filename,
+            chunks=parsed_document,
+            available_services=available_services,
+        )
+
+    async def _resolve_extracted_service_items(
+        self,
+        *,
+        organization_id: int,
+        extracted_data: ExtractedDocumentData,
+        document_start_date: Any,
+        document_end_date: Any,
+    ) -> list[DocumentServiceItemRequest]:
+        if document_start_date is None or document_end_date is None:
+            return []
+
+        candidates: list[DocumentServiceItemRequest] = []
+        for item in extracted_data.service_items:
+            if item.service_id is None or item.value is None or item.currency is None or item.start_date is None or item.end_date is None:
+                continue
+
+            candidates.append(
+                DocumentServiceItemRequest(
+                    service_id=item.service_id,
+                    description=item.description,
+                    value=item.value,
+                    currency=item.currency,
+                    start_date=item.start_date,
+                    end_date=item.end_date,
+                )
+            )
+
+        if not candidates:
+            return []
+
+        existing_services = await self.service_repo.get_services_by_ids(
+            organization_id=organization_id,
+            service_ids=[item.service_id for item in candidates],
+        )
+        existing_ids = {service.id for service in existing_services if service.id is not None}
+        scoped_candidates = [item for item in candidates if item.service_id in existing_ids]
+
+        valid_candidates: list[DocumentServiceItemRequest] = []
+        for item in scoped_candidates:
+            try:
+                validate_service_periods(
+                    document_start_date=document_start_date,
+                    document_end_date=document_end_date,
+                    service_items=[item],
+                )
+            except DocumentValidationError:
+                continue
+            valid_candidates.append(item)
+
+        if not valid_candidates:
+            return []
+
+        try:
+            validate_service_currency_alignment(service_items=valid_candidates)
+        except DocumentValidationError:
+            return []
+
+        return valid_candidates
+
+    async def _prepare_create_data(
+        self,
+        *,
+        data: CreateDocumentRequest | CreateDocumentDraftRequest,
+        organization_id: int,
+        extracted_data: ExtractedDocumentData,
+    ) -> tuple[DocumentTable, list[DocumentServiceItemRequest], dict[str, Any]]:
+        is_draft_request = self._is_draft_request(data)
+        resolved_name = data.name if data.name is not None else extracted_data.name
+        resolved_client = data.client if data.client is not None else extracted_data.client
+        resolved_type = data.type if data.type is not None else extracted_data.type
+        resolved_start_date = data.start_date if data.start_date is not None else extracted_data.start_date
+        resolved_end_date = data.end_date if data.end_date is not None else extracted_data.end_date
+        resolved_state = data.state if data.state is not None else (DocumentState.DRAFT if is_draft_request else None)
+
+        normalized_form_data = dict(data.form_data or {})
+        if normalized_form_data.get("value") is None:
+            normalized_form_data["value"] = extracted_data.form_data.value
+        if normalized_form_data.get("currency") is None:
+            normalized_form_data["currency"] = self._serialize_optional_enum(extracted_data.form_data.currency)
+
+        manual_service_items = list(data.service_items)
+        if manual_service_items:
+            if resolved_start_date is None or resolved_end_date is None:
+                raise DocumentValidationError(message="Las fechas del contrato son obligatorias cuando se registran servicios.")
+
+            await self.policy.validate_requested_services(
+                organization_id=organization_id,
+                service_items=manual_service_items,
+            )
+            validate_service_currency_alignment(service_items=manual_service_items)
+            validate_service_periods(
+                document_start_date=resolved_start_date,
+                document_end_date=resolved_end_date,
+                service_items=manual_service_items,
+            )
+            resolved_service_items = manual_service_items
+            normalized_form_data = self.policy.normalize_form_data(
+                base_form_data=normalized_form_data,
+                service_items=resolved_service_items,
+            )
+        else:
+            resolved_service_items = await self._resolve_extracted_service_items(
+                organization_id=organization_id,
+                extracted_data=extracted_data,
+                document_start_date=resolved_start_date,
+                document_end_date=resolved_end_date,
+            )
+            if resolved_service_items and (normalized_form_data.get("value") is None or normalized_form_data.get("currency") is None):
+                summarized_form_data = self.policy.normalize_form_data(
+                    base_form_data=normalized_form_data,
+                    service_items=resolved_service_items,
+                )
+                if normalized_form_data.get("value") is None:
+                    normalized_form_data["value"] = summarized_form_data.get("value")
+                if normalized_form_data.get("currency") is None:
+                    normalized_form_data["currency"] = summarized_form_data.get("currency")
+
+        if is_draft_request:
+            normalized_form_data.setdefault("value", None)
+            normalized_form_data.setdefault("currency", None)
+
+        validated_document = self.policy.validate_document(
+            {
+                "name": resolved_name,
+                "organization_id": organization_id,
+                "client": resolved_client,
+                "type": resolved_type,
+                "start_date": resolved_start_date,
+                "end_date": resolved_end_date,
+                "form_data": normalized_form_data,
+                "state": resolved_state,
+                "folder_id": data.folder_id,
+            }
+        )
+        return validated_document, resolved_service_items, normalized_form_data
+
     async def create_document(
         self,
-        data: CreateDocumentRequest,
+        data: CreateDocumentRequest | CreateDocumentDraftRequest,
         file_data: FileRequest,
         organization_id: int,
         user_role: UserRole | None = None,
         index_name: str = "contracts_index",
     ) -> DocumentResponse:
         """Creates a document and syncs all external stores."""
-        self._ensure_write_access(document_type=DocumentType(data.type), user_role=user_role)
-        await self._validate_folder_access(organization_id=organization_id, folder_id=data.folder_id, user_role=user_role)
-        await self.policy.validate_requested_services(organization_id=organization_id, service_items=data.service_items)
-        validate_service_currency_alignment(service_items=data.service_items)
-        validate_service_periods(
-            document_start_date=data.start_date,
-            document_end_date=data.end_date,
-            service_items=data.service_items,
-        )
-
-        normalized_form_data = self.policy.normalize_form_data(base_form_data=data.form_data, service_items=data.service_items)
-
-        new_document = self.policy.validate_document(
-            {
-                "name": data.name,
-                "organization_id": organization_id,
-                "client": data.client,
-                "type": data.type,
-                "start_date": data.start_date,
-                "end_date": data.end_date,
-                "form_data": normalized_form_data,
-                "state": data.state,
-                "folder_id": data.folder_id,
-            }
-        )
-
         parsed_document = await self.extractor.extract(file=file_data.content, filename=file_data.filename)
         if not parsed_document:
             raise DocumentExtractionError()
+
+        extracted_data = await self._extract_structured_data(
+            data=data,
+            filename=file_data.filename,
+            parsed_document=parsed_document,
+            organization_id=organization_id,
+        )
+
+        new_document, resolved_service_items, normalized_form_data = await self._prepare_create_data(
+            data=data,
+            organization_id=organization_id,
+            extracted_data=extracted_data,
+        )
+
+        if new_document.type is not None:
+            self._ensure_write_access(document_type=DocumentType(new_document.type), user_role=user_role)
+        await self._validate_folder_access(
+            organization_id=organization_id,
+            folder_id=new_document.folder_id,
+            user_role=user_role,
+        )
 
         self.chunk_enricher.enrich(chunks=parsed_document, organization_id=organization_id, form_data=normalized_form_data)
 
@@ -148,7 +321,7 @@ class DocumentCommandService:
             raise DocumentTransactionError(operation="create", details="Failed to save document in SQL, no ID returned")
 
         document_id = saved_document.id
-        service_entities = self.policy.build_document_service_entities(document_id=document_id, service_items=data.service_items)
+        service_entities = self.policy.build_document_service_entities(document_id=document_id, service_items=resolved_service_items)
 
         storage_path = None
         vectors_added = False
@@ -208,7 +381,8 @@ class DocumentCommandService:
         document = await self._get_document_entity(id=id, organization_id=organization_id)
         if not document:
             raise DocumentNotFoundError(document_id=id)
-        self._ensure_write_access(document_type=DocumentType(document.type), user_role=user_role)
+        if document.type is not None:
+            self._ensure_write_access(document_type=DocumentType(document.type), user_role=user_role)
 
         try:
             await self.vector_repo.delete_vectors(index_name=index_name, document_id=id)

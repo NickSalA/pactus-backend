@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from ...documents.api.schemas import CreateDocumentRequest, FileRequest
+from ...documents.api.schemas import CreateDocumentDraftRequest, FileRequest
 from ...documents.application.services import DocumentCommandService
 from ..application.repositories import IDocumentIngestionTarget
 
@@ -35,7 +35,7 @@ class DocumentIngestionAdapter(IDocumentIngestionTarget):
         payload = dict(document_payload)
         payload["form_data"] = self._build_form_data(document_payload=document_payload, source_metadata=source_metadata)
 
-        document_request = CreateDocumentRequest(**payload)
+        document_request = CreateDocumentDraftRequest(**payload)
         file_request = FileRequest(content=file_bytes, filename=filename, content_type=content_type)
 
         return await self.document_service.create_document(

@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from contractai_backend.modules.chatbot.api.schemas import ConversationCreate
 from contractai_backend.modules.chatbot.application.services.conversation_service import ConversationService
 from contractai_backend.modules.chatbot.domain.entities import ConversationTable
 
@@ -25,7 +24,7 @@ class TestCreateConversation:
         repo.save.return_value = conv
 
         service = _make_service(repo)
-        result = await service.create_conversation(ConversationCreate(organization_id=1, user_id=1, title="Test"))
+        result = await service.create_conversation(organization_id=1, user_id=1, title="Test")
 
         assert result.title == "Test"
         repo.save.assert_called_once()
@@ -36,10 +35,10 @@ class TestGetConversation:
     async def test_returns_conversation_read(self):
         conv = _make_conv()
         repo = AsyncMock()
-        repo.get_by_id.return_value = conv
+        repo.get_visible_by_id.return_value = conv
 
         service = _make_service(repo)
-        result = await service.get_conversation(1)
+        result = await service.get_conversation(conversation_id=1, organization_id=1, user_id=1)
 
         assert result is not None
         assert result.id == 1
@@ -47,10 +46,10 @@ class TestGetConversation:
     @pytest.mark.asyncio
     async def test_returns_none_when_not_found(self):
         repo = AsyncMock()
-        repo.get_by_id.return_value = None
+        repo.get_visible_by_id.return_value = None
 
         service = _make_service(repo)
-        result = await service.get_conversation(99)
+        result = await service.get_conversation(conversation_id=99, organization_id=1, user_id=1)
 
         assert result is None
 
@@ -63,7 +62,7 @@ class TestListUserConversations:
         repo.get_by_user.return_value = convs
 
         service = _make_service(repo)
-        result = await service.list_user_conversations(user_id=1)
+        result = await service.list_user_conversations(organization_id=1, user_id=1)
 
         assert len(result) == 2
 
@@ -73,7 +72,7 @@ class TestListUserConversations:
         repo.get_by_user.return_value = []
 
         service = _make_service(repo)
-        result = await service.list_user_conversations(user_id=99)
+        result = await service.list_user_conversations(organization_id=1, user_id=99)
 
         assert result == []
 
@@ -86,7 +85,12 @@ class TestAppendMessages:
         repo.update_messages.return_value = conv
 
         service = _make_service(repo)
-        result = await service.append_messages(1, [{"role": "user", "content": "hi"}])
+        result = await service.append_messages(
+            conversation_id=1,
+            organization_id=1,
+            user_id=1,
+            new_messages=[{"role": "user", "content": "hi"}],
+        )
 
         assert result is not None
 
@@ -96,6 +100,6 @@ class TestAppendMessages:
         repo.update_messages.return_value = None
 
         service = _make_service(repo)
-        result = await service.append_messages(99, [])
+        result = await service.append_messages(conversation_id=99, organization_id=1, user_id=1, new_messages=[])
 
         assert result is None

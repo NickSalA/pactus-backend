@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from ...documents.api.schemas import CreateDocumentRequest
+from ...documents.api.schemas import CreateDocumentDraftRequest
 
 
 class AuthURLResponse(BaseModel):
@@ -22,7 +22,7 @@ class DriveRequest(BaseModel):
 
 class DriveImportFile(BaseModel):
     file_id: str = Field(..., min_length=1)
-    document: CreateDocumentRequest
+    document: CreateDocumentDraftRequest = Field(default_factory=CreateDocumentDraftRequest)
 
 
 class ImportRequest(BaseModel):

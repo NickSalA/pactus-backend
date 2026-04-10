@@ -200,6 +200,8 @@ class EmailAlertService:
             result = await self.session.exec(
                 select(DocumentTable).where(
                     DocumentTable.organization_id == organization_id,
+                    col(DocumentTable.name).is_not(None),
+                    col(DocumentTable.client).is_not(None),
                     col(DocumentTable.state).in_([DocumentState.ACTIVE, DocumentState.EXPIRING_SOON]),
                     DocumentTable.end_date >= today,
                 )

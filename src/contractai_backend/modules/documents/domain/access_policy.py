@@ -33,6 +33,14 @@ WRITABLE_FOLDER_OWNER_ROLES_BY_ROLE: dict[UserRole, frozenset[UserRole]] = {
 }
 
 
+def get_readable_document_types(user_role: UserRole | None) -> frozenset[DocumentType] | None:
+    """Returns readable document types for the role, or None when unrestricted."""
+    if user_role is None:
+        return None
+
+    return READABLE_DOCUMENT_TYPES_BY_ROLE.get(user_role)
+
+
 def can_read_document_type(user_role: UserRole | None, document_type: DocumentType) -> bool:
     """Returns whether the role can read the given document type."""
     allowed_types = READABLE_DOCUMENT_TYPES_BY_ROLE.get(user_role)

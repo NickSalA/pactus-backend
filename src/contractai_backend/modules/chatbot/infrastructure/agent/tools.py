@@ -1,6 +1,7 @@
 """Tools personalizados para el agente de chatbot, integrando la búsqueda en la base de conocimientos contractual."""
 
 import json
+from collections.abc import Iterable
 from datetime import datetime
 
 from langchain_core.tools import tool
@@ -10,11 +11,28 @@ from .....core.application.validation import format_pydantic_validation_error
 from ....documents.application.dto import ContractQueryDTO
 from ....documents.application.services import ContractQueryService
 from ....documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
+from ....users.domain.value_objs import UserRole
 from ...application.repositories import VectorRepository
+from .access import ROLE_PERMISSION_DENIED_RESPONSE, evaluate_document_access
 
 
-def build_bc_tool(repo: VectorRepository):
+def _resolve_scoped_document_ids(document_ids: list[int] | None, allowed_document_ids: frozenset[int] | None) -> list[int] | None:
+    if allowed_document_ids is None:
+        return document_ids
+
+    if not allowed_document_ids:
+        return []
+
+    if document_ids is None:
+        return sorted(allowed_document_ids)
+
+    return [document_id for document_id in document_ids if document_id in allowed_document_ids]
+
+
+def build_bc_tool(repo: VectorRepository, user_role: UserRole | None, allowed_document_ids: Iterable[int] | None = None):
     """Construye una herramienta para el agente, que utiliza el repositorio vectorial para buscar información en la base de conocimientos."""
+
+    scoped_document_ids = None if allowed_document_ids is None else frozenset(allowed_document_ids)
 
     @tool(
         name_or_callable="bc_tool",
@@ -27,12 +45,23 @@ def build_bc_tool(repo: VectorRepository):
         ),
     )
     async def bc_tool(query: str, limit: int = 5, document_ids: list[int] | None = None) -> str:
-        return await repo.search_documents(query=query, limit=limit, document_ids=document_ids)
+        access_decision = evaluate_document_access(message=query, user_role=user_role)
+        if access_decision.is_denied:
+            return ROLE_PERMISSION_DENIED_RESPONSE
+
+        if scoped_document_ids is not None and not scoped_document_ids:
+            return ""
+
+        filtered_document_ids = _resolve_scoped_document_ids(document_ids=document_ids, allowed_document_ids=scoped_document_ids)
+        if document_ids is not None and filtered_document_ids == []:
+            return ROLE_PERMISSION_DENIED_RESPONSE
+
+        return await repo.search_documents(query=query, limit=limit, document_ids=filtered_document_ids)
 
     return bc_tool
 
 
-def build_contracts_query_tool(service: ContractQueryService, organization_id: int):
+def build_contracts_query_tool(service: ContractQueryService, organization_id: int, user_role: UserRole | None):
     """Construye una herramienta para consultas estructuradas de contratos."""
 
     @tool(
@@ -86,7 +115,7 @@ def build_contracts_query_tool(service: ContractQueryService, organization_id: i
             }
             return json.dumps(result, ensure_ascii=True)
 
-        result = await service.run_query(organization_id=organization_id, query=query)
+        result = await service.run_query(organization_id=organization_id, query=query, user_role=user_role)
         return json.dumps(result, ensure_ascii=True)
 
     return contracts_query_tool

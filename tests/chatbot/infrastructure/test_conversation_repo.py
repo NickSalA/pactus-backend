@@ -14,7 +14,10 @@ def _make_conv(id: int = 1) -> ConversationTable:
 
 
 def _make_repo() -> tuple[ConversationRepository, AsyncMock]:
-    session = AsyncMock()
+    session = MagicMock()
+    session.exec = AsyncMock()
+    session.commit = AsyncMock()
+    session.refresh = AsyncMock()
     repo = ConversationRepository(session=session)
     return repo, session
 
@@ -23,12 +26,16 @@ class TestUpdateMessages:
     @pytest.mark.asyncio
     async def test_returns_none_when_conversation_not_found(self):
         repo, session = _make_repo()
-        # get_by_id returns None
         result_mock = MagicMock()
         result_mock.first.return_value = None
         session.exec.return_value = result_mock
 
-        result = await repo.update_messages(99, [{"role": "user", "content": "hi"}])
+        result = await repo.update_messages(
+            conversation_id=99,
+            organization_id=1,
+            user_id=1,
+            new_messages=[{"role": "user", "content": "hi"}],
+        )
         assert result is None
 
     @pytest.mark.asyncio
@@ -39,13 +46,18 @@ class TestUpdateMessages:
         result_mock = MagicMock()
         result_mock.first.return_value = conv
         session.exec.return_value = result_mock
-        session.refresh = AsyncMock()
 
-        result = await repo.update_messages(1, [{"role": "user", "content": "hi"}])
+        result = await repo.update_messages(
+            conversation_id=1,
+            organization_id=1,
+            user_id=1,
+            new_messages=[{"role": "user", "content": "hi"}],
+        )
 
         session.add.assert_called_once_with(instance=conv)
         session.commit.assert_called_once()
         session.refresh.assert_called_once()
+        assert result is conv
 
     @pytest.mark.asyncio
     async def test_updated_at_is_refreshed(self):
@@ -56,9 +68,13 @@ class TestUpdateMessages:
         result_mock = MagicMock()
         result_mock.first.return_value = conv
         session.exec.return_value = result_mock
-        session.refresh = AsyncMock()
 
-        await repo.update_messages(1, [{"role": "bot", "content": "resp"}])
+        await repo.update_messages(
+            conversation_id=1,
+            organization_id=1,
+            user_id=1,
+            new_messages=[{"role": "bot", "content": "resp"}],
+        )
 
         assert conv.updated_at >= old_time
 
@@ -73,7 +89,7 @@ class TestGetByUser:
         result_mock.all.return_value = convs
         session.exec.return_value = result_mock
 
-        result = await repo.get_by_user(user_id=1)
+        result = await repo.get_by_user(user_id=1, organization_id=1)
         assert result == convs
 
     @pytest.mark.asyncio
@@ -83,5 +99,32 @@ class TestGetByUser:
         result_mock.all.return_value = []
         session.exec.return_value = result_mock
 
-        result = await repo.get_by_user(user_id=99)
+        result = await repo.get_by_user(user_id=99, organization_id=1)
         assert result == []
+
+
+class TestGetVisibleById:
+    @pytest.mark.asyncio
+    async def test_returns_owned_conversation(self):
+        repo, session = _make_repo()
+        conv = _make_conv(1)
+
+        result_mock = MagicMock()
+        result_mock.first.return_value = conv
+        session.exec.return_value = result_mock
+
+        result = await repo.get_visible_by_id(conversation_id=1, user_id=1, organization_id=1)
+
+        assert result == conv
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_conversation_is_not_visible(self):
+        repo, session = _make_repo()
+
+        result_mock = MagicMock()
+        result_mock.first.return_value = None
+        session.exec.return_value = result_mock
+
+        result = await repo.get_visible_by_id(conversation_id=1, user_id=2, organization_id=1)
+
+        assert result is None

@@ -34,7 +34,7 @@ class TestDocumentTableValidation:
     def test_creates_valid_document(self):
         doc = DocumentTable.model_validate(_valid_doc())
         assert doc.name == "Contrato Ejemplo"
-        assert doc.state == DocumentState.ACTIVE
+        assert doc.state is None
 
     def test_end_date_before_start_date_raises(self):
         with pytest.raises(ValidationError, match="End date cannot be earlier than start date"):
@@ -48,9 +48,9 @@ class TestDocumentTableValidation:
         with pytest.raises(ValidationError, match="Input should be a valid dictionary"):
             DocumentTable.model_validate(_valid_doc(form_data=["invalid"]))
 
-    def test_default_state_is_active(self):
+    def test_default_state_is_none(self):
         doc = DocumentTable.model_validate(_valid_doc())
-        assert doc.state == DocumentState.ACTIVE
+        assert doc.state is None
 
     def test_file_path_defaults_to_none(self):
         doc = DocumentTable.model_validate(_valid_doc())
@@ -66,6 +66,25 @@ class TestDocumentTableValidation:
         for state in DocumentState:
             doc = DocumentTable.model_validate(_valid_doc(state=state))
             assert doc.state == state
+
+    def test_nullable_top_level_fields_are_allowed(self):
+        doc = DocumentTable.model_validate(
+            _valid_doc(
+                name=None,
+                client=None,
+                type=None,
+                start_date=None,
+                end_date=None,
+                state=None,
+            )
+        )
+
+        assert doc.name is None
+        assert doc.client is None
+        assert doc.type is None
+        assert doc.start_date is None
+        assert doc.end_date is None
+        assert doc.state is None
 
 
 class TestDocumentServiceTableValidation:

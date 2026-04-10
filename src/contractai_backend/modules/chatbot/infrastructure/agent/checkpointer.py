@@ -21,7 +21,8 @@ async def init_checkpointer():
         min_size=settings.CHECKPOINTER_POOL_MIN_SIZE,
         max_size=settings.CHECKPOINTER_POOL_MAX_SIZE,
         configure=setup_connection,
-        kwargs={"prepare_threshold": 0, "row_factory": dict_row, "autocommit": True},
+        # Disable prepared statements to stay compatible with pooled managed Postgres connections.
+        kwargs={"prepare_threshold": None, "row_factory": dict_row, "autocommit": True},
     )
 
     await pool.open()

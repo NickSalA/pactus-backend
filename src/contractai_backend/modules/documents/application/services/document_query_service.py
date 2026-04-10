@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from ...api.schemas import DocumentResponse
 from ...domain import DocumentTable
-from ...domain.access_policy import can_read_document_type, filter_readable_documents
+from ...domain.access_policy import can_read_document_type
 from ...domain.value_objs import DocumentType
 from ..repositories import DocumentQueryRepository
 from .document_response_assembler import DocumentResponseAssembler
@@ -17,14 +17,20 @@ class DocumentQueryService:
         self.sql_repo = sql_repo
         self.response_assembler = DocumentResponseAssembler(sql_repo=sql_repo)
 
+    @staticmethod
+    def _can_read_document(document: DocumentTable, user_role: UserRole | None) -> bool:
+        if document.type is None:
+            return True
+        return can_read_document_type(user_role=user_role, document_type=DocumentType(document.type))
+
     async def get_documents(self, organization_id: int, user_role: UserRole | None = None) -> Sequence[DocumentResponse]:
         """Lists documents for the given organization."""
         await self.sql_repo.sync_contract_states(organization_id=organization_id)
-        documents: list[DocumentTable] = filter_readable_documents(
-            documents=await self.sql_repo.get_all(filters={"organization_id": organization_id}),
-            user_role=user_role,
-            get_document_type=lambda document: DocumentType(document.type),
-        )
+        documents = [
+            document
+            for document in await self.sql_repo.get_all(filters={"organization_id": organization_id})
+            if self._can_read_document(document=document, user_role=user_role)
+        ]
         document_ids = [document.id for document in documents if document.id is not None]
         service_items_by_document = {}
 
@@ -42,7 +48,7 @@ class DocumentQueryService:
         document = await self.sql_repo.get_by_id(id)
         if document is None or document.organization_id != organization_id:
             return None
-        if not can_read_document_type(user_role=user_role, document_type=DocumentType(document.type)):
+        if not self._can_read_document(document=document, user_role=user_role):
             return None
 
         return await self.response_assembler.build(document=document)
