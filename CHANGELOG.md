@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.29.0 (2026-04-10)
+
+### Features
+
+- Migrate to Azure OpenAI for chatbot and template draft generation
+  ([`65d4461`](https://github.com/NickSalA/ContractAI-Backend/commit/65d44614699a29ab505ce852e7fe2cfefc16238a))
+
+
 ## v0.28.0 (2026-04-10)
 
 ### Features
