@@ -3,6 +3,9 @@
 from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from .application.secret import SecretsRegistry, get_secret
+from .infrastructure.azure_provider import AzureKeyVaultProvider
+
 
 class Settings(BaseSettings):
     """Configuration settings for the application."""
@@ -13,7 +16,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:8000", "http://localhost:3000", "http://localhost:9002"]
     DEBUG: bool = Field(default=False)
 
-    SECRET_KEY: str = Field(default="your-secret-key")
+    SECRET_KEY: str = Field(default_factory=lambda: get_secret("SECRET_KEY"))
     ALGORITHM: str | None = None
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=1440)
 
@@ -26,17 +29,17 @@ class Settings(BaseSettings):
     MODEL_TEMPERATURE: float = Field(default=0.7)
 
     OPENAI_EMBEDDING_MODEL_NAME: str = Field(default="text-embedding-3-small")
-    OPENAI_API_KEY: str = Field(default=...)
+    OPENAI_API_KEY: str = Field(default_factory=lambda: get_secret("OPENAI_API_KEY"))
 
     # BETTER_STACK_TOKEN: str = Field(default=...)
     # BETTER_STACK_HOST: str = Field(default=...)
 
-    QDRANT_API_KEY: str = Field(default=...)
+    QDRANT_API_KEY: str = Field(default_factory=lambda: get_secret("QDRANT_API_KEY"))
     QDRANT_URL: str = Field(default=...)
     INDEX_NAME: str = Field(default="contracts_index")
     DRIVE_INDEX_NAME: str = Field(default="drive_contracts_index")
 
-    LLAMA_PARSE_API_KEY: str = Field(default=...)
+    LLAMA_PARSE_API_KEY: str = Field(default_factory=lambda: get_secret("LLAMA_PARSE_API_KEY"))
 
     ALLOWED_FILE_TYPES: list[str] = Field(default=["application/pdf", "text/plain"])
     MAX_FILE_SIZE: int = Field(default=5)
@@ -81,6 +84,8 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
+
+SecretsRegistry.set_provider(AzureKeyVaultProvider(vault_url="https://contractai.vault.azure.net/"))
 
 try:
     settings = Settings()

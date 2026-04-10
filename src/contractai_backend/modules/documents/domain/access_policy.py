@@ -65,7 +65,7 @@ def can_manage_folder(user_role: UserRole | None, owner_role: UserRole) -> bool:
     return allowed_owner_roles is None or owner_role in allowed_owner_roles
 
 
-def filter_readable_documents(
+def filter_readable_documents[T](
     documents: Sequence[T],
     user_role: UserRole | None,
     get_document_type: Callable[[T], DocumentType],
