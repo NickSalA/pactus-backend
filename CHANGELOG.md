@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.30.1 (2026-04-11)
+
+### Bug Fixes
+
+- Enhance permissions agent
+  ([`5929547`](https://github.com/NickSalA/ContractAI-Backend/commit/5929547bdad08fb81c793da3b34465c1bd686f7e))
+
+
 ## v0.30.0 (2026-04-11)
 
 ### Features
