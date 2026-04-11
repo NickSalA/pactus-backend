@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     AZURE_OPENAI_CHAT_DEPLOYMENT: str = Field(default="gpt-4.1-mini")
     OPENAI_CHAT_MODEL_NAME: str = Field(default="gpt-4.1-mini")
     OPENAI_EMBEDDING_MODEL_NAME: str = Field(default="text-embedding-3-small")
-    OPENAI_API_KEY: str = Field(default_factory=lambda: get_secret("OPENAI_API_KEY"))
+    OPENAI_API_KEY: str = Field(default_factory=lambda: get_secret("OPENAI-API-KEY"))
     AZURE_OPENAI_API_KEY: str = Field(default_factory=lambda: get_secret("AZURE-OPENAI-API-KEY"))
     # BETTER_STACK_TOKEN: str = Field(default=...)
     # BETTER_STACK_HOST: str = Field(default=...)

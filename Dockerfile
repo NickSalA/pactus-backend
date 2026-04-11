@@ -15,9 +15,14 @@ ENV PATH="/opt/venv/bin:$PATH"
 # 2. Copiamos SOLO los requerimientos para aprovechar la caché
 COPY requirements.txt .
 
-# 3. Instalamos dependencias. Las wheels de asyncpg/psycopg3 se instalarán rapidísimo
+# 3. Instalamos dependencias de terceros exportadas desde uv.
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
+
+# 4. Instalamos el paquete del proyecto sin resolver dependencias otra vez.
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN pip install --no-cache-dir --no-deps .
 
 # ########################################
 # ETAPA 2: RUNNER (Final)
@@ -45,4 +50,4 @@ USER appuser
 EXPOSE 8000
 
 # 5. Arrancamos uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "contractai_backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
