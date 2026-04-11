@@ -51,8 +51,6 @@ class TestSettings:
     def test_prefers_dotenv_values_over_key_vault(self, tmp_path):
         env_values = {
             "AZURE_KEY_VAULT_URL": "https://test.vault.azure.net",
-            "SECRET_KEY": "env-secret-key",
-            "ALGORITHM": "HS256",
             "GEMINI_API_KEY": "env-gemini-key",
             "OPENAI_API_KEY": "env-openai-key",
             "QDRANT_API_KEY": "env-qdrant-key",

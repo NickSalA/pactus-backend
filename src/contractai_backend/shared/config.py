@@ -15,8 +15,6 @@ class Settings(BaseSettings):
     GLOBAL_PREFIX: str = "/api/v1"
     CORS_ORIGINS: list[str] = ["http://localhost:8000", "http://localhost:3000", "http://localhost:9002"]
     DEBUG: bool = Field(default=False)
-    SECRET_KEY: str = Field(default_factory=lambda: get_secret("SECRET_KEY"))
-    ALGORITHM: str | None = None
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=1440)
 
     PENDING_DAYS: int = Field(default=30)
@@ -38,21 +36,21 @@ class Settings(BaseSettings):
     # BETTER_STACK_TOKEN: str = Field(default=...)
     # BETTER_STACK_HOST: str = Field(default=...)
 
-    QDRANT_API_KEY: str = Field(default_factory=lambda: get_secret("QDRANT_API_KEY"))
+    QDRANT_API_KEY: str = Field(default_factory=lambda: get_secret("QDRANT-API-KEY"))
     QDRANT_URL: str = Field(default=...)
     INDEX_NAME: str = Field(default="contracts_index")
     DRIVE_INDEX_NAME: str = Field(default="drive_contracts_index")
 
-    LLAMA_PARSE_API_KEY: str = Field(default_factory=lambda: get_secret("LLAMA_PARSE_API_KEY"))
+    LLAMA_PARSE_API_KEY: str = Field(default_factory=lambda: get_secret("LLAMA-PARSE-API-KEY"))
 
     ALLOWED_FILE_TYPES: list[str] = Field(default=["application/pdf", "text/plain"])
     MAX_FILE_SIZE: int = Field(default=5)
     MAX_NUM_PAGES: int = Field(default=10)
 
     DATABASE_NAME: str | None = Field(default="postgres")
-    DATABASE_PASSWORD: str | None = Field(default=...)
-    DATABASE_USER: str | None = Field(default=...)
-    DATABASE_HOST: str | None = Field(default=...)
+    DATABASE_PASSWORD: str | None = Field(default_factory=lambda: get_secret("DATABASE-PASSWORD"))
+    DATABASE_USER: str | None = Field(default_factory=lambda: get_secret("DATABASE-USER"))
+    DATABASE_HOST: str | None = Field(default_factory=lambda: get_secret("DATABASE-HOST"))
     DATABASE_PORT: int | None = Field(default=5432)
     DATABASE_POOL_SIZE: int = Field(default=5)
     DATABASE_MAX_OVERFLOW: int = Field(default=5)
@@ -62,11 +60,11 @@ class Settings(BaseSettings):
     CHECKPOINTER_POOL_MAX_SIZE: int = Field(default=2)
 
     SUPABASE_URL: str = Field(default=...)
-    SUPABASE_SECRET_KEY: str = Field(default=...)
+    SUPABASE_SECRET_KEY: str = Field(default_factory=lambda: get_secret("SUPABASE-SECRET-KEY"))
     SUPABASE_STORAGE_BUCKET: str = Field(default="contracts")
 
     GOOGLE_CLIENT_ID: str = Field(default=...)
-    GOOGLE_CLIENT_SECRET: str = Field(default=...)
+    GOOGLE_CLIENT_SECRET: str = Field(default_factory=lambda: get_secret("GOOGLE-CLIENT-SECRET"))
     GOOGLE_REDIRECT_URI: str = Field(default=...)
 
     GMAIL_SENDER: str | None = Field(default=None)
