@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.31.0 (2026-04-11)
+
+### Features
+
+- Update Dockerfile for improved dependency management and add .dockerignore
+  ([`1b480af`](https://github.com/NickSalA/ContractAI-Backend/commit/1b480af28f3ee1225953718ce844962d87da219d))
+
+
 ## v0.30.1 (2026-04-11)
 
 ### Bug Fixes
