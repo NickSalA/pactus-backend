@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.30.0 (2026-04-11)
+
+### Features
+
+- Switch from Azure OpenAI to Google Generative AI for template draft generation
+  ([`a33da84`](https://github.com/NickSalA/ContractAI-Backend/commit/a33da84dc3a6be88f4c0bf85dd3b7e01bd3f1c08))
+
+
 ## v0.29.0 (2026-04-10)
 
 ### Features
