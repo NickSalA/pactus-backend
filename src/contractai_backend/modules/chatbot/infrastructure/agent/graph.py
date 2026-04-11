@@ -1,27 +1,27 @@
 """Graph definition for the ContractAI chatbot agent."""
 
 import json
+from collections.abc import Sequence
 from functools import partial
+from typing import Any
 
 from langchain.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
+from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
-from .access import ROLE_PERMISSION_DENIED_RESPONSE, evaluate_document_access
-from .decisions import ContextAgentDecision, PermissionAgentDecision, parse_structured_decision
+from .access import ROLE_PERMISSION_DENIED_RESPONSE, evaluate_document_access, extract_contract_party_candidate
+from .decisions import ContextAgentDecision, coerce_content_to_text, parse_structured_decision
 from .llm import bind_tools_for_llm
-from .prompts import get_context_agent_prompt, get_conversation_agent_prompt, get_permission_agent_prompt
+from .prompts import get_context_agent_prompt, get_conversation_agent_prompt
 from .state import AgentState
 
-DEFAULT_EARLY_RESPONSE = (
-    "Puedo ayudarte con consultas informativas sobre contratos y documentos. "
-    "En este chat no ejecuto acciones ni modificaciones; solo respondo consultas y rankings con la informacion disponible."
-)
 DEFAULT_PERMISSION_DENIED_RESPONSE = (
     "No tengo un contexto de permisos valido para atender esta consulta. Por favor vuelve a iniciar sesion o contacta a un administrador."
 )
+VALID_PERMISSION_ROLES = {"ADMIN", "HR", "MANAGER", "WORKER"}
 
 
 def _extract_latest_user_message(state: AgentState) -> str:
@@ -51,6 +51,121 @@ async def _invoke_agent(llm: BaseChatModel | Runnable, system_prompt: str, paylo
     return await llm.ainvoke(messages)
 
 
+def _get_permission_tool(tools: Sequence[BaseTool], tool_name: str) -> BaseTool | None:
+    return next((tool for tool in tools if tool.name == tool_name), None)
+
+
+def _get_allowed_document_types(user_context: dict[str, Any], access_decision) -> set[str] | None:
+    if access_decision.allowed_document_types is not None:
+        return {document_type.value for document_type in access_decision.allowed_document_types}
+
+    raw_allowed_document_types = user_context.get("allowed_document_types")
+    if raw_allowed_document_types is None:
+        return None
+
+    return {str(document_type) for document_type in raw_allowed_document_types}
+
+
+def _normalize_contract_candidates(matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized_matches: list[dict[str, Any]] = []
+    seen_document_ids: set[int] = set()
+    for match in matches:
+        try:
+            document_id = int(match["document_id"])
+        except (KeyError, TypeError, ValueError):
+            continue
+
+        if document_id in seen_document_ids:
+            continue
+
+        document_type = match.get("document_type")
+        if document_type is None:
+            continue
+
+        seen_document_ids.add(document_id)
+        normalized_matches.append(
+            {
+                "document_id": document_id,
+                "name": match.get("name"),
+                "client": match.get("client"),
+                "document_type": str(document_type),
+                "file_name": match.get("file_name"),
+                "match_score": float(match.get("match_score") or 0.0),
+            }
+        )
+
+    normalized_matches.sort(key=lambda item: (item["match_score"], str(item.get("client") or "")), reverse=True)
+    return normalized_matches
+
+
+def _format_contract_candidate(candidate: dict[str, Any]) -> str:
+    identifier = candidate.get("name") or candidate.get("file_name") or candidate.get("client") or f"Documento {candidate['document_id']}"
+    return (
+        f"{identifier} | Contraparte: {candidate.get('client') or 'Sin nombre'} | "
+        f"Tipo: {candidate.get('document_type')} | Documento: {candidate['document_id']}"
+    )
+
+
+def _build_permission_clarification_response(party_candidate: str, allowed_matches: list[dict[str, Any]]) -> str:
+    options = "\n".join(f"{index}. {_format_contract_candidate(candidate)}" for index, candidate in enumerate(allowed_matches[:3], start=1))
+    return f"Encontre varios contratos a los que si tienes acceso relacionados con '{party_candidate}'. Indica cual necesitas:\n{options}"
+
+
+async def _resolve_named_party_access(
+    message: str,
+    user_context: dict[str, Any],
+    access_decision,
+    tools: Sequence[BaseTool],
+) -> dict[str, Any] | None:
+    party_candidate = extract_contract_party_candidate(message)
+    if party_candidate is None:
+        return None
+
+    party_lookup_tool = _get_permission_tool(tools, "party_lookup_tool")
+    if party_lookup_tool is None:
+        return None
+
+    raw_result = await party_lookup_tool.ainvoke({"party_name": party_candidate, "limit": 10})
+    try:
+        lookup_result = json.loads(str(raw_result))
+    except json.JSONDecodeError:
+        return None
+
+    matches = lookup_result.get("matches")
+    if not isinstance(matches, list):
+        return None
+
+    normalized_matches = _normalize_contract_candidates(matches)
+    if not normalized_matches:
+        return {"kind": "no_match"}
+
+    allowed_document_types = _get_allowed_document_types(user_context=user_context, access_decision=access_decision)
+    if allowed_document_types is None:
+        allowed_matches = normalized_matches
+        denied_matches: list[dict[str, Any]] = []
+    else:
+        allowed_matches = [match for match in normalized_matches if match["document_type"] in allowed_document_types]
+        denied_matches = [match for match in normalized_matches if match["document_type"] not in allowed_document_types]
+
+    if not allowed_matches:
+        if denied_matches:
+            return {"kind": "deny"}
+        return {"kind": "no_match"}
+
+    if len(allowed_matches) == 1:
+        return {
+            "kind": "allow",
+            "document_ids": [allowed_matches[0]["document_id"]],
+            "candidates": allowed_matches,
+        }
+
+    return {
+        "kind": "clarify",
+        "response": _build_permission_clarification_response(party_candidate=party_candidate, allowed_matches=allowed_matches),
+        "candidates": allowed_matches,
+    }
+
+
 async def run_context_agent(state: AgentState, llm: BaseChatModel):
     """A1: classify the request with a dedicated LLM agent."""
     message = _extract_latest_user_message(state)
@@ -63,7 +178,14 @@ async def run_context_agent(state: AgentState, llm: BaseChatModel):
     try:
         decision = parse_structured_decision(response.content, ContextAgentDecision)
     except Exception:
-        return {"context_route": "n1_early_response", "early_response": DEFAULT_EARLY_RESPONSE}
+        fallback_response = coerce_content_to_text(response.content).strip()
+        if fallback_response and not fallback_response.lstrip().startswith("{"):
+            return {"context_route": "n1_early_response", "early_response": fallback_response}
+
+        return {
+            "context_route": "n1_early_response",
+            "early_response": "No pude interpretar la solicitud inicial. Reformulala brevemente por favor.",
+        }
 
     return {
         "context_route": decision.route,
@@ -75,38 +197,73 @@ def route_after_context(state: AgentState) -> str:
     return state.get("context_route", "a2_permissions")
 
 
-async def run_permission_agent(state: AgentState, llm: BaseChatModel):
-    """A2: validate trusted backend permissions with a dedicated LLM agent."""
+async def run_permission_agent(state: AgentState, tools: Sequence[BaseTool]):
+    """A2: validate permissions deterministically using access rules and relational lookup."""
     message = _extract_latest_user_message(state)
     user_context = state.get("user_context") or {}
+    role = str(user_context.get("role") or "").upper()
+    organization_id = user_context.get("organization_id")
+    if not isinstance(organization_id, int) or organization_id <= 0 or role not in VALID_PERMISSION_ROLES:
+        return {
+            "permission_route": "n2_denied_response",
+            "permission_response": DEFAULT_PERMISSION_DENIED_RESPONSE,
+            "resolved_document_ids": None,
+            "resolved_contract_candidates": None,
+        }
+
     access_decision = evaluate_document_access(message=message, user_role=user_context.get("role"))
     if access_decision.is_denied:
         return {
             "permission_route": "n2_denied_response",
             "permission_response": ROLE_PERMISSION_DENIED_RESPONSE,
+            "resolved_document_ids": None,
+            "resolved_contract_candidates": None,
         }
 
-    response = await _invoke_agent(
-        llm=llm,
-        system_prompt=get_permission_agent_prompt(),
-        payload={
-            "user_message": message,
-            "trusted_user_context": user_context,
-            "access_policy_hint": access_decision.to_prompt_payload(),
-        },
-    )
-
     try:
-        decision = parse_structured_decision(response.content, PermissionAgentDecision)
+        named_party_resolution = await _resolve_named_party_access(
+            message=message,
+            user_context=user_context,
+            access_decision=access_decision,
+            tools=tools,
+        )
     except Exception:
         return {
             "permission_route": "n2_denied_response",
             "permission_response": DEFAULT_PERMISSION_DENIED_RESPONSE,
+            "resolved_document_ids": None,
+            "resolved_contract_candidates": None,
+        }
+
+    if named_party_resolution is None or named_party_resolution.get("kind") == "no_match":
+        return {
+            "permission_route": "a3_conversation",
+            "permission_response": None,
+            "resolved_document_ids": None,
+            "resolved_contract_candidates": None,
+        }
+
+    if named_party_resolution["kind"] == "deny":
+        return {
+            "permission_route": "n2_denied_response",
+            "permission_response": ROLE_PERMISSION_DENIED_RESPONSE,
+            "resolved_document_ids": None,
+            "resolved_contract_candidates": None,
+        }
+
+    if named_party_resolution["kind"] == "clarify":
+        return {
+            "permission_route": "n2_permission_response",
+            "permission_response": named_party_resolution["response"],
+            "resolved_document_ids": None,
+            "resolved_contract_candidates": named_party_resolution.get("candidates"),
         }
 
     return {
-        "permission_route": decision.route,
-        "permission_response": decision.response if decision.route == "n2_denied_response" else None,
+        "permission_route": "a3_conversation",
+        "permission_response": None,
+        "resolved_document_ids": named_party_resolution.get("document_ids"),
+        "resolved_contract_candidates": named_party_resolution.get("candidates"),
     }
 
 
@@ -147,7 +304,22 @@ async def call_model(state: AgentState, llm: Runnable):
             f"If any tool returns status='forbidden' or the exact message '{ROLE_PERMISSION_DENIED_RESPONSE}', respond exactly with that same message."
         )
     )
-    messages = [system_message, access_message] + state["messages"]
+    resolved_document_ids = state.get("resolved_document_ids") or []
+    resolved_candidates = state.get("resolved_contract_candidates") or []
+    resolution_messages: list[SystemMessage] = []
+    if resolved_document_ids:
+        candidate = resolved_candidates[0] if resolved_candidates else None
+        resolution_messages.append(
+            SystemMessage(
+                content=(
+                    "Trusted contract resolution: the permission stage already matched this request to one permitted contract. "
+                    f"Restrict contract-specific retrieval to document_ids={resolved_document_ids}. "
+                    f"Resolved contract: {_format_contract_candidate(candidate) if candidate else resolved_document_ids[0]}. "
+                    "If you use bc_tool, pass those document_ids. Do not broaden the search unless the user explicitly asks for another contract."
+                )
+            )
+        )
+    messages = [system_message, access_message] + resolution_messages + state["messages"]
 
     response = await llm.ainvoke(messages)
     return {"messages": [response]}
@@ -159,8 +331,9 @@ def finalize_response(_: AgentState):
 
 
 class ContractAgentGraph:
-    def __init__(self, tools: list, llm: BaseChatModel):
+    def __init__(self, tools: list, llm: BaseChatModel, permission_tools: list | None = None):
         self.tools = tools
+        self.permission_tools = permission_tools or []
         self.decision_llm = llm
         self.conversation_llm = bind_tools_for_llm(llm, self.tools)
 
@@ -168,7 +341,7 @@ class ContractAgentGraph:
         """Build the multi-node chatbot graph."""
         workflow = StateGraph(AgentState)  # ty:ignore[invalid-argument-type]
         context_node = partial(run_context_agent, llm=self.decision_llm)
-        permission_node = partial(run_permission_agent, llm=self.decision_llm)
+        permission_node = partial(run_permission_agent, tools=self.permission_tools)
         agent_node = partial(call_model, llm=self.conversation_llm)
 
         workflow.add_node("a1_context", context_node)
@@ -177,6 +350,7 @@ class ContractAgentGraph:
         workflow.add_node("tools", ToolNode(self.tools))
         workflow.add_node("n1_early_response", build_terminal_response("early_response"))
         workflow.add_node("n2_denied_response", build_terminal_response("permission_response"))
+        workflow.add_node("n2_permission_response", build_terminal_response("permission_response"))
         workflow.add_node("n3_final_response", finalize_response)
 
         workflow.add_edge(START, "a1_context")
@@ -194,6 +368,7 @@ class ContractAgentGraph:
             {
                 "a3_conversation": "a3_conversation",
                 "n2_denied_response": "n2_denied_response",
+                "n2_permission_response": "n2_permission_response",
             },
         )
         workflow.add_conditional_edges(
@@ -207,6 +382,7 @@ class ContractAgentGraph:
         workflow.add_edge("tools", "a3_conversation")
         workflow.add_edge("n1_early_response", END)
         workflow.add_edge("n2_denied_response", END)
+        workflow.add_edge("n2_permission_response", END)
         workflow.add_edge("n3_final_response", END)
 
         return workflow.compile(checkpointer=checkpointer)

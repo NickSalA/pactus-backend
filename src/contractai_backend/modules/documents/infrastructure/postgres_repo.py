@@ -3,9 +3,12 @@
 from collections import defaultdict
 from collections.abc import Sequence
 from datetime import date
+from difflib import SequenceMatcher
+import re
+import unicodedata
 
 from loguru import logger
-from sqlalchemy import Float, asc, cast, desc, func, or_, text
+from sqlalchemy import Float, asc, case, cast, desc, func, or_, text
 from sqlalchemy.exc import OperationalError, SQLAlchemyError, TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col, delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -77,6 +80,65 @@ class SQLModelDocumentRepository(
                 col(DocumentTable.start_date) > today,
             )
         )
+
+    @staticmethod
+    def _normalize_lookup_text(value: str | None) -> str:
+        if not value:
+            return ""
+
+        normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+        return " ".join(re.findall(r"[a-z0-9]+", normalized.lower()))
+
+    @classmethod
+    def _compute_party_match_metrics(cls, query: str, candidate: str) -> tuple[float, float, float, float]:
+        normalized_query = cls._normalize_lookup_text(query)
+        normalized_candidate = cls._normalize_lookup_text(candidate)
+        if not normalized_query or not normalized_candidate:
+            return 0.0, 0.0, 0.0, 0.0
+
+        if normalized_query == normalized_candidate:
+            return 1.0, 1.0, 1.0, 1.0
+
+        if normalized_query in normalized_candidate or normalized_candidate in normalized_query:
+            full_score = SequenceMatcher(None, normalized_query, normalized_candidate).ratio()
+            return 0.97, 1.0, full_score, 1.0
+
+        query_tokens = normalized_query.split()
+        candidate_tokens = normalized_candidate.split()
+        if not query_tokens or not candidate_tokens:
+            return 0.0, 0.0, 0.0, 0.0
+
+        token_scores: list[float] = []
+        close_hits = 0
+        for query_token in query_tokens:
+            best_score = max(SequenceMatcher(None, query_token, candidate_token).ratio() for candidate_token in candidate_tokens)
+            token_scores.append(best_score)
+            if best_score >= 0.84:
+                close_hits += 1
+
+        avg_token_score = sum(token_scores) / len(token_scores)
+        coverage = close_hits / len(query_tokens)
+        full_score = SequenceMatcher(None, normalized_query, normalized_candidate).ratio()
+        combined_score = (avg_token_score * 0.55) + (coverage * 0.30) + (full_score * 0.15)
+        return combined_score, coverage, avg_token_score, full_score
+
+    @classmethod
+    def _is_viable_party_match(cls, query: str, candidate: str) -> bool:
+        combined_score, coverage, avg_token_score, full_score = cls._compute_party_match_metrics(query=query, candidate=candidate)
+        normalized_query = cls._normalize_lookup_text(query)
+        normalized_candidate = cls._normalize_lookup_text(candidate)
+
+        if not normalized_query or not normalized_candidate:
+            return False
+
+        if normalized_query == normalized_candidate or normalized_query in normalized_candidate or normalized_candidate in normalized_query:
+            return True
+
+        query_token_count = len(normalized_query.split())
+        if query_token_count == 1:
+            return combined_score >= 0.86 or full_score >= 0.90
+
+        return coverage >= 0.75 and avg_token_score >= 0.84 and combined_score >= 0.72
 
     @staticmethod
     def _resolve_sort_direction(direction: str):
@@ -187,6 +249,66 @@ class SQLModelDocumentRepository(
             query = select(DocumentServiceTable).where(col(DocumentServiceTable.document_id) == doc_id).order_by(col(DocumentServiceTable.id))
             result = await self.session.exec(statement=query)
             return result.all()
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
+            raise DocumentDatabaseUnavailableError() from e
+        except SQLAlchemyError as e:
+            raise DocumentDatabaseError() from e
+
+    async def search_contract_access_candidates(
+        self, organization_id: int, query: str, limit: int = 10
+    ) -> Sequence[dict[str, str | int | float | None]]:
+        """Searches real contracts by counterparty name for access decisions."""
+        normalized_query = self._normalize_lookup_text(query)
+        if not normalized_query:
+            return []
+
+        try:
+            statement = (
+                select(
+                    col(DocumentTable.id).label("document_id"),
+                    col(DocumentTable.name).label("name"),
+                    col(DocumentTable.client).label("client"),
+                    col(DocumentTable.type).label("document_type"),
+                    col(DocumentTable.file_name).label("file_name"),
+                )
+                .where(DocumentTable.organization_id == organization_id)
+                .where(col(DocumentTable.client).is_not(None))
+                .where(col(DocumentTable.type).is_not(None))
+            )
+
+            result = await self.session.exec(statement=statement)
+            candidates: list[dict[str, str | int | float | None]] = []
+            for row in result.all():
+                mapping = row._mapping if hasattr(row, "_mapping") else None
+                document_id = mapping["document_id"] if mapping else row[0]
+                name = mapping["name"] if mapping else row[1]
+                client = mapping["client"] if mapping else row[2]
+                document_type = mapping["document_type"] if mapping else row[3]
+                file_name = mapping["file_name"] if mapping else row[4]
+                if client is None or not self._is_viable_party_match(query=normalized_query, candidate=str(client)):
+                    continue
+
+                match_score, _, _, _ = self._compute_party_match_metrics(query=normalized_query, candidate=str(client))
+                candidates.append(
+                    {
+                        "document_id": document_id,
+                        "name": name,
+                        "client": client,
+                        "document_type": document_type.value if hasattr(document_type, "value") else document_type,
+                        "file_name": file_name,
+                        "match_score": round(match_score, 6),
+                    }
+                )
+
+            candidates.sort(
+                key=lambda item: (
+                    float(item.get("match_score") or 0.0),
+                    1 if self._normalize_lookup_text(str(item.get("client"))) == normalized_query else 0,
+                    str(item.get("client") or ""),
+                ),
+                reverse=True,
+            )
+            return candidates[:limit]
         except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:

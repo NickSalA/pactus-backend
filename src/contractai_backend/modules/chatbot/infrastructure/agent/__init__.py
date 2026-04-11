@@ -5,7 +5,7 @@ from .decisions import ContextAgentDecision, PermissionAgentDecision, parse_stru
 from .graph import ContractAgentGraph
 from .llm import bind_tools_for_llm, get_llm
 from .prompts import get_context_agent_prompt, get_conversation_agent_prompt, get_permission_agent_prompt
-from .tools import build_bc_tool, build_contracts_query_tool
+from .tools import build_bc_tool, build_contracts_query_tool, build_party_lookup_tool
 
 __all__ = [
     "ContractAgentGraph",
@@ -16,6 +16,7 @@ __all__ = [
     "bind_tools_for_llm",
     "build_bc_tool",
     "build_contracts_query_tool",
+    "build_party_lookup_tool",
     "evaluate_document_access",
     "get_context_agent_prompt",
     "get_conversation_agent_prompt",

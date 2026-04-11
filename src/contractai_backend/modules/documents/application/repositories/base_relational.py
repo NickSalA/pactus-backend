@@ -30,6 +30,11 @@ class DocumentQueryRepository(ABC):
         pass
 
     @abstractmethod
+    async def search_contract_access_candidates(self, organization_id: int, query: str, limit: int = 10) -> Sequence[dict[str, Any]]:
+        """Lists contracts whose counterparty may match a user-provided name for access decisions."""
+        pass
+
+    @abstractmethod
     async def search_contracts(
         self,
         organization_id: int,

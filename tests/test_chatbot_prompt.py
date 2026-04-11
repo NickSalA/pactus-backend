@@ -21,6 +21,7 @@ def test_permission_prompt_defines_a2_json_routes() -> None:
 
     assert "You are A2" in prompt
     assert "trusted backend user context" in prompt
+    assert "party_lookup_tool" in prompt
     assert "ADMIN, HR, MANAGER, WORKER" in prompt
     assert "a3_conversation" in prompt
     assert "n2_denied_response" in prompt

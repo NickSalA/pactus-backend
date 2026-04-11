@@ -3,6 +3,7 @@
 import json
 from collections.abc import Iterable
 from datetime import datetime
+from typing import Any, Protocol
 
 from langchain_core.tools import tool
 from pydantic import ValidationError
@@ -14,6 +15,15 @@ from ....documents.domain.value_objs import CurrencyType, DocumentState, Documen
 from ....users.domain.value_objs import UserRole
 from ...application.repositories import VectorRepository
 from .access import ROLE_PERMISSION_DENIED_RESPONSE, evaluate_document_access
+
+
+class CounterpartyLookupRepository(Protocol):
+    async def search_contract_access_candidates(
+        self,
+        organization_id: int,
+        query: str,
+        limit: int = 10,
+    ) -> list[dict[str, Any]] | tuple[dict[str, Any], ...]: ...
 
 
 def _resolve_scoped_document_ids(document_ids: list[int] | None, allowed_document_ids: frozenset[int] | None) -> list[int] | None:
@@ -59,6 +69,42 @@ def build_bc_tool(repo: VectorRepository, user_role: UserRole | None, allowed_do
         return await repo.search_documents(query=query, limit=limit, document_ids=filtered_document_ids)
 
     return bc_tool
+
+
+def build_party_lookup_tool(repo: CounterpartyLookupRepository, organization_id: int):
+    """Builds a permission helper tool that resolves real contracts for one named party."""
+
+    @tool(
+        name_or_callable="party_lookup_tool",
+        description=(
+            "Usala en el agente de permisos cuando el usuario pregunte por un contrato con una persona o empresa especifica y el tipo de documento no sea explicito. "
+            "Busca contratos reales por contraparte en la organizacion y devuelve document_id, nombre, client y document_type para decidir acceso. "
+            "No responde contenido contractual; solo resuelve contratos candidatos para COMPANY o LABOR."
+        ),
+    )
+    async def party_lookup_tool(party_name: str, limit: int = 5) -> str:
+        normalized_party_name = " ".join(party_name.strip().split())
+        if not normalized_party_name:
+            return json.dumps(
+                {
+                    "status": "invalid_request",
+                    "message": "party_name no puede estar vacio.",
+                },
+                ensure_ascii=True,
+            )
+
+        matches = list(await repo.search_contract_access_candidates(organization_id=organization_id, query=normalized_party_name, limit=limit))
+        matched_document_types = sorted({document_type for item in matches if (document_type := item.get("document_type")) is not None})
+        result = {
+            "status": "success" if matches else "no_match",
+            "query": normalized_party_name,
+            "matches": matches,
+            "matched_document_types": matched_document_types,
+            "match_count": len(matches),
+        }
+        return json.dumps(result, ensure_ascii=True)
+
+    return party_lookup_tool
 
 
 def build_contracts_query_tool(service: ContractQueryService, organization_id: int, user_role: UserRole | None):

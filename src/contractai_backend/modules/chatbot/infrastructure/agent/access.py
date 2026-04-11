@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from dataclasses import dataclass
 
@@ -11,36 +12,26 @@ from ....users.domain.value_objs import UserRole
 
 ROLE_PERMISSION_DENIED_RESPONSE = "No tienes permisos para acceder a esa informacion."
 
-COMPANY_KEYWORDS = (
-    "empresa",
-    "empresas",
-    "cliente",
-    "clientes",
-    "proveedor",
-    "proveedores",
-    "corporativo",
-    "corporativos",
-    "comercial",
-    "comerciales",
-    "sociedad",
-)
+EXPLICIT_DOCUMENT_TYPE_PATTERNS: dict[DocumentType, tuple[str, ...]] = {
+    DocumentType.COMPANY: (
+        r"\bempresa(?:s)?\b",
+        r"\bcliente(?:s)?\b",
+        r"\bproveedor(?:es)?\b",
+        r"\bcorporativ(?:o|a|os|as)\b",
+        r"\bcomercial(?:es)?\b",
+    ),
+    DocumentType.LABOR: (
+        r"\blabor(?:al(?:es)?)?\b",
+        r"\btrabajador(?:es)?\b",
+        r"\bemplead(?:o|a|os|as)\b",
+        r"\brrhh\b",
+        r"\brecursos humanos\b",
+        r"\bplanilla\b",
+    ),
+}
 
-LABOR_KEYWORDS = (
-    "trabajador",
-    "trabajadores",
-    "empleado",
-    "empleados",
-    "laboral",
-    "laborales",
-    "rrhh",
-    "recursos humanos",
-    "personal",
-    "planilla",
-    "practicante",
-    "practicantes",
-    "colaborador",
-    "colaboradores",
-)
+CONTRACT_PARTY_PATTERN = re.compile(r"\bcontratos?\s+(?:de|con)\s+(?P<party>[^?.!,;]+)")
+TRAILING_PARTY_PATTERN = re.compile(r"\b(?:por favor|gracias|porfa)\b.*$")
 
 
 @dataclass(frozen=True)
@@ -87,17 +78,26 @@ def coerce_user_role(user_role: UserRole | str | None) -> UserRole | None:
 
 
 def infer_requested_document_types(message: str) -> frozenset[DocumentType]:
-    """Infer document-type intent from user or tool queries."""
+    """Infer explicit document-type intent from the latest message."""
     normalized = normalize_access_text(message)
-    requested_types: set[DocumentType] = set()
-
-    if any(keyword in normalized for keyword in COMPANY_KEYWORDS):
-        requested_types.add(DocumentType.COMPANY)
-
-    if any(keyword in normalized for keyword in LABOR_KEYWORDS):
-        requested_types.add(DocumentType.LABOR)
-
+    requested_types = {
+        document_type
+        for document_type, patterns in EXPLICIT_DOCUMENT_TYPE_PATTERNS.items()
+        if any(re.search(pattern, normalized) for pattern in patterns)
+    }
     return frozenset(requested_types)
+
+
+def extract_contract_party_candidate(message: str) -> str | None:
+    """Extract the party name from direct contract queries like 'contrato de X'."""
+    normalized = normalize_access_text(message)
+    matches = list(CONTRACT_PARTY_PATTERN.finditer(normalized))
+    if not matches:
+        return None
+
+    candidate = matches[-1].group("party").strip()
+    candidate = TRAILING_PARTY_PATTERN.sub("", candidate).strip()
+    return candidate or None
 
 
 def evaluate_document_access(message: str, user_role: UserRole | str | None) -> DocumentAccessDecision:

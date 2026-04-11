@@ -20,3 +20,5 @@ class AgentState(TypedDict, total=False):
     early_response: str | None
     permission_route: str
     permission_response: str | None
+    resolved_document_ids: list[int] | None
+    resolved_contract_candidates: list[dict[str, object]] | None

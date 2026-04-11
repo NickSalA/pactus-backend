@@ -16,7 +16,14 @@ from ....shared.config import settings
 from ....shared.infrastructure.database import get_aclient, get_session
 from ..application import ChatbotService, ConversationService, ILLMProvider
 from ..infrastructure import ConversationRepository, QdrantVectorRepository
-from ..infrastructure.agent import ContractAgentGraph, LangGraphLLMAdapter, build_bc_tool, build_contracts_query_tool, get_llm
+from ..infrastructure.agent import (
+    ContractAgentGraph,
+    LangGraphLLMAdapter,
+    build_bc_tool,
+    build_contracts_query_tool,
+    build_party_lookup_tool,
+    get_llm,
+)
 
 
 async def get_conversation_service(session: Annotated[AsyncSession, Depends(get_session)]) -> ConversationService:
@@ -52,13 +59,14 @@ async def get_llm_provider(
             allowed_document_ids.update(document.id for document in documents if document.id is not None)
 
     bc_tool = build_bc_tool(repo=vector_repo, user_role=current_user.role, allowed_document_ids=allowed_document_ids)
+    party_lookup_tool = build_party_lookup_tool(repo=contract_repo, organization_id=current_user.organization_id)
     contracts_query_tool = build_contracts_query_tool(
         service=contract_query_service,
         organization_id=current_user.organization_id,
         user_role=current_user.role,
     )
 
-    graph_builder = ContractAgentGraph(tools=[contracts_query_tool, bc_tool], llm=get_llm())
+    graph_builder = ContractAgentGraph(tools=[contracts_query_tool, bc_tool], permission_tools=[party_lookup_tool], llm=get_llm())
     compiled_graph = graph_builder.build_graph(checkpointer=checkpointer)
 
     return LangGraphLLMAdapter(compiled_graph=compiled_graph)

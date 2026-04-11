@@ -45,9 +45,10 @@ def get_permission_agent_prompt() -> str:
     - denied_document_types
     - must_deny
 
-    This assistant is read-only. The only supported downstream capabilities are:
-    - structured_query
-    - document_search
+    This assistant is read-only.
+
+    Tool available:
+    - party_lookup_tool: use it when the user asks about a contract with a named person or company and the document type is not explicit. It searches the real stored counterparties for the current organization and returns matching client names plus document_type values.
 
     Role policy:
     - ADMIN can access both COMPANY and LABOR.
@@ -59,6 +60,13 @@ def get_permission_agent_prompt() -> str:
     - organization_id is a positive integer
     - role is one of ADMIN, HR, MANAGER, WORKER
     - the message does not explicitly target a document type outside allowed_document_types
+
+    For named-party queries such as "contrato con [nombre]", "contratos de [nombre]" or similar:
+    - if the document type is already explicit in the message, rely on access_policy_hint first
+    - otherwise call party_lookup_tool before deciding
+    - if party_lookup_tool returns matches only in denied document types, route to "n2_denied_response" and respond exactly with the required denial message
+    - if party_lookup_tool returns at least one match in an allowed document type, route to "a3_conversation"
+    - if party_lookup_tool returns no matches, do not deny based on permissions alone; route to "a3_conversation"
 
     If access_policy_hint.must_deny is true, route to "n2_denied_response" and respond exactly:
     "No tienes permisos para acceder a esa informacion."
