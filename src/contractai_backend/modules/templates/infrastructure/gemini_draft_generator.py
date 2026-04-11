@@ -3,7 +3,7 @@
 import json
 from typing import Any
 
-from langchain_openai import AzureChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from ....shared.config import settings
 from ..api.schemas import GenerateTemplateDraftRequest, TemplateDraftResponse, TemplateUsage
@@ -12,13 +12,12 @@ from ..application.repositories.base_draft_generator import ITemplateDraftGenera
 
 class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
     def __init__(self):
-        """Configura el cliente GPT."""
-        self.llm = AzureChatOpenAI(
-            api_version="2024-12-01-preview",
-            azure_endpoint="https://AgenteAI-Instance.openai.azure.com/",
-            api_key=settings.AZURE_OPENAI_API_KEY,
+        """Configura el cliente Gemini."""
+        self.llm = ChatGoogleGenerativeAI(
+            model=settings.GEMINI_MODEL_NAME,
+            api_key=settings.GEMINI_API_KEY,
             temperature=settings.MODEL_TEMPERATURE,
-            azure_deployment="geopoint-agent-model",
+            max_retries=0,
         )
 
     async def generate(
