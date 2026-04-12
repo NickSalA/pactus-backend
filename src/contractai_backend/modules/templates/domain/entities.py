@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlmodel import Field
 
 from ....core.domain.base import BaseTable
+from ...documents.domain import DocumentType
 from .value_objs import TemplateState
 
 
@@ -31,6 +32,9 @@ class TemplateTable(BaseTable, table=True):
     organization_id: int = Field(sa_column=Column("organization_id", Integer, nullable=False, index=True))
     name: str = Field(sa_column=Column("name", String(length=255), nullable=False))
     description: str | None = Field(default=None, sa_column=Column("description", Text, nullable=True))
+    document_type: DocumentType = Field(
+        sa_column=Column("document_type", ENUM(DocumentType, name="document_type", create_type=False), nullable=False)
+    )
     content: dict[str, Any] = Field(sa_column=Column("content", JSONB, nullable=False))
     created_at: datetime | None = Field(
         default_factory=lambda: datetime.now(tz=UTC), sa_column=Column("created_at", DateTime(timezone=True), nullable=False)

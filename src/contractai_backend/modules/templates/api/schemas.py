@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from ...documents.domain import DocumentType
 from ..domain.entities import TemplateContent, TemplateTable
 from ..domain.value_objs import TemplateState
 
@@ -15,6 +16,7 @@ class GenerateTemplateDraftRequest(BaseModel):
     instructions: str | None = None
     contract_type: str | None = None
     jurisdiction: str | None = None
+    document_type: DocumentType | None = None
 
 
 class TemplateUsage(BaseModel):
@@ -37,6 +39,7 @@ class TemplateResponse(BaseModel):
     organization_id: int
     name: str
     description: str | None = None
+    document_type: DocumentType
     content: TemplateContent
     created_at: datetime | None = None
     state: TemplateState
@@ -70,6 +73,7 @@ class PreviewTemplateResponse(BaseModel):
 class CreateTemplateRequest(BaseModel):
     name: str
     description: str | None = None
+    document_type: DocumentType
     content: TemplateContent
 
     @field_validator("name")
@@ -94,6 +98,7 @@ class CreateTemplateRequest(BaseModel):
 class UpdateTemplateRequest(BaseModel):
     name: str | None = None
     description: str | None = None
+    document_type: DocumentType | None = None
     content: TemplateContent | None = None
 
     @field_validator("name")

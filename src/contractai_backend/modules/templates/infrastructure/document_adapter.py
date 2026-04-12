@@ -3,6 +3,7 @@
 from ...documents.api.schemas import CreateDocumentRequest, DocumentResponse, FileRequest
 from ...documents.application.services import DocumentCommandService
 from ...documents.domain import DocumentState
+from ...users.domain.value_objs import UserRole
 from ..application.repositories.base_relational import IDocumentModuleAdapter
 
 
@@ -10,7 +11,7 @@ class DocumentModuleAdapter(IDocumentModuleAdapter):
     def __init__(self, doc_service: DocumentCommandService):
         self.doc_service: DocumentCommandService = doc_service
 
-    async def save_generated_document(self, document_payload: dict, file: bytes):
+    async def save_generated_document(self, document_payload: dict, file: bytes, user_role: UserRole | None):
         """Implementación del método para guardar el documento generado."""
         doc_request = CreateDocumentRequest(
             name=document_payload["name"],
@@ -27,7 +28,10 @@ class DocumentModuleAdapter(IDocumentModuleAdapter):
         file_request = FileRequest(filename=document_payload["file_name"], content=file, content_type="application/pdf")
 
         nuevo_documento: DocumentResponse = await self.doc_service.create_document(
-            data=doc_request, file_data=file_request, organization_id=document_payload["organization_id"]
+            data=doc_request,
+            file_data=file_request,
+            organization_id=document_payload["organization_id"],
+            user_role=user_role,
         )
 
         return nuevo_documento

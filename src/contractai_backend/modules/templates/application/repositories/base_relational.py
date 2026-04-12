@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from .....core.application.base import BaseRepository
+from ....users.domain.value_objs import UserRole
 from ...domain.entities import TemplateTable
 
 
@@ -29,6 +30,6 @@ class IOrganizationRepository(ABC):
 
 class IDocumentModuleAdapter(ABC):
     @abstractmethod
-    async def save_generated_document(self, document_payload: dict, file: bytes) -> Any:
+    async def save_generated_document(self, document_payload: dict, file: bytes, user_role: UserRole | None) -> Any:
         """Envía los datos del PDF generado al módulo de Documentos para que él lo guarde."""
         pass
