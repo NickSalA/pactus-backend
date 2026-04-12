@@ -4,7 +4,7 @@ import json
 from collections.abc import Sequence
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 from pydantic import ValidationError
 
 from contractai_backend.core.exceptions.base import AppError
@@ -75,7 +75,7 @@ async def generate_template(
 async def list_template_formats(
     template_service: TemplateAuthoringServiceDep,
     current_user: CurrentUserDep,
-    document_type: DocumentType | None = Query(default=None),
+    document_type: DocumentType | None = None,
 ) -> list[TemplateFormatResponse]:
     """Endpoint para listar los formatos disponibles para el usuario."""
     try:
@@ -93,7 +93,7 @@ async def list_template_formats(
 async def generate_template_draft(
     template_service: TemplateAuthoringServiceDep,
     current_user: CurrentUserDep,
-    file: UploadFile | None = File(None),
+    file: UploadFile | None = None,
     request: str = Form(...),
 ) -> PersistedTemplateDraftResponse:
     """Endpoint para generar un borrador de plantilla desde request, archivo o ambos."""
@@ -271,9 +271,9 @@ async def archive_template(
 async def list_templates(
     template_service: TemplateServiceDep,
     current_user: CurrentUserDep,
-    document_type: DocumentType | None = Query(default=None),
-    format_code: str | None = Query(default=None),
-    state: TemplateState | None = Query(default=None),
+    document_type: DocumentType | None = None,
+    format_code: str | None = None,
+    state: TemplateState | None = None,
 ) -> Sequence[TemplateResponse]:
     """Endpoint para listar las plantillas de la organización."""
     try:
