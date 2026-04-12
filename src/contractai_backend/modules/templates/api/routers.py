@@ -8,6 +8,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 from pydantic import ValidationError
 
+from contractai_backend.core.domain.access import ensure_admin
+from contractai_backend.core.exceptions.base import AppError
 from contractai_backend.modules.templates.domain.entities import TemplateTable
 
 from ....shared.api.dependencies.security import CurrentUserDep
@@ -61,7 +63,10 @@ async def generate_template(
     """Endpoint para generar un documento a partir de una plantilla."""
     try:
         generated_document = await template_service.generate_contract(
-            template_id=template_id, form_data=request, organization_id=current_user.organization_id
+            template_id=template_id,
+            form_data=request,
+            organization_id=current_user.organization_id,
+            user_role=current_user.role,
         )
         return generated_document
     except ValueError as e:
@@ -70,6 +75,8 @@ async def generate_template(
             status.HTTP_404_NOT_FOUND if detail == "Template not found or does not belong to the organization." else status.HTTP_400_BAD_REQUEST
         )
         raise HTTPException(status_code=status_code, detail=detail) from e
+    except AppError:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al generar el documento: {e!s}") from e
 
@@ -82,6 +89,7 @@ async def generate_template_draft(
     request: str | None = Form(None),
 ) -> PersistedTemplateDraftResponse:
     """Endpoint para generar un borrador de plantilla desde request, archivo o ambos."""
+    ensure_admin(current_user, "Solo los administradores pueden generar borradores de plantillas")
     if file is None and request is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes enviar un archivo, un request o ambos.")
 
@@ -112,6 +120,8 @@ async def generate_template_draft(
         raise
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except AppError:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al generar el borrador: {e!s}") from e
 
@@ -123,6 +133,7 @@ async def preview_template(
     current_user: CurrentUserDep,
 ) -> PreviewTemplateResponse:
     """Endpoint para previsualizar una plantilla."""
+    ensure_admin(current_user, "Solo los administradores pueden previsualizar plantillas")
     try:
         return await template_service.preview_template(
             request=request,
@@ -130,6 +141,8 @@ async def preview_template(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except AppError:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al previsualizar: {e!s}") from e
 
@@ -142,11 +155,17 @@ async def get_template(
 ) -> TemplateResponse:
     """Endpoint para obtener los detalles de una plantilla."""
     try:
-        template: TemplateTable | None = await template_service.get_template(template_id=template_id, organization_id=current_user.organization_id)
+        template = await template_service.get_template(
+            template_id=template_id,
+            organization_id=current_user.organization_id,
+            user_role=current_user.role,
+        )
         if template is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plantilla no encontrada")
         return build_template_response(template)
     except HTTPException:
+        raise
+    except AppError:
         raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al obtener la plantilla: {e!s}") from e
@@ -159,6 +178,7 @@ async def create_template(
     current_user: CurrentUserDep,
 ) -> TemplateResponse:
     """Endpoint para crear una plantilla."""
+    ensure_admin(current_user, "Solo los administradores pueden crear plantillas")
     try:
         return await template_service.create_template(
             request=request,
@@ -166,6 +186,8 @@ async def create_template(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except AppError:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al crear la plantilla: {e!s}") from e
 
@@ -178,6 +200,7 @@ async def update_template(
     current_user: CurrentUserDep,
 ) -> TemplateResponse:
     """Endpoint para actualizar una plantilla en borrador."""
+    ensure_admin(current_user, "Solo los administradores pueden actualizar plantillas")
     try:
         return await template_service.update_template(
             template_id=template_id,
@@ -188,6 +211,8 @@ async def update_template(
         detail = str(e)
         status_code = status.HTTP_404_NOT_FOUND if detail == "Plantilla no encontrada" else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=status_code, detail=detail) from e
+    except AppError:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al actualizar la plantilla: {e!s}") from e
 
@@ -199,6 +224,7 @@ async def publish_template(
     current_user: CurrentUserDep,
 ) -> TemplateResponse:
     """Endpoint para publicar una plantilla en borrador."""
+    ensure_admin(current_user, "Solo los administradores pueden publicar plantillas")
     try:
         return await template_service.publish_template(
             template_id=template_id,
@@ -208,6 +234,8 @@ async def publish_template(
         detail = str(e)
         status_code = status.HTTP_404_NOT_FOUND if detail == "Plantilla no encontrada" else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=status_code, detail=detail) from e
+    except AppError:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al publicar la plantilla: {e!s}") from e
 
@@ -219,7 +247,12 @@ async def list_templates(
 ) -> Sequence[TemplateResponse]:
     """Endpoint para listar las plantillas de la organización."""
     try:
-        templates: Sequence[TemplateTable] = await template_service.list_templates(organization_id=current_user.organization_id)
+        templates: Sequence[TemplateTable] = await template_service.list_templates(
+            organization_id=current_user.organization_id,
+            user_role=current_user.role,
+        )
         return [build_template_response(template) for template in templates]
+    except AppError:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al listar las plantillas: {e!s}") from e

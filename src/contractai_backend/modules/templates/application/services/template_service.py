@@ -4,6 +4,10 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
+from .....core.exceptions.base import ForbiddenError
+from ....documents.domain import DocumentType
+from ....documents.domain.access_policy import can_write_document_type
+from ....users.domain.value_objs import UserRole
 from ...domain.entities import TemplateTable
 from ...domain.value_objs import TemplateState
 from ..repositories.base_generate import IDocumentGenerator
@@ -36,13 +40,16 @@ class TemplateService:
             return f"{cls.LABOR_CONTRACT_NAME_PREFIX} - {normalized_worker_name}"
         return cls.LABOR_CONTRACT_NAME_PREFIX
 
-    async def generate_contract(self, template_id: int, organization_id: int, form_data: dict[str, Any]):
+    async def generate_contract(self, template_id: int, organization_id: int, form_data: dict[str, Any],
+        user_role: UserRole | None):
         """Genera un contrato a partir de una plantilla."""
         template: TemplateTable | None = await self.template_repo.get_template_by_id(template_id=template_id, organization_id=organization_id)
         if not template:
             raise ValueError("Template not found or does not belong to the organization.")
         if template.state != TemplateState.PUBLISHED:
             raise ValueError("Solo se pueden generar documentos desde plantillas en estado PUBLISHED.")
+        if not can_write_document_type(user_role=user_role, document_type=template.document_type):
+            raise ForbiddenError("No tiene permisos para generar contratos con esta plantilla")
         org_data = await self.organization_repo.get_organization_data(organization_id=organization_id)
         now: datetime = datetime.now()
         months: list[str] = [
@@ -71,32 +78,86 @@ class TemplateService:
         cliente_seguro = cliente_nombre.replace(" ", "_").lower()
         timestamp = int(now.timestamp())
         generated_file_name = f"{base_name}_{cliente_seguro}_{timestamp}.pdf"
+        service_items = form_data.get("service_items", []) if template.document_type == DocumentType.COMPANY else []
+        start_date, end_date = self._resolve_generated_dates(form_data=form_data, now=now)
         document_payload: dict[str, int | str | bytes | Any | dict[str, Any | int | str]] = {
             "organization_id": organization_id,
             "template_id": template_id,
             "name": self._build_labor_contract_name(worker_name=trabajador_nombre),
             "client": cliente_nombre,
-            "type": "LABOR",
+            "type": template.document_type,
             "state": "PENDING_SIGNATURE",
             "content": pdf_bytes,
-            "start_date": form_data.get("contrato_fecha_inicio", now.date().isoformat()),
-            "end_date": form_data.get("contrato_fecha_fin", now.date().isoformat()),
+            "start_date": start_date,
+            "end_date": end_date,
             "folder_id": form_data.get("folder_id"),
-            "service_items": form_data.get("service_items", []),
+            "service_items": service_items,
             "form_data": master_dict,
             "file_name": generated_file_name,
         }
 
-        nuevo_documento = await self.document_adapter.save_generated_document(document_payload=document_payload, file=pdf_bytes)
+        nuevo_documento = await self.document_adapter.save_generated_document(
+            document_payload=document_payload,
+            file=pdf_bytes,
+            user_role=user_role,
+        )
 
         return nuevo_documento
 
-    async def get_template(self, template_id: int, organization_id: int) -> TemplateTable | None:
+    async def get_template(
+        self,
+        template_id: int,
+        organization_id: int,
+        user_role: UserRole | None = None,
+    ) -> TemplateTable | None:
         """Obtiene una plantilla de la organización."""
         template: TemplateTable | None = await self.template_repo.get_template_by_id(template_id=template_id, organization_id=organization_id)
+        if template is None:
+            return None
+        if user_role in (None, UserRole.ADMIN):
+            return template
+        if template.state != TemplateState.PUBLISHED:
+            return None
+        if not can_write_document_type(user_role=user_role, document_type=template.document_type):
+            return None
         return template
 
-    async def list_templates(self, organization_id: int) -> Sequence[TemplateTable]:
+    async def list_templates(self, organization_id: int, user_role: UserRole | None = None) -> Sequence[TemplateTable]:
         """Lista las plantillas de una organización."""
         templates: Sequence[TemplateTable] = await self.template_repo.list_by_organization(organization_id=organization_id)
-        return templates
+        if user_role in (None, UserRole.ADMIN):
+            return templates
+        return [
+            template
+            for template in templates
+            if template.state == TemplateState.PUBLISHED and can_write_document_type(user_role=user_role, document_type=template.document_type)
+        ]
+
+    def _resolve_generated_dates(self, form_data: dict[str, Any], now: datetime) -> tuple[str, str]:
+        """Normaliza fechas de vigencia desde los nombres más comunes del payload."""
+        start_date = self._first_non_empty_value(
+            form_data,
+            "contrato_fecha_inicio",
+            "contract_start_date",
+            "fecha_inicio",
+            "start_date",
+        )
+        end_date = self._first_non_empty_value(
+            form_data,
+            "contrato_fecha_fin",
+            "contract_end_date",
+            "fecha_fin",
+            "end_date",
+        )
+        fallback = now.date().isoformat()
+        return start_date or fallback, end_date or fallback
+
+    @staticmethod
+    def _first_non_empty_value(payload: dict[str, Any], *keys: str) -> str | None:
+        """Devuelve el primer valor no vacío entre varias claves posibles."""
+        for key in keys:
+            value = payload.get(key)
+            if value in (None, ""):
+                continue
+            return str(value)
+        return None

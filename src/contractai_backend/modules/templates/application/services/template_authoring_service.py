@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from contractai_backend.modules.documents.application.repositories import DocumentExtractor
+from contractai_backend.modules.documents.domain import DocumentType
 
 from ...api.schemas import (
     CreateTemplateRequest,
@@ -63,7 +64,11 @@ class TemplateAuthoringService:
     ) -> PersistedTemplateDraftResponse:
         """Genera y persiste un borrador desde formulario."""
         draft = await self.generate_draft_from_prompt(request=request, organization_id=organization_id)
-        template = await self._persist_draft(draft=draft, organization_id=organization_id)
+        template = await self._persist_draft(
+            draft=draft,
+            organization_id=organization_id,
+            document_type=self._resolve_requested_document_type(request=request),
+        )
         return PersistedTemplateDraftResponse(template=template, warnings=draft.warnings, source=draft.source, usage=draft.usage)
 
     async def generate_draft_from_file(
@@ -115,7 +120,11 @@ class TemplateAuthoringService:
             filename=filename,
             organization_id=organization_id,
         )
-        template = await self._persist_draft(draft=draft, organization_id=organization_id)
+        template = await self._persist_draft(
+            draft=draft,
+            organization_id=organization_id,
+            document_type=self._resolve_requested_document_type(request=request),
+        )
         return PersistedTemplateDraftResponse(template=template, warnings=draft.warnings, source=draft.source, usage=draft.usage)
 
     async def preview_template(
@@ -148,6 +157,7 @@ class TemplateAuthoringService:
             organization_id=organization_id,
             name=request.name,
             description=request.description,
+            document_type=request.document_type,
             content=synced_content,
         )
         saved_template = await self.template_repo.save(entity=template)
@@ -178,6 +188,10 @@ class TemplateAuthoringService:
             template.name = request.name
         if "description" in fields_set:
             template.description = request.description
+        if "document_type" in fields_set:
+            if request.document_type is None:
+                raise ValueError("Document type cannot be null")
+            template.document_type = request.document_type
 
         updated_template = await self.template_repo.update(entity=template)
         return build_template_response(updated_template)
@@ -197,12 +211,18 @@ class TemplateAuthoringService:
         published_template = await self.template_repo.update(entity=template)
         return build_template_response(published_template)
 
-    async def _persist_draft(self, draft: TemplateDraftResponse, organization_id: int) -> TemplateResponse:
+    async def _persist_draft(
+        self,
+        draft: TemplateDraftResponse,
+        organization_id: int,
+        document_type: DocumentType,
+    ) -> TemplateResponse:
         """Guarda un borrador generado en la base de datos."""
         template = self._build_template_entity(
             organization_id=organization_id,
             name=draft.name,
             description=draft.description,
+            document_type=document_type,
             content=draft.content,
         )
         saved_template = await self.template_repo.save(entity=template)
@@ -296,6 +316,7 @@ class TemplateAuthoringService:
         organization_id: int,
         name: str,
         description: str | None,
+        document_type: DocumentType,
         content: TemplateContent,
     ) -> TemplateTable:
         """Crea la entidad base de plantilla."""
@@ -303,9 +324,37 @@ class TemplateAuthoringService:
             organization_id=organization_id,
             name=name,
             description=description,
+            document_type=document_type,
             content=content.model_dump(mode="python"),
             state=TemplateState.DRAFT,
         )
+
+    def _resolve_requested_document_type(self, request: GenerateTemplateDraftRequest) -> DocumentType:
+        """Resuelve el tipo documental de un draft, manteniendo compatibilidad con requests antiguos."""
+        if request.document_type is not None:
+            return request.document_type
+
+        hint = " ".join(
+            value.strip().lower()
+            for value in [request.contract_type, request.name, request.description, request.instructions]
+            if isinstance(value, str) and value.strip()
+        )
+
+        company_markers = (
+            "management",
+            "gerencia",
+            "gerenc",
+            "hotel",
+            "empresa",
+            "comercial",
+            "servicio",
+            "cliente",
+            "b2b",
+        )
+        if any(marker in hint for marker in company_markers):
+            return DocumentType.COMPANY
+
+        return DocumentType.LABOR
 
     def _build_time_payload(self) -> dict[str, int | str]:
         """Genera variables automaticas de fecha."""
