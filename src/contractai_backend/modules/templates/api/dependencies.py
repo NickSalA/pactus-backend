@@ -17,6 +17,7 @@ from ..application.repositories import (
     IDocumentModuleAdapter,
     IOrganizationRepository,
     ITemplateDraftGenerator,
+    ITemplateFormatRepository,
     ITemplateRenderer,
     ITemplateRepository,
 )
@@ -27,6 +28,7 @@ from ..infrastructure import (
     GeminiTemplateDraftGenerator,
     JinjaRenderer,
     OrganizationModuleAdapter,
+    SQLModelTemplateFormatRepository,
     SQLModelTemplateRepository,
     WeasyPrintGenerator,
 )
@@ -39,6 +41,11 @@ OrganizationDep = Annotated[OrganizationService, Depends(get_organization_servic
 async def get_template_repository(session: SessionDep) -> ITemplateRepository:
     """Devuelve una instancia del repositorio de plantillas."""
     return SQLModelTemplateRepository(session=session)
+
+
+async def get_template_format_repository(session: SessionDep) -> ITemplateFormatRepository:
+    """Devuelve una instancia del repositorio de formatos de plantilla."""
+    return SQLModelTemplateFormatRepository(session=session)
 
 
 async def get_document_module_adapter(doc_service: DocumentServiceDep) -> IDocumentModuleAdapter:
@@ -72,6 +79,7 @@ async def get_template_draft_generator() -> ITemplateDraftGenerator:
 
 
 TemplateRepositoryDep = Annotated[ITemplateRepository, Depends(get_template_repository)]
+TemplateFormatRepositoryDep = Annotated[ITemplateFormatRepository, Depends(get_template_format_repository)]
 DocumentAdapterDep = Annotated[IDocumentModuleAdapter, Depends(get_document_module_adapter)]
 OrganizationRepositoryDep = Annotated[IOrganizationRepository, Depends(get_organization_repository)]
 TemplateRendererDep = Annotated[ITemplateRenderer, Depends(get_template_renderer)]
@@ -82,6 +90,7 @@ TemplateDraftGeneratorDep = Annotated[ITemplateDraftGenerator, Depends(get_templ
 
 async def get_template_service(
     template_repo: TemplateRepositoryDep,
+    template_format_repo: TemplateFormatRepositoryDep,
     document_adapter: DocumentAdapterDep,
     organization_repo: OrganizationRepositoryDep,
     renderer: TemplateRendererDep,
@@ -90,6 +99,7 @@ async def get_template_service(
     """Devuelve una instancia del servicio de plantillas."""
     return TemplateService(
         template_repo=template_repo,
+        template_format_repo=template_format_repo,
         document_adapter=document_adapter,
         organization_repo=organization_repo,
         renderer=renderer,
@@ -99,6 +109,7 @@ async def get_template_service(
 
 async def get_template_authoring_service(
     template_repo: TemplateRepositoryDep,
+    template_format_repo: TemplateFormatRepositoryDep,
     organization_repo: OrganizationRepositoryDep,
     renderer: TemplateRendererDep,
     extractor: DocumentExtractorDep,
@@ -107,6 +118,7 @@ async def get_template_authoring_service(
     """Devuelve una instancia del servicio de autoría de plantillas."""
     return TemplateAuthoringService(
         template_repo=template_repo,
+        template_format_repo=template_format_repo,
         organization_repo=organization_repo,
         renderer=renderer,
         extractor=extractor,

@@ -4,12 +4,12 @@ import json
 from collections.abc import Sequence
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import ValidationError
 
 from contractai_backend.core.exceptions.base import AppError
 from contractai_backend.modules.documents.domain import DocumentType
-from contractai_backend.modules.templates.domain.entities import TemplateTable
+from contractai_backend.modules.templates.domain.value_objs import TemplateState
 
 from ....shared.api.dependencies.security import CurrentUserDep
 from ..application.services.template_authoring_service import TemplateAuthoringService
@@ -24,7 +24,6 @@ from .schemas import (
     TemplateFormatResponse,
     TemplateResponse,
     UpdateTemplateRequest,
-    build_template_response,
 )
 
 router = APIRouter()
@@ -76,7 +75,7 @@ async def generate_template(
 async def list_template_formats(
     template_service: TemplateAuthoringServiceDep,
     current_user: CurrentUserDep,
-    document_type: DocumentType | None = None,
+    document_type: DocumentType | None = Query(default=None),
 ) -> list[TemplateFormatResponse]:
     """Endpoint para listar los formatos disponibles para el usuario."""
     try:
@@ -94,7 +93,7 @@ async def list_template_formats(
 async def generate_template_draft(
     template_service: TemplateAuthoringServiceDep,
     current_user: CurrentUserDep,
-    file: UploadFile | None = None,
+    file: UploadFile | None = File(None),
     request: str = Form(...),
 ) -> PersistedTemplateDraftResponse:
     """Endpoint para generar un borrador de plantilla desde request, archivo o ambos."""
@@ -167,7 +166,7 @@ async def get_template(
         )
         if template is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plantilla no encontrada")
-        return build_template_response(template)
+        return template
     except HTTPException:
         raise
     except AppError:
@@ -245,18 +244,47 @@ async def publish_template(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al publicar la plantilla: {e!s}") from e
 
 
+@router.post(path="/{template_id}/archive", response_model=TemplateResponse, status_code=status.HTTP_200_OK)
+async def archive_template(
+    template_id: int,
+    template_service: TemplateAuthoringServiceDep,
+    current_user: CurrentUserDep,
+) -> TemplateResponse:
+    """Endpoint para archivar una plantilla."""
+    try:
+        return await template_service.archive_template(
+            template_id=template_id,
+            organization_id=current_user.organization_id,
+            user_role=current_user.role,
+        )
+    except ValueError as e:
+        detail = str(e)
+        status_code = status.HTTP_404_NOT_FOUND if detail == "Plantilla no encontrada" else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=detail) from e
+    except AppError:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al archivar la plantilla: {e!s}") from e
+
+
 @router.get(path="/", response_model=Sequence[TemplateResponse], status_code=status.HTTP_200_OK)
 async def list_templates(
     template_service: TemplateServiceDep,
     current_user: CurrentUserDep,
+    document_type: DocumentType | None = Query(default=None),
+    format_code: str | None = Query(default=None),
+    state: TemplateState | None = Query(default=None),
 ) -> Sequence[TemplateResponse]:
     """Endpoint para listar las plantillas de la organización."""
     try:
-        templates: Sequence[TemplateTable] = await template_service.list_templates(
+        templates = await template_service.list_templates(
             organization_id=current_user.organization_id,
             user_role=current_user.role,
+            document_type=document_type,
+            format_code=format_code,
+            state=state,
         )
-        return [build_template_response(template) for template in templates]
+        return templates
     except AppError:
         raise
     except Exception as e:

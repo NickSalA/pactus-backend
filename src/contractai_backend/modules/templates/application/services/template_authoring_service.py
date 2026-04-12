@@ -23,10 +23,9 @@ from ...api.schemas import (
     UpdateTemplateRequest,
     build_template_response,
 )
-from ...domain.entities import TemplateContent, TemplateField, TemplateTable
-from ...domain.formats import is_valid_template_format, list_template_formats
+from ...domain.entities import TemplateContent, TemplateField, TemplateFormatTable, TemplateTable
 from ...domain.value_objs import TemplateState
-from ..repositories import IOrganizationRepository, ITemplateRenderer, ITemplateRepository
+from ..repositories import IOrganizationRepository, ITemplateFormatRepository, ITemplateRenderer, ITemplateRepository
 from ..repositories.base_draft_generator import ITemplateDraftGenerator
 from .template_content_synchronizer import TemplateContentSynchronizer
 from .template_placeholder_validator import TemplatePlaceholderValidator
@@ -69,6 +68,7 @@ class TemplateAuthoringService:
     def __init__(
         self,
         template_repo: ITemplateRepository,
+        template_format_repo: ITemplateFormatRepository,
         organization_repo: IOrganizationRepository,
         renderer: ITemplateRenderer,
         extractor: DocumentExtractor,
@@ -76,6 +76,7 @@ class TemplateAuthoringService:
     ):
         """Stores dependencies for template authoring."""
         self.template_repo = template_repo
+        self.template_format_repo = template_format_repo
         self.organization_repo = organization_repo
         self.renderer = renderer
         self.extractor = extractor
@@ -93,26 +94,17 @@ class TemplateAuthoringService:
         if user_role == UserRole.WORKER:
             raise ForbiddenError("No tiene permisos para gestionar plantillas")
 
-        if user_role == UserRole.ADMIN:
-            document_types = [requested_document_type] if requested_document_type is not None else list(DocumentType)
-        else:
+        effective_document_type = None
+        if user_role != UserRole.ADMIN:
             effective_document_type = self._resolve_effective_document_type(
                 user_role=user_role,
                 requested_document_type=requested_document_type,
             )
-            document_types = [effective_document_type]
+        elif requested_document_type is not None:
+            effective_document_type = requested_document_type
 
-        formats: list[TemplateFormatResponse] = []
-        for document_type in document_types:
-            for definition in list_template_formats(document_type=document_type):
-                formats.append(
-                    TemplateFormatResponse(
-                        document_type=definition.document_type,
-                        format_code=definition.format_code,
-                        label=definition.label,
-                    )
-                )
-        return formats
+        formats = await self.template_format_repo.list_active(document_type=effective_document_type)
+        return [self._build_template_format_response(template_format) for template_format in formats]
 
     async def generate_draft_from_prompt(
         self,
@@ -122,8 +114,12 @@ class TemplateAuthoringService:
     ) -> tuple[TemplateDraftResponse, DocumentType]:
         """Generates a draft from structured instructions."""
         document_type = self._resolve_effective_document_type(user_role=user_role, requested_document_type=request.document_type)
-        self._validate_format_code(document_type=document_type, format_code=request.format_code)
-        resolved_request = request.model_copy(update={"document_type": document_type})
+        template_format = await self._get_template_format_or_raise(document_type=document_type, format_code=request.format_code)
+        resolved_request = self._apply_format_defaults(
+            request=request,
+            document_type=document_type,
+            template_format=template_format,
+        )
 
         organization_context = await self._build_organization_context(organization_id=organization_id)
         draft = await self.draft_generator.generate(request=resolved_request, organization_context=organization_context)
@@ -161,8 +157,12 @@ class TemplateAuthoringService:
     ) -> tuple[TemplateDraftResponse, DocumentType]:
         """Generates a draft from a reference file."""
         document_type = self._resolve_effective_document_type(user_role=user_role, requested_document_type=request.document_type)
-        self._validate_format_code(document_type=document_type, format_code=request.format_code)
-        resolved_request = request.model_copy(update={"document_type": document_type})
+        template_format = await self._get_template_format_or_raise(document_type=document_type, format_code=request.format_code)
+        resolved_request = self._apply_format_defaults(
+            request=request,
+            document_type=document_type,
+            template_format=template_format,
+        )
 
         extracted_pages = await self.extractor.extract(file=file_content, filename=filename)
         reference_context = self.reference_preprocessor.build(extracted_pages)
@@ -225,7 +225,7 @@ class TemplateAuthoringService:
     ) -> PreviewTemplateResponse:
         """Renders a template preview for the current role."""
         document_type = self._resolve_effective_document_type(user_role=user_role, requested_document_type=request.document_type)
-        self._validate_format_code(document_type=document_type, format_code=request.format_code)
+        await self._get_template_format_or_raise(document_type=document_type, format_code=request.format_code)
 
         synced_content = self.content_synchronizer.sync(request.content)
         warnings = self.validator.validate(synced_content)
@@ -247,20 +247,20 @@ class TemplateAuthoringService:
     ) -> TemplateResponse:
         """Creates a manual draft template."""
         document_type = self._resolve_effective_document_type(user_role=user_role, requested_document_type=request.document_type)
-        self._validate_format_code(document_type=document_type, format_code=request.format_code)
+        template_format = await self._get_template_format_or_raise(document_type=document_type, format_code=request.format_code)
 
         synced_content = self.content_synchronizer.sync(request.content)
         self.validator.validate(synced_content)
         template = self._build_template_entity(
             organization_id=organization_id,
-            name=request.name,
-            description=request.description,
+            name=request.name or self._resolve_template_default_name(template_format),
+            description=request.description if request.description is not None else template_format.default_description,
             document_type=document_type,
-            format_code=request.format_code,
+            template_format_id=template_format.id,
             content=synced_content,
         )
         saved_template = await self.template_repo.save(entity=template)
-        return build_template_response(saved_template)
+        return build_template_response(saved_template, template_format=template_format)
 
     async def update_template(
         self,
@@ -291,7 +291,8 @@ class TemplateAuthoringService:
             template.description = request.description
 
         updated_template = await self.template_repo.update(entity=template)
-        return build_template_response(updated_template)
+        template_format = await self._get_template_format_by_id(template.template_format_id)
+        return build_template_response(updated_template, template_format=template_format)
 
     async def publish_template(
         self,
@@ -304,9 +305,10 @@ class TemplateAuthoringService:
         self._ensure_can_author_document_type(user_role=user_role, document_type=template.document_type)
         if template.state != TemplateState.DRAFT:
             raise ValidationError("Solo se pueden publicar plantillas en estado DRAFT.")
-        if not template.format_code:
-            raise ValidationError("La plantilla debe tener format_code antes de publicarse.")
-        self._validate_format_code(document_type=template.document_type, format_code=template.format_code)
+        template_format = await self._get_template_format_by_id(template.template_format_id)
+        if template_format is None:
+            raise ValidationError("La plantilla debe tener un formato válido antes de publicarse.")
+        await self._get_template_format_or_raise(document_type=template.document_type, format_code=template_format.format_code)
 
         content = self.content_synchronizer.sync(TemplateContent.model_validate(template.content))
         self.validator.validate(content)
@@ -315,7 +317,24 @@ class TemplateAuthoringService:
         template.content = content.model_dump(mode="python")
         template.state = TemplateState.PUBLISHED
         published_template = await self.template_repo.update(entity=template)
-        return build_template_response(published_template)
+        return build_template_response(published_template, template_format=template_format)
+
+    async def archive_template(
+        self,
+        template_id: int,
+        organization_id: int,
+        user_role: UserRole,
+    ) -> TemplateResponse:
+        """Archives a template that should no longer be used."""
+        template = await self._get_template_or_raise(template_id=template_id, organization_id=organization_id)
+        self._ensure_can_author_document_type(user_role=user_role, document_type=template.document_type)
+        if template.state == TemplateState.ARCHIVED:
+            raise ValidationError("La plantilla ya se encuentra archivada.")
+
+        template.state = TemplateState.ARCHIVED
+        archived_template = await self.template_repo.update(entity=template)
+        template_format = await self._get_template_format_by_id(template.template_format_id)
+        return build_template_response(archived_template, template_format=template_format)
 
     async def _persist_draft(
         self,
@@ -325,16 +344,17 @@ class TemplateAuthoringService:
         format_code: str,
     ) -> TemplateResponse:
         """Persists a generated draft template."""
+        template_format = await self._get_template_format_or_raise(document_type=document_type, format_code=format_code)
         template = self._build_template_entity(
             organization_id=organization_id,
             name=draft.name,
             description=draft.description,
             document_type=document_type,
-            format_code=format_code,
+            template_format_id=template_format.id,
             content=draft.content,
         )
         saved_template = await self.template_repo.save(entity=template)
-        return build_template_response(saved_template)
+        return build_template_response(saved_template, template_format=template_format)
 
     async def _generate_validated_file_draft(
         self,
@@ -425,7 +445,7 @@ class TemplateAuthoringService:
         name: str,
         description: str | None,
         document_type: DocumentType,
-        format_code: str,
+        template_format_id: int,
         content: TemplateContent,
     ) -> TemplateTable:
         """Builds the base template entity."""
@@ -434,7 +454,7 @@ class TemplateAuthoringService:
             name=name,
             description=description,
             document_type=document_type,
-            format_code=format_code,
+            template_format_id=template_format_id,
             content=content.model_dump(mode="python"),
             state=TemplateState.DRAFT,
         )
@@ -464,10 +484,55 @@ class TemplateAuthoringService:
         if not can_write_document_type(user_role=user_role, document_type=document_type):
             raise ForbiddenError(f"No tiene permisos para gestionar plantillas de tipo {document_type.value}.")
 
-    def _validate_format_code(self, document_type: DocumentType, format_code: str) -> None:
-        """Validates that the format belongs to the selected base type."""
-        if not is_valid_template_format(document_type=document_type, format_code=format_code):
+    async def _get_template_format_or_raise(
+        self,
+        document_type: DocumentType,
+        format_code: str,
+    ) -> TemplateFormatTable:
+        """Loads one active template format or raises a validation error."""
+        template_format = await self.template_format_repo.get_by_document_type_and_code(
+            document_type=document_type,
+            format_code=format_code,
+        )
+        if template_format is None:
             raise ValidationError(f"format_code '{format_code}' no es válido para document_type '{document_type.value}'.")
+        return template_format
+
+    async def _get_template_format_by_id(self, template_format_id: int | None) -> TemplateFormatTable | None:
+        """Loads one template format by identifier when present."""
+        if template_format_id is None:
+            return None
+        return await self.template_format_repo.get_by_id(template_format_id)
+
+    def _apply_format_defaults(
+        self,
+        request: GenerateTemplateDraftRequest,
+        document_type: DocumentType,
+        template_format: TemplateFormatTable,
+    ) -> GenerateTemplateDraftRequest:
+        """Applies default metadata for the selected format."""
+        return request.model_copy(
+            update={
+                "document_type": document_type,
+                "name": request.name or self._resolve_template_default_name(template_format),
+                "description": request.description if request.description is not None else template_format.default_description,
+            }
+        )
+
+    def _build_template_format_response(self, template_format: TemplateFormatTable) -> TemplateFormatResponse:
+        """Builds one template-format response payload."""
+        return TemplateFormatResponse(
+            id=template_format.id,
+            document_type=template_format.document_type,
+            format_code=template_format.format_code,
+            label=template_format.label,
+            default_name=self._resolve_template_default_name(template_format),
+            default_description=template_format.default_description,
+        )
+
+    def _resolve_template_default_name(self, template_format: TemplateFormatTable) -> str:
+        """Resolves the default visible name of a template format."""
+        return (template_format.default_name or template_format.label).strip()
 
     def _validate_reference_document_type(
         self,
