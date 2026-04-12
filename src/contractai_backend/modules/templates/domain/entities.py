@@ -10,6 +10,7 @@ from sqlmodel import Field
 
 from ....core.domain.base import BaseTable
 from ...documents.domain import DocumentType
+from .formats import normalize_format_code
 from .value_objs import TemplateState
 
 
@@ -42,6 +43,7 @@ class TemplateTable(BaseTable, table=True):
     state: TemplateState = Field(
         default=TemplateState.DRAFT, sa_column=Column("state", ENUM(TemplateState, name="document_template_state"), nullable=False)
     )
+    format_code: str | None = Field(default=None, sa_column=Column("format_code", String(length=255), nullable=False))
 
     @field_validator("content")
     @classmethod
@@ -69,3 +71,11 @@ class TemplateTable(BaseTable, table=True):
         if v <= 0:
             raise ValueError("Organization ID must be a positive integer")
         return v
+
+    @field_validator("format_code")
+    @classmethod
+    def validate_format_code(cls, v):
+        """Valida y normaliza el codigo tecnico del formato."""
+        if v is None:
+            return None
+        return normalize_format_code(v)

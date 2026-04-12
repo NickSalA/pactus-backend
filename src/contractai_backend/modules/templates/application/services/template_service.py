@@ -111,8 +111,6 @@ class TemplateService:
             return None
         if user_role in (None, UserRole.ADMIN):
             return template
-        if template.state != TemplateState.PUBLISHED:
-            return None
         if not can_write_document_type(user_role=user_role, document_type=template.document_type):
             return None
         return template
@@ -122,11 +120,7 @@ class TemplateService:
         templates: Sequence[TemplateTable] = await self.template_repo.list_by_organization(organization_id=organization_id)
         if user_role in (None, UserRole.ADMIN):
             return templates
-        return [
-            template
-            for template in templates
-            if template.state == TemplateState.PUBLISHED and can_write_document_type(user_role=user_role, document_type=template.document_type)
-        ]
+        return [template for template in templates if can_write_document_type(user_role=user_role, document_type=template.document_type)]
 
     def _resolve_generated_dates(self, form_data: dict[str, Any], now: datetime) -> tuple[str, str]:
         """Normaliza fechas de vigencia desde los nombres más comunes del payload."""

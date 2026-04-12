@@ -110,7 +110,8 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
         instructions = request.instructions or ""
         name_hint = request.name or ""
         description_hint = request.description or ""
-        contract_type = request.contract_type or ""
+        document_type = request.document_type.value if request.document_type is not None else ""
+        format_code = request.format_code
         jurisdiction = request.jurisdiction or ""
 
         reference_section = ""
@@ -150,6 +151,7 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "- Use only these field types: text, number, date, boolean.\n"
             "- Use snake_case for keys.\n"
             "- Use Jinja placeholders like {{ key }} in body_md.\n"
+            "- Respect DOCUMENT_TYPE and FORMAT_CODE as the target base format for the draft.\n"
             "- Every placeholder must exist in fields or be one of these auto variables:\n"
             "  empleador_razon_social, empleador_ruc, empleador_domicilio, empleador_descripcion,\n"
             "  empleador_objeto_social, representante_nombre, representante_dni, jurisdiccion,\n"
@@ -166,7 +168,8 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "- Use Spanish legal language in body_md.\n\n"
             f"NAME_HINT: {name_hint}\n"
             f"DESCRIPTION_HINT: {description_hint}\n"
-            f"CONTRACT_TYPE: {contract_type}\n"
+            f"DOCUMENT_TYPE: {document_type}\n"
+            f"FORMAT_CODE: {format_code}\n"
             f"JURISDICTION: {jurisdiction}\n"
             f"INSTRUCTIONS: {instructions}\n"
             f"{organization_section}"
