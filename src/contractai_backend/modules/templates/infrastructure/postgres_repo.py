@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 
+from sqlalchemy import update
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -10,6 +11,7 @@ from ...documents.domain import DocumentType
 from ..application.repositories.base_relational import ITemplateFormatRepository, ITemplateRepository
 from ..domain.entities import TemplateFormatTable, TemplateTable
 from ..domain.formats import normalize_format_code
+from ..domain.value_objs import TemplateState
 
 
 class SQLModelTemplateRepository(PostgresBaseRepository[TemplateTable], ITemplateRepository):
@@ -31,6 +33,24 @@ class SQLModelTemplateRepository(PostgresBaseRepository[TemplateTable], ITemplat
         query = select(self.model).where(self.model.organization_id == organization_id)
         result = await self.session.exec(statement=query)
         return result.all()
+
+    async def publish(self, entity: TemplateTable) -> TemplateTable:
+        """Publica una plantilla y archiva las publicadas previas del mismo formato."""
+        db_merged = await self.session.merge(instance=entity)
+        await self.session.exec(
+            update(self.model)
+            .where(
+                self.model.organization_id == db_merged.organization_id,
+                self.model.document_type == db_merged.document_type,
+                self.model.template_format_id == db_merged.template_format_id,
+                self.model.state == TemplateState.PUBLISHED,
+                self.model.id != db_merged.id,
+            )
+            .values(state=TemplateState.ARCHIVED)
+        )
+        await self.session.commit()
+        await self.session.refresh(instance=db_merged)
+        return db_merged
 
 
 class SQLModelTemplateFormatRepository(PostgresBaseRepository[TemplateFormatTable], ITemplateFormatRepository):

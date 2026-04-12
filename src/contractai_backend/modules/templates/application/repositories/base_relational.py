@@ -21,6 +21,11 @@ class ITemplateRepository(BaseRepository[TemplateTable]):
         """Lista las plantillas de una organización."""
         pass
 
+    @abstractmethod
+    async def publish(self, entity: TemplateTable) -> TemplateTable:
+        """Publica una plantilla y archiva las publicadas previas del mismo formato."""
+        pass
+
 
 class ITemplateFormatRepository(BaseRepository[TemplateFormatTable]):
     @abstractmethod
