@@ -3,10 +3,12 @@ import asyncio
 import json
 from pathlib import Path
 
+from contractai_backend.modules.documents.domain import DocumentType
 from contractai_backend.modules.documents.infrastructure import LlamaParseExtractor
 from contractai_backend.modules.templates.api.schemas import GenerateTemplateDraftRequest
 from contractai_backend.modules.templates.application.services.template_authoring_service import TemplateAuthoringService
 from contractai_backend.modules.templates.infrastructure import GeminiTemplateDraftGenerator, JinjaRenderer
+from contractai_backend.modules.users.domain.value_objs import UserRole
 
 
 class DummyTemplateRepository:
@@ -42,8 +44,10 @@ def _build_request_payload(args: argparse.Namespace) -> dict:
         payload["description"] = args.description
     if args.instructions:
         payload["instructions"] = args.instructions
-    if args.contract_type:
-        payload["contract_type"] = args.contract_type
+    if args.document_type:
+        payload["document_type"] = args.document_type
+    if args.format_code:
+        payload["format_code"] = args.format_code
     if args.jurisdiction:
         payload["jurisdiction"] = args.jurisdiction
 
@@ -61,6 +65,8 @@ async def _run(args: argparse.Namespace) -> None:
         payload = {
             "name": file_path.stem.replace("_", " ").strip() or "Plantilla sin nombre",
             "description": "Borrador generado desde archivo de referencia",
+            "document_type": DocumentType.COMPANY,
+            "format_code": "management",
         }
 
     request = GenerateTemplateDraftRequest(**payload)
@@ -76,11 +82,12 @@ async def _run(args: argparse.Namespace) -> None:
     )
 
     file_content = file_path.read_bytes()
-    draft = await service.generate_draft_from_file(
+    draft, _ = await service.generate_draft_from_file(
         request=request,
         file_content=file_content,
         filename=file_path.name,
         organization_id=args.organization_id,
+        user_role=UserRole.ADMIN,
     )
 
     output = draft.model_dump(mode="json")
@@ -100,7 +107,8 @@ def main() -> None:
     parser.add_argument("--name", help="Template name")
     parser.add_argument("--description", help="Template description")
     parser.add_argument("--instructions", help="Authoring instructions")
-    parser.add_argument("--contract-type", help="Contract type")
+    parser.add_argument("--document-type", choices=[value.value for value in DocumentType], help="Document type")
+    parser.add_argument("--format-code", help="Template format code")
     parser.add_argument("--jurisdiction", help="Jurisdiction")
     parser.add_argument("--output", help="Write draft JSON to this file")
     parser.add_argument("--organization-id", type=int, default=1, help="Organization ID (default: 1)")

@@ -2,14 +2,13 @@
 
 import json
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 from pydantic import ValidationError
 
-from contractai_backend.core.domain.access import ensure_admin
 from contractai_backend.core.exceptions.base import AppError
+from contractai_backend.modules.documents.domain import DocumentType
 from contractai_backend.modules.templates.domain.entities import TemplateTable
 
 from ....shared.api.dependencies.security import CurrentUserDep
@@ -22,6 +21,7 @@ from .schemas import (
     PersistedTemplateDraftResponse,
     PreviewTemplateRequest,
     PreviewTemplateResponse,
+    TemplateFormatResponse,
     TemplateResponse,
     UpdateTemplateRequest,
     build_template_response,
@@ -31,15 +31,6 @@ router = APIRouter()
 
 TemplateServiceDep = Annotated[TemplateService, Depends(get_template_service)]
 TemplateAuthoringServiceDep = Annotated[TemplateAuthoringService, Depends(get_template_authoring_service)]
-
-
-def _build_default_file_request(filename: str) -> GenerateTemplateDraftRequest:
-    """Construye un request minimo desde el nombre del archivo."""
-    base_name = Path(filename).stem.replace("_", " ").strip() or "Plantilla sin nombre"
-    return GenerateTemplateDraftRequest(
-        name=base_name,
-        description="Borrador generado desde archivo de referencia",
-    )
 
 
 def _parse_draft_request(raw_request: str | None) -> GenerateTemplateDraftRequest | None:
@@ -81,40 +72,54 @@ async def generate_template(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al generar el documento: {e!s}") from e
 
 
+@router.get(path="/formats", response_model=list[TemplateFormatResponse], status_code=status.HTTP_200_OK)
+async def list_template_formats(
+    template_service: TemplateAuthoringServiceDep,
+    current_user: CurrentUserDep,
+    document_type: DocumentType | None = None,
+) -> list[TemplateFormatResponse]:
+    """Endpoint para listar los formatos disponibles para el usuario."""
+    try:
+        return await template_service.list_available_formats(
+            user_role=current_user.role,
+            requested_document_type=document_type,
+        )
+    except AppError:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al listar formatos: {e!s}") from e
+
+
 @router.post(path="/drafts", response_model=PersistedTemplateDraftResponse, status_code=status.HTTP_201_CREATED)
 async def generate_template_draft(
     template_service: TemplateAuthoringServiceDep,
     current_user: CurrentUserDep,
     file: UploadFile | None = None,
-    request: str | None = Form(None),
+    request: str = Form(...),
 ) -> PersistedTemplateDraftResponse:
     """Endpoint para generar un borrador de plantilla desde request, archivo o ambos."""
-    ensure_admin(current_user, "Solo los administradores pueden generar borradores de plantillas")
-    if file is None and request is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes enviar un archivo, un request o ambos.")
-
     try:
         request_obj = _parse_draft_request(request)
+        if request_obj is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes enviar un request valido.")
 
         if file is not None:
             if file.filename is None:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Archivo invalido.")
 
-            draft_request = request_obj or _build_default_file_request(file.filename)
             file_content = await file.read()
             return await template_service.generate_and_save_draft_from_file(
-                request=draft_request,
+                request=request_obj,
                 file_content=file_content,
                 filename=file.filename,
                 organization_id=current_user.organization_id,
+                user_role=current_user.role,
             )
-
-        if request_obj is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes enviar un request valido cuando no subas archivo.")
 
         return await template_service.generate_and_save_draft_from_prompt(
             request=request_obj,
             organization_id=current_user.organization_id,
+            user_role=current_user.role,
         )
     except HTTPException:
         raise
@@ -133,11 +138,11 @@ async def preview_template(
     current_user: CurrentUserDep,
 ) -> PreviewTemplateResponse:
     """Endpoint para previsualizar una plantilla."""
-    ensure_admin(current_user, "Solo los administradores pueden previsualizar plantillas")
     try:
         return await template_service.preview_template(
             request=request,
             organization_id=current_user.organization_id,
+            user_role=current_user.role,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
@@ -178,11 +183,11 @@ async def create_template(
     current_user: CurrentUserDep,
 ) -> TemplateResponse:
     """Endpoint para crear una plantilla."""
-    ensure_admin(current_user, "Solo los administradores pueden crear plantillas")
     try:
         return await template_service.create_template(
             request=request,
             organization_id=current_user.organization_id,
+            user_role=current_user.role,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
@@ -200,12 +205,12 @@ async def update_template(
     current_user: CurrentUserDep,
 ) -> TemplateResponse:
     """Endpoint para actualizar una plantilla en borrador."""
-    ensure_admin(current_user, "Solo los administradores pueden actualizar plantillas")
     try:
         return await template_service.update_template(
             template_id=template_id,
             request=request,
             organization_id=current_user.organization_id,
+            user_role=current_user.role,
         )
     except ValueError as e:
         detail = str(e)
@@ -224,11 +229,11 @@ async def publish_template(
     current_user: CurrentUserDep,
 ) -> TemplateResponse:
     """Endpoint para publicar una plantilla en borrador."""
-    ensure_admin(current_user, "Solo los administradores pueden publicar plantillas")
     try:
         return await template_service.publish_template(
             template_id=template_id,
             organization_id=current_user.organization_id,
+            user_role=current_user.role,
         )
     except ValueError as e:
         detail = str(e)

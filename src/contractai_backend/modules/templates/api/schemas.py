@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from ...documents.domain import DocumentType
 from ..domain.entities import TemplateContent, TemplateTable
+from ..domain.formats import normalize_format_code
 from ..domain.value_objs import TemplateState
 
 
@@ -14,9 +15,15 @@ class GenerateTemplateDraftRequest(BaseModel):
     name: str | None = None
     description: str | None = None
     instructions: str | None = None
-    contract_type: str | None = None
     jurisdiction: str | None = None
     document_type: DocumentType | None = None
+    format_code: str
+
+    @field_validator("format_code")
+    @classmethod
+    def validate_format_code(cls, value: str) -> str:
+        """Normaliza el codigo tecnico del formato."""
+        return normalize_format_code(value)
 
 
 class TemplateUsage(BaseModel):
@@ -40,6 +47,7 @@ class TemplateResponse(BaseModel):
     name: str
     description: str | None = None
     document_type: DocumentType
+    format_code: str | None = None
     content: TemplateContent
     created_at: datetime | None = None
     state: TemplateState
@@ -60,8 +68,16 @@ class PersistedTemplateDraftResponse(BaseModel):
 
 
 class PreviewTemplateRequest(BaseModel):
+    document_type: DocumentType | None = None
+    format_code: str
     content: TemplateContent
     sample_data: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("format_code")
+    @classmethod
+    def validate_preview_format_code(cls, value: str) -> str:
+        """Normaliza el codigo tecnico del formato en preview."""
+        return normalize_format_code(value)
 
 
 class PreviewTemplateResponse(BaseModel):
@@ -73,7 +89,8 @@ class PreviewTemplateResponse(BaseModel):
 class CreateTemplateRequest(BaseModel):
     name: str
     description: str | None = None
-    document_type: DocumentType
+    document_type: DocumentType | None = None
+    format_code: str
     content: TemplateContent
 
     @field_validator("name")
@@ -94,11 +111,16 @@ class CreateTemplateRequest(BaseModel):
         cleaned = value.strip()
         return cleaned or None
 
+    @field_validator("format_code")
+    @classmethod
+    def validate_create_format_code(cls, value: str) -> str:
+        """Normaliza el codigo tecnico del formato."""
+        return normalize_format_code(value)
+
 
 class UpdateTemplateRequest(BaseModel):
     name: str | None = None
     description: str | None = None
-    document_type: DocumentType | None = None
     content: TemplateContent | None = None
 
     @field_validator("name")
@@ -127,3 +149,9 @@ class UpdateTemplateRequest(BaseModel):
         if not self.model_fields_set:
             raise ValueError("Patch request cannot be empty")
         return self
+
+
+class TemplateFormatResponse(BaseModel):
+    document_type: DocumentType
+    format_code: str
+    label: str
