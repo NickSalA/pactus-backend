@@ -5,8 +5,9 @@ from collections.abc import Sequence
 from typing import Any
 
 from .....core.application.base import BaseRepository
+from ....documents.domain import DocumentType
 from ....users.domain.value_objs import UserRole
-from ...domain.entities import TemplateTable
+from ...domain.entities import TemplateFormatTable, TemplateTable
 
 
 class ITemplateRepository(BaseRepository[TemplateTable]):
@@ -18,6 +19,27 @@ class ITemplateRepository(BaseRepository[TemplateTable]):
     @abstractmethod
     async def list_by_organization(self, organization_id: int) -> Sequence[TemplateTable]:
         """Lista las plantillas de una organización."""
+        pass
+
+
+class ITemplateFormatRepository(BaseRepository[TemplateFormatTable]):
+    @abstractmethod
+    async def get_by_document_type_and_code(
+        self,
+        document_type: DocumentType,
+        format_code: str,
+    ) -> TemplateFormatTable | None:
+        """Obtiene un formato activo por tipo documental y codigo."""
+        pass
+
+    @abstractmethod
+    async def list_active(self, document_type: DocumentType | None = None) -> Sequence[TemplateFormatTable]:
+        """Lista formatos activos, opcionalmente filtrados por tipo documental."""
+        pass
+
+    @abstractmethod
+    async def list_by_ids(self, ids: Sequence[int]) -> Sequence[TemplateFormatTable]:
+        """Lista formatos por identificadores."""
         pass
 
 

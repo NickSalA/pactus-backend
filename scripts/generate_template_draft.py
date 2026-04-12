@@ -7,6 +7,7 @@ from contractai_backend.modules.documents.domain import DocumentType
 from contractai_backend.modules.documents.infrastructure import LlamaParseExtractor
 from contractai_backend.modules.templates.api.schemas import GenerateTemplateDraftRequest
 from contractai_backend.modules.templates.application.services.template_authoring_service import TemplateAuthoringService
+from contractai_backend.modules.templates.domain.entities import TemplateFormatTable
 from contractai_backend.modules.templates.infrastructure import GeminiTemplateDraftGenerator, JinjaRenderer
 from contractai_backend.modules.users.domain.value_objs import UserRole
 
@@ -21,6 +22,54 @@ class DummyOrganizationRepository:
     async def get_organization_data(self, organization_id: int):
         """Returns empty organization context for local runs."""
         return {}
+
+
+class DummyTemplateFormatRepository:
+    def __init__(self):
+        self._formats = [
+            TemplateFormatTable(
+                id=1,
+                document_type=DocumentType.COMPANY,
+                format_code="management",
+                label="Contrato de Management",
+                default_name="Contrato de Management",
+                default_description="Plantilla base para contratos corporativos de management.",
+                is_active=True,
+            ),
+            TemplateFormatTable(
+                id=2,
+                document_type=DocumentType.LABOR,
+                format_code="fixed_term",
+                label="Contrato a Plazo Fijo",
+                default_name="Contrato a Plazo Fijo",
+                default_description="Plantilla base para contratos laborales sujetos a plazo fijo.",
+                is_active=True,
+            ),
+        ]
+
+    async def get_by_id(self, id: int):
+        """Returns one format by id."""
+        for template_format in self._formats:
+            if template_format.id == id:
+                return template_format
+        return None
+
+    async def get_by_document_type_and_code(self, document_type: DocumentType, format_code: str):
+        """Returns one active format by type and code."""
+        for template_format in self._formats:
+            if template_format.document_type == document_type and template_format.format_code == format_code and template_format.is_active:
+                return template_format
+        return None
+
+    async def list_active(self, document_type: DocumentType | None = None):
+        """Lists active dummy formats."""
+        if document_type is None:
+            return list(self._formats)
+        return [template_format for template_format in self._formats if template_format.document_type == document_type and template_format.is_active]
+
+    async def list_by_ids(self, ids):
+        """Lists dummy formats by id."""
+        return [template_format for template_format in self._formats if template_format.id in ids]
 
 
 def _load_request_payload(raw: str | None) -> dict:
@@ -75,6 +124,7 @@ async def _run(args: argparse.Namespace) -> None:
     draft_generator = GeminiTemplateDraftGenerator()
     service = TemplateAuthoringService(
         template_repo=DummyTemplateRepository(),
+        template_format_repo=DummyTemplateFormatRepository(),
         organization_repo=DummyOrganizationRepository(),
         renderer=JinjaRenderer(),
         extractor=extractor,

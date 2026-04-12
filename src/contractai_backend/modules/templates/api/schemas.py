@@ -6,7 +6,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ...documents.domain import DocumentType
-from ..domain.entities import TemplateContent, TemplateTable
+from ..domain.entities import TemplateContent, TemplateFormatTable, TemplateTable
 from ..domain.formats import normalize_format_code
 from ..domain.value_objs import TemplateState
 
@@ -47,7 +47,9 @@ class TemplateResponse(BaseModel):
     name: str
     description: str | None = None
     document_type: DocumentType
+    template_format_id: int | None = None
     format_code: str | None = None
+    format_label: str | None = None
     content: TemplateContent
     created_at: datetime | None = None
     state: TemplateState
@@ -55,9 +57,24 @@ class TemplateResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-def build_template_response(template: TemplateTable) -> TemplateResponse:
+def build_template_response(
+    template: TemplateTable,
+    template_format: TemplateFormatTable | None = None,
+) -> TemplateResponse:
     """Serializa una entidad de plantilla."""
-    return TemplateResponse.model_validate(template)
+    return TemplateResponse(
+        id=template.id,
+        organization_id=template.organization_id,
+        name=template.name,
+        description=template.description,
+        document_type=template.document_type,
+        template_format_id=template.template_format_id,
+        format_code=template_format.format_code if template_format is not None else None,
+        format_label=template_format.label if template_format is not None else None,
+        content=TemplateContent.model_validate(template.content),
+        created_at=template.created_at,
+        state=template.state,
+    )
 
 
 class PersistedTemplateDraftResponse(BaseModel):
@@ -87,7 +104,7 @@ class PreviewTemplateResponse(BaseModel):
 
 
 class CreateTemplateRequest(BaseModel):
-    name: str
+    name: str | None = None
     description: str | None = None
     document_type: DocumentType | None = None
     format_code: str
@@ -95,8 +112,10 @@ class CreateTemplateRequest(BaseModel):
 
     @field_validator("name")
     @classmethod
-    def validate_name(cls, value: str) -> str:
+    def validate_name(cls, value: str | None) -> str | None:
         """Normaliza el nombre obligatorio."""
+        if value is None:
+            return None
         cleaned = value.strip()
         if not cleaned:
             raise ValueError("Name cannot be empty")
@@ -152,6 +171,9 @@ class UpdateTemplateRequest(BaseModel):
 
 
 class TemplateFormatResponse(BaseModel):
+    id: int
     document_type: DocumentType
     format_code: str
     label: str
+    default_name: str
+    default_description: str | None = None

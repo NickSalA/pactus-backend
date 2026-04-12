@@ -1,4 +1,4 @@
-"""Defines the database table for templates, including fields for organization ID, name, description, content, and creation timestamp."""
+"""Defines the database tables for templates and template formats."""
 
 from datetime import UTC, datetime
 from typing import Any
@@ -43,7 +43,7 @@ class TemplateTable(BaseTable, table=True):
     state: TemplateState = Field(
         default=TemplateState.DRAFT, sa_column=Column("state", ENUM(TemplateState, name="document_template_state"), nullable=False)
     )
-    format_code: str | None = Field(default=None, sa_column=Column("format_code", String(length=255), nullable=False))
+    template_format_id: int | None = Field(default=None, sa_column=Column("template_format_id", Integer, nullable=True))
 
     @field_validator("content")
     @classmethod
@@ -72,10 +72,21 @@ class TemplateTable(BaseTable, table=True):
             raise ValueError("Organization ID must be a positive integer")
         return v
 
+
+class TemplateFormatTable(BaseTable, table=True):
+    __tablename__ = "template_formats"
+
+    document_type: DocumentType = Field(
+        sa_column=Column("document_type", ENUM(DocumentType, name="document_type", create_type=False), nullable=False)
+    )
+    format_code: str = Field(default=..., sa_column=Column("format_code", String(length=255), nullable=False))
+    label: str = Field(default=..., sa_column=Column("label", String(length=255), nullable=False))
+    default_description: str | None = Field(default=None, sa_column=Column("default_description", Text, nullable=True))
+    default_name: str | None = Field(default=None, sa_column=Column("default_name", String(length=255), nullable=True))
+    is_active: bool = Field(default=True, sa_column=Column("is_active", nullable=False))
+
     @field_validator("format_code")
     @classmethod
-    def validate_format_code(cls, v):
+    def validate_format_code(cls, value: str) -> str:
         """Valida y normaliza el codigo tecnico del formato."""
-        if v is None:
-            return None
-        return normalize_format_code(v)
+        return normalize_format_code(value)
