@@ -153,7 +153,8 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             '  "source": {}\n'
             "}\n\n"
             "Rules:\n"
-            "- Use only these field types: text, number, date, boolean.\n"
+            "- Use only these field types: text, number, date, time, boolean.\n"
+            "- Use type 'time' for hour-only values such as hora_inicio, hora_fin, hora_ingreso or horario_refrigerio.\n"
             "- Use snake_case for keys.\n"
             "- Use Jinja placeholders like {{ key }} in body_md.\n"
             "- Provide a useful placeholder example for every field and operational field.\n"

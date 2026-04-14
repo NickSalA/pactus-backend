@@ -16,6 +16,8 @@ CLAUSE_HEADING_PATTERN = re.compile(
 PAGE_LINE_PATTERN = re.compile(r"^(p[aá]gina\s+\d+|\d+\s*/\s*\d+)$", re.IGNORECASE)
 CLAUSE_LABEL_PATTERN = re.compile(r"\*\*(?P<label>[A-ZÁÉÍÓÚÑ ]+?)\s*\.\-\*\*", re.IGNORECASE)
 MARKDOWN_HEADING_PATTERN = re.compile(r"^#{1,6}\s+(?P<title>.+)$")
+MARKDOWN_IMAGE_PATTERN = re.compile(r"^!\[[^\]]*\]\([^\)]+\)$")
+REFERENCE_IMAGE_ARTIFACT_PATTERN = re.compile(r"^!{{[^{}\n]+}}\([^\)]+\)$")
 NAMED_STRUCTURE_PATTERN = re.compile(
     r"^(?:\*\*)?(?P<prefix>cl[aá]usula|art[ií]culo|secci[oó]n|cap[ií]tulo)\s+(?P<identifier>[A-Z0-9IVXLCM]+(?:\.\d+)*)",
     re.IGNORECASE,
@@ -155,6 +157,8 @@ class TemplateReferencePreprocessor:
         """Normalizes spacing and clause punctuation in a line."""
         line = raw_line.replace("\u00a0", " ").strip()
         line = WHITESPACE_PATTERN.sub(" ", line)
+        if MARKDOWN_IMAGE_PATTERN.fullmatch(line) or REFERENCE_IMAGE_ARTIFACT_PATTERN.fullmatch(line):
+            return ""
         line = re.sub(r"\*\*(?P<label>[^*]+?)\s+\.\-\*\*", r"**\g<label>.-**", line)
         line = re.sub(r"\*\*(?P<label>[^*]+?)\.\s+\-\*\*", r"**\g<label>.-**", line)
         return line.strip()

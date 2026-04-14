@@ -279,3 +279,48 @@ class TestGenerateContract:
         renderer.render.assert_not_called()
         document_generator.generate_pdf.assert_not_called()
         document_adapter.save_generated_document.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_generate_contract_removes_reference_image_artifacts_from_saved_templates(self, monkeypatch):
+        monkeypatch.setattr(template_service_module, "datetime", _FixedDateTime)
+
+        template_repo = AsyncMock()
+        template_repo.get_template_by_id.return_value = TemplateTable(
+            id=1,
+            organization_id=1,
+            name="Plantilla Laboral",
+            document_type=DocumentType.LABOR,
+            content=TemplateContent(
+                body_md="# Contrato\nFirmado en {{ lugar_firma }}.\n\n!{{ firma_empleador_trabajador_con_marca_agua_prodlab }}(page_2_image_1_v2.jpg)",
+                fields=[],
+                version="1.0",
+            ).model_dump(mode="python"),
+            state=TemplateState.PUBLISHED,
+        )
+        organization_repo = AsyncMock()
+        organization_repo.get_organization_data.return_value = {"lugar_firma": "Lima", "empleador_razon_social": "ACME S.A.C."}
+        renderer = AsyncMock()
+        renderer.render.return_value = "# Contrato\nFirmado en Lima."
+        document_generator = AsyncMock()
+        document_generator.generate_pdf.return_value = b"pdf"
+        document_adapter = AsyncMock()
+        document_adapter.save_generated_document.return_value = {"id": 321}
+        service = _make_service(
+            template_repo=template_repo,
+            organization_repo=organization_repo,
+            renderer=renderer,
+            document_generator=document_generator,
+            document_adapter=document_adapter,
+        )
+
+        result = await service.generate_contract(
+            template_id=1,
+            organization_id=1,
+            form_data={"trabajador_nombre": "Ana Torres"},
+            user_role=None,
+        )
+
+        assert result == {"id": 321}
+        rendered_template = renderer.render.await_args.kwargs["template_md"]
+        assert "firma_empleador_trabajador_con_marca_agua_prodlab" not in rendered_template
+        assert "page_2_image_1_v2.jpg" not in rendered_template
