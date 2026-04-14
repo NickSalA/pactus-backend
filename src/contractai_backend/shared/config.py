@@ -13,7 +13,13 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "CONTRACT AI"
     LOG_LEVEL: str = "DEBUG"
     GLOBAL_PREFIX: str = "/api/v1"
-    CORS_ORIGINS: list[str] = ["http://localhost:8000", "http://localhost:3000", "http://localhost:9002,", "https://contractia-kappa.vercel.app"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:8000",
+        "http://localhost:3000",
+        "http://localhost:9002",
+        "https://contractia-kappa.vercel.app",
+        "http://127.0.0.1:3000",
+    ]
     DEBUG: bool = Field(default=False)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=1440)
 

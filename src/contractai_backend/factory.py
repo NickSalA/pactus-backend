@@ -59,7 +59,7 @@ def create() -> FastAPI:
     app.include_router(router=templates_router, prefix="/templates", tags=["Plantillas"])
     app.add_middleware(
         middleware_class=CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
+        allow_origins=["*"],
         allow_methods=["*"],
         allow_headers=["*"],
     )
