@@ -412,6 +412,8 @@ class DocumentCommandService:
 
             storage_path = await self.storage_repo.upload_file(
                 document_id=document_id,
+                organization_id=saved_document.organization_id,
+                document_type=saved_document.type,
                 file=file_data.content,
                 filename=file_data.filename,
                 content_type=file_data.content_type,
@@ -630,6 +632,8 @@ class DocumentCommandService:
         try:
             new_storage_path = await self.storage_repo.upload_file(
                 document_id=id,
+                organization_id=document.organization_id,
+                document_type=document.type,
                 file=file_data.content,
                 filename=file_data.filename,
                 content_type=file_data.content_type,

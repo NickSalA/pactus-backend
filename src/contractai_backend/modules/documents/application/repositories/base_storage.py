@@ -2,12 +2,22 @@
 
 from abc import ABC, abstractmethod
 
+from ...domain.value_objs import DocumentType
+
 
 class DocumentStorageRepository(ABC):
     """Defines operations to store, remove and share document files."""
 
     @abstractmethod
-    async def upload_file(self, document_id: int, file: bytes, filename: str, content_type: str) -> str:
+    async def upload_file(
+        self,
+        document_id: int,
+        organization_id: int,
+        document_type: DocumentType | None,
+        file: bytes,
+        filename: str,
+        content_type: str,
+    ) -> str:
         """Uploads a document file to storage."""
 
     @abstractmethod

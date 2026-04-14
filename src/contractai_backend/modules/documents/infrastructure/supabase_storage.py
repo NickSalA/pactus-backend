@@ -8,7 +8,41 @@ from httpx import Response
 
 from ....shared.config import settings
 from ..application.repositories import DocumentStorageRepository
+from ..domain.value_objs import DocumentType
 from ..domain.exceptions import DocumentStorageError, DocumentStorageUnavailableError
+
+
+def sanitize_storage_filename(filename: str) -> str:
+    """Sanitizes filenames to a safe storage-friendly format."""
+    file_path = Path(filename)
+    base_name: str = file_path.stem
+    extension: str = file_path.suffix.lower()
+    if not extension:
+        extension = ".pdf"
+    normalized: str = re.sub(pattern=r"[^A-Za-z0-9._-]", repl="_", string=base_name).strip("._")
+    if not normalized:
+        normalized = "document"
+    return f"{normalized}{extension}"
+
+
+def normalize_storage_document_type(document_type: DocumentType | None) -> str:
+    """Maps document types to stable storage prefixes."""
+    if document_type is None:
+        return "untyped"
+    return document_type.value.lower()
+
+
+def build_document_storage_path(
+    document_id: int,
+    organization_id: int,
+    document_type: DocumentType | None,
+    filename: str | None = None,
+) -> str:
+    """Builds deterministic storage path for each document."""
+    resolved_filename = filename or "document.pdf"
+    safe_name = sanitize_storage_filename(resolved_filename)
+    type_prefix = normalize_storage_document_type(document_type)
+    return f"orgs/{organization_id}/{type_prefix}/docs/{document_id}/{safe_name}"
 
 
 class SupabaseStorageRepository(DocumentStorageRepository):
@@ -22,22 +56,27 @@ class SupabaseStorageRepository(DocumentStorageRepository):
 
     def _sanitize_filename(self, filename: str) -> str:
         """Sanitizes filenames to a safe storage-friendly format."""
-        file_path = Path(filename)
-        base_name: str = file_path.stem
-        extension: str = file_path.suffix.lower()
-        if not extension:
-            extension = ".pdf"
-        normalized: str = re.sub(pattern=r"[^A-Za-z0-9._-]", repl="_", string=base_name).strip("._")
-        if not normalized:
-            normalized = "document"
-        return f"{normalized}{extension}"
+        return sanitize_storage_filename(filename)
 
-    def _build_path(self, document_id: int, filename: str | None = None) -> str:
+    @staticmethod
+    def _normalize_document_type(document_type: DocumentType | None) -> str:
+        """Maps document types to stable storage prefixes."""
+        return normalize_storage_document_type(document_type)
+
+    def _build_path(
+        self,
+        document_id: int,
+        organization_id: int,
+        document_type: DocumentType | None,
+        filename: str | None = None,
+    ) -> str:
         """Builds deterministic storage path for each document."""
-        if not filename:
-            filename = "document.pdf"
-        safe_name: str = self._sanitize_filename(filename)
-        return f"documents/{document_id}/{safe_name}"
+        return build_document_storage_path(
+            document_id=document_id,
+            organization_id=organization_id,
+            document_type=document_type,
+            filename=filename,
+        )
 
     async def _post(self, *, url: str, headers: dict[str, str], content: bytes | None = None, json: dict | None = None) -> Response:
         return await self.client.post(url=url, headers=headers, content=content, json=json, timeout=30.0)
@@ -45,9 +84,17 @@ class SupabaseStorageRepository(DocumentStorageRepository):
     async def _delete(self, *, url: str, headers: dict[str, str]) -> Response:
         return await self.client.delete(url=url, headers=headers, timeout=30.0)
 
-    async def upload_file(self, document_id: int, file: bytes, filename: str, content_type: str) -> str:
+    async def upload_file(
+        self,
+        document_id: int,
+        organization_id: int,
+        document_type: DocumentType | None,
+        file: bytes,
+        filename: str,
+        content_type: str,
+    ) -> str:
         """Uploads a document file to Supabase Storage."""
-        path: str = self._build_path(document_id, filename)
+        path: str = self._build_path(document_id, organization_id, document_type, filename)
         endpoint = f"{self.base_url}/storage/v1/object/{self.bucket}/{path}"
 
         headers: dict[str, str] = {
