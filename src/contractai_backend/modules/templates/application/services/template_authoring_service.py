@@ -59,28 +59,31 @@ class TemplateAuthoringService:
     )
 
     LABOR_CLASSIFIER_PATTERNS = (
-        r"\btrabajador(?:es)?\b",
-        r"\bemplead(?:o|a|os|as)\b",
-        r"\bempleador\b",
-        r"\bremuneraci[oó]n\b",
-        r"\bjornada\b",
-        r"\bvacaciones\b",
-        r"\bperiodo de prueba\b",
-        r"\bplanilla\b",
-        r"\bsubordinaci[oó]n\b",
-        r"\bcontrato de trabajo\b",
+        (r"\btrabajador(?:es)?\b", 2),
+        (r"\bemplead(?:o|a|os|as)\b", 2),
+        (r"\bempleador\b", 2),
+        (r"\bremuneraci[oó]n\b", 2),
+        (r"\bjornada\b", 2),
+        (r"\bvacaciones\b", 2),
+        (r"\bperiodo de prueba\b", 3),
+        (r"\bplanilla\b", 3),
+        (r"\bsubordinaci[oó]n\b", 3),
+        (r"\bsujeto a modalidad\b", 4),
+        (r"\bcontrato de trabajo\b", 4),
+        (r"\bdecreto legislativo\s*(?:n[°oº]?\s*)?728\b", 4),
+        (r"\bley de productividad y competitividad laboral\b", 4),
     )
     COMPANY_CLASSIFIER_PATTERNS = (
-        r"\bempresa(?:s)?\b",
-        r"\bcliente(?:s)?\b",
-        r"\bproveedor(?:es)?\b",
-        r"\bmanagement\b",
-        r"\bgerenc(?:ia|iamiento|ial)\b",
-        r"\bservicio(?:s)?\b",
-        r"\bpersona jur[ií]dica\b",
-        r"\bsociedad an[oó]nima\b",
-        r"\br\.?u\.?c\.?\b",
-        r"\bcontrato comercial\b",
+        (r"\bempresa(?:s)?\b", 1),
+        (r"\bcliente(?:s)?\b", 2),
+        (r"\bproveedor(?:es)?\b", 2),
+        (r"\bmanagement\b", 4),
+        (r"\bgerenc(?:ia|iamiento|ial)\b", 4),
+        (r"\bservicio(?:s)?\b", 1),
+        (r"\bpersona jur[ií]dica\b", 2),
+        (r"\bsociedad an[oó]nima\b", 2),
+        (r"\br\.?u\.?c\.?\b", 1),
+        (r"\bcontrato comercial\b", 3),
     )
 
     def __init__(
@@ -141,22 +144,15 @@ class TemplateAuthoringService:
         )
 
         organization_context = await self._build_organization_context(organization_id=organization_id)
-        draft = await self.draft_generator.generate(request=resolved_request, organization_context=organization_context)
-        draft.content, preparation_warnings = self._prepare_generated_content(
-            draft.content,
-            document_type=document_type,
-            generation_mode=resolved_request.generation_mode,
-        )
-        backend_warnings = self.validator.validate(draft.content, document_type=document_type)
-        draft.warnings = self._merge_warnings(
-            self._filter_stale_ai_warnings(draft.warnings),
-            backend_warnings,
-            preparation_warnings,
+        draft, retries_used = await self._generate_validated_prompt_draft(
+            request=resolved_request,
+            organization_context=organization_context,
         )
         draft.source = {
             **draft.source,
             "mode": draft.source.get("mode", "prompt"),
             "generation_mode": resolved_request.generation_mode.value,
+            "retries_used": retries_used,
         }
         return draft, document_type
 
@@ -468,6 +464,43 @@ class TemplateAuthoringService:
 
         raise ValidationError("No se pudo generar un borrador valido desde el archivo de referencia.")
 
+    async def _generate_validated_prompt_draft(
+        self,
+        request: GenerateTemplateDraftRequest,
+        organization_context: dict[str, Any],
+    ) -> tuple[TemplateDraftResponse, int]:
+        """Generates a prompt-based draft with one validation retry."""
+        retry_feedback: list[str] = []
+        max_attempts = 2
+
+        for attempt in range(max_attempts):
+            draft = await self.draft_generator.generate(
+                request=request,
+                organization_context=organization_context,
+                validation_feedback=retry_feedback or None,
+            )
+            try:
+                draft.content, preparation_warnings = self._prepare_generated_content(
+                    draft.content,
+                    document_type=request.document_type,
+                    generation_mode=request.generation_mode,
+                )
+                backend_warnings = self.validator.validate(draft.content, document_type=request.document_type)
+            except ValueError as exc:
+                if attempt == max_attempts - 1:
+                    raise
+                retry_feedback = [str(exc)]
+                continue
+
+            draft.warnings = self._merge_warnings(
+                self._filter_stale_ai_warnings(draft.warnings),
+                backend_warnings,
+                preparation_warnings,
+            )
+            return draft, attempt
+
+        raise ValidationError("No se pudo generar un borrador valido a partir de las instrucciones.")
+
     async def _get_template_or_raise(self, template_id: int, organization_id: int) -> TemplateTable:
         """Loads one template or raises a not found error."""
         template = await self.template_repo.get_template_by_id(template_id=template_id, organization_id=organization_id)
@@ -707,8 +740,8 @@ class TemplateAuthoringService:
     def _classify_reference_document_type(self, clean_text: str) -> DocumentType | None:
         """Classifies a reference document as COMPANY or LABOR using heuristics."""
         normalized_text = self._normalize_reference_text(clean_text)
-        labor_score = sum(1 for pattern in self.LABOR_CLASSIFIER_PATTERNS if re.search(pattern, normalized_text))
-        company_score = sum(1 for pattern in self.COMPANY_CLASSIFIER_PATTERNS if re.search(pattern, normalized_text))
+        labor_score = self._score_classifier_patterns(normalized_text, self.LABOR_CLASSIFIER_PATTERNS)
+        company_score = self._score_classifier_patterns(normalized_text, self.COMPANY_CLASSIFIER_PATTERNS)
 
         if labor_score == 0 and company_score == 0:
             return None
@@ -717,6 +750,10 @@ class TemplateAuthoringService:
         if labor_score >= company_score + 2:
             return DocumentType.LABOR
         return None
+
+    def _score_classifier_patterns(self, text: str, patterns: tuple[tuple[str, int], ...]) -> int:
+        """Scores a normalized reference text using weighted regex patterns."""
+        return sum(weight for pattern, weight in patterns if re.search(pattern, text))
 
     def _normalize_reference_text(self, value: str) -> str:
         """Normalizes extracted text for heuristic matching."""

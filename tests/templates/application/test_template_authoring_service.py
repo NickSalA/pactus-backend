@@ -118,6 +118,91 @@ class TestGenerateDraftFromPrompt:
         assert draft.content.operational_fields == []
 
     @pytest.mark.asyncio
+    async def test_generate_draft_from_prompt_sanitizes_format_date_filters(self):
+        template_format_repo = AsyncMock()
+        template_format_repo.get_by_document_type_and_code.return_value = _make_format()
+        organization_repo = AsyncMock()
+        organization_repo.get_organization_data.return_value = {}
+        draft_generator = AsyncMock()
+        draft_generator.generate.return_value = TemplateDraftResponse(
+            name="Plantilla Empresa",
+            description=None,
+            content=TemplateContent(
+                body_md="# Contrato\n{{ fecha_inicio_contrato | format_date('%d/%m/%Y') }}\n{{ fecha_fin_contrato | format_date('%d/%m/%Y') }}",
+                fields=[
+                    TemplateField(key="fecha_inicio_contrato", label="Fecha de Inicio", type="date", required=True),
+                    TemplateField(key="fecha_fin_contrato", label="Fecha de Fin", type="date", required=True),
+                ],
+            ),
+            warnings=[],
+            source={},
+        )
+        service = _make_authoring_service(
+            template_format_repo=template_format_repo,
+            organization_repo=organization_repo,
+            draft_generator=draft_generator,
+        )
+
+        draft, _ = await service.generate_draft_from_prompt(
+            request=GenerateTemplateDraftRequest(format_code="base_company"),
+            organization_id=1,
+            user_role=UserRole.MANAGER,
+        )
+
+        assert "format_date" not in draft.content.body_md
+        assert "{{ fecha_inicio_contrato }}" in draft.content.body_md
+        assert "{{ fecha_fin_contrato }}" in draft.content.body_md
+
+    @pytest.mark.asyncio
+    async def test_generate_draft_from_prompt_retries_after_invalid_jinja_output(self):
+        template_format_repo = AsyncMock()
+        template_format_repo.get_by_document_type_and_code.return_value = _make_format()
+        organization_repo = AsyncMock()
+        organization_repo.get_organization_data.return_value = {}
+        draft_generator = AsyncMock()
+        draft_generator.generate.side_effect = [
+            TemplateDraftResponse(
+                name="Plantilla Empresa",
+                description=None,
+                content=TemplateContent(
+                    body_md="# Contrato\n{{ fecha_inicio_contrato | unsupported_filter('%d/%m/%Y') }}",
+                    fields=[TemplateField(key="fecha_inicio_contrato", label="Fecha de Inicio", type="date", required=True)],
+                ),
+                warnings=[],
+                source={},
+            ),
+            TemplateDraftResponse(
+                name="Plantilla Empresa",
+                description=None,
+                content=TemplateContent(
+                    body_md="# Contrato\n{{ fecha_inicio_contrato }}",
+                    fields=[TemplateField(key="fecha_inicio_contrato", label="Fecha de Inicio", type="date", required=True)],
+                ),
+                warnings=[],
+                source={},
+            ),
+        ]
+        service = _make_authoring_service(
+            template_format_repo=template_format_repo,
+            organization_repo=organization_repo,
+            draft_generator=draft_generator,
+        )
+
+        draft, _ = await service.generate_draft_from_prompt(
+            request=GenerateTemplateDraftRequest(format_code="base_company"),
+            organization_id=1,
+            user_role=UserRole.MANAGER,
+        )
+
+        assert "unsupported_filter" not in draft.content.body_md
+        assert draft.source["retries_used"] == 1
+        assert draft_generator.generate.await_count == 2
+        second_call = draft_generator.generate.await_args_list[1]
+        assert second_call.kwargs["validation_feedback"] == [
+            "Expresiones Jinja no soportadas: fecha_inicio_contrato | unsupported_filter('%d/%m/%Y')"
+        ]
+
+    @pytest.mark.asyncio
     async def test_generate_draft_from_prompt_strict_mode_rejects_missing_explicit_contract_dates(self):
         template_format_repo = AsyncMock()
         template_format_repo.get_by_document_type_and_code.return_value = _make_format()
@@ -304,6 +389,44 @@ class TestGenerateDraftFromPrompt:
         assert draft.warnings == []
 
     @pytest.mark.asyncio
+    async def test_generate_draft_from_prompt_drops_organization_auto_variables_from_operational_fields(self):
+        template_format_repo = AsyncMock()
+        template_format_repo.get_by_document_type_and_code.return_value = _make_format(document_type=DocumentType.LABOR)
+        organization_repo = AsyncMock()
+        organization_repo.get_organization_data.return_value = {}
+        draft_generator = AsyncMock()
+        draft_generator.generate.return_value = TemplateDraftResponse(
+            name="Plantilla Laboral",
+            description=None,
+            content=TemplateContent(
+                body_md="# Contrato\n{{ empleador_razon_social }}\n{{ trabajador_nombre }}",
+                fields=[TemplateField(key="trabajador_nombre", label="Nombre del Trabajador", required=True)],
+                operational_fields=[
+                    TemplateField(key="empleador_razon_social", label="Razón Social del Empleador", required=False),
+                    TemplateField(key="empleador_domicilio", label="Domicilio del Empleador", required=False),
+                ],
+            ),
+            warnings=[],
+            source={},
+        )
+        service = _make_authoring_service(
+            template_format_repo=template_format_repo,
+            organization_repo=organization_repo,
+            draft_generator=draft_generator,
+        )
+
+        draft, document_type = await service.generate_draft_from_prompt(
+            request=GenerateTemplateDraftRequest(format_code="base_labor", document_type=DocumentType.LABOR),
+            organization_id=1,
+            user_role=UserRole.ADMIN,
+        )
+
+        assert document_type == DocumentType.LABOR
+        assert "{{ empleador_razon_social }}" in draft.content.body_md
+        assert [field.key for field in draft.content.fields] == ["trabajador_nombre"]
+        assert draft.content.operational_fields == []
+
+    @pytest.mark.asyncio
     async def test_generate_draft_from_prompt_forces_visible_placeholders_to_required(self):
         template_format_repo = AsyncMock()
         template_format_repo.get_by_document_type_and_code.return_value = _make_format()
@@ -435,3 +558,32 @@ class TestPublishTemplate:
         assert response.content.contract_date_mapping.start_date_field == "vigencia_inicio_real"
         assert response.content.contract_date_mapping.end_date_field == "vigencia_fin_real"
         assert response.content.operational_fields == []
+
+
+class TestReferenceDocumentClassifier:
+    def test_classifies_labor_reference_with_employer_and_worker_terms(self):
+        service = object.__new__(TemplateAuthoringService)
+
+        detected_type = service._classify_reference_document_type(
+            """
+            MODELO DE CONTRATO DE TRABAJO SUJETO A MODALIDAD
+            Conste por el presente documento el contrato de trabajo sujeto a modalidad.
+            EL EMPLEADOR, con R.U.C. N° 12345678901, contrata a EL TRABAJADOR.
+            Al amparo del Decreto Legislativo 728 y la Ley de Productividad y Competitividad Laboral.
+            """
+        )
+
+        assert detected_type == DocumentType.LABOR
+
+    def test_classifies_company_reference_with_management_terms(self):
+        service = object.__new__(TemplateAuthoringService)
+
+        detected_type = service._classify_reference_document_type(
+            """
+            CONTRATO DE MANAGEMENT
+            Celebran de una parte la EMPRESA y de otra parte el GERENTE.
+            La persona juridica prestara servicios de gerenciamiento comercial.
+            """
+        )
+
+        assert detected_type == DocumentType.COMPANY

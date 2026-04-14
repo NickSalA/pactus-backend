@@ -11,6 +11,7 @@ class TemplateContentSynchronizer:
     """Keeps template fields aligned with body_md placeholders."""
 
     BRACKET_PLACEHOLDER_PATTERN = re.compile(r"\[([^\[\]\n]{2,200})\]")
+    FORMAT_DATE_FILTER_PATTERN = re.compile(r"{{\s*(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*\|\s*format_date\s*\((?P<args>[^{}]*)\)\s*}}")
     IGNORED_BRACKET_MARKERS: frozenset[str] = frozenset({"cierre_documento"})
     AUTO_VARIABLE_ALIASES: dict[str, str] = {
         "representante_nombre_empresa": "representante_nombre",
@@ -55,7 +56,9 @@ class TemplateContentSynchronizer:
         if unsupported_expressions:
             raise ValueError(f"Expresiones Jinja no soportadas: {', '.join(unsupported_expressions)}")
 
-        existing_fields = self._merge_existing_fields(content.fields, content.operational_fields)
+        visible_fields = self._filter_auto_variable_fields(content.fields)
+        operational_fields = self._filter_auto_variable_fields(content.operational_fields)
+        existing_fields = self._merge_existing_fields(visible_fields, operational_fields)
         ordered_manual_keys = self._extract_manual_keys(expressions)
         mapping_keys = self._extract_contract_date_mapping_keys(content.contract_date_mapping)
 
@@ -69,7 +72,7 @@ class TemplateContentSynchronizer:
 
         synced_operational_fields = self._build_operational_fields(
             existing_fields=existing_fields,
-            original_operational_fields=content.operational_fields,
+            original_operational_fields=operational_fields,
             visible_keys=ordered_manual_keys,
             mapping_keys=mapping_keys,
         )
@@ -86,6 +89,10 @@ class TemplateContentSynchronizer:
             contract_date_mapping=inferred_mapping,
         )
 
+    def _filter_auto_variable_fields(self, fields: list[TemplateField]) -> list[TemplateField]:
+        """Drops organization auto variables from user-editable field groups."""
+        return [field for field in fields if field.key not in TemplatePlaceholderValidator.AUTO_VARIABLES]
+
     def _normalize_reference_markers(self, body_md: str) -> str:
         """Converts reference markers like [NOMBRE CAMPO] into Jinja placeholders."""
 
@@ -98,7 +105,12 @@ class TemplateContentSynchronizer:
 
         normalized_body_md = self.BRACKET_PLACEHOLDER_PATTERN.sub(replace_marker, body_md)
         normalized_body_md = self._canonicalize_auto_variable_aliases(normalized_body_md)
+        normalized_body_md = self._sanitize_supported_jinja_filters(normalized_body_md)
         return re.sub(r"\n{3,}", "\n\n", normalized_body_md)
+
+    def _sanitize_supported_jinja_filters(self, body_md: str) -> str:
+        """Simplifies supported legacy Jinja filters to plain placeholders."""
+        return self.FORMAT_DATE_FILTER_PATTERN.sub(lambda match: "{{ " + match.group("key") + " }}", body_md)
 
     def _canonicalize_auto_variable_aliases(self, body_md: str) -> str:
         """Replaces obvious employer-side aliases with canonical auto variables."""
