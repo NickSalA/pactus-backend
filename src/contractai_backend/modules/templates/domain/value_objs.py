@@ -16,10 +16,3 @@ class TemplateGenerationMode(StrEnum):
 
     STRICT = "strict"
     ADAPTIVE = "adaptive"
-
-
-class TemplateFieldMode(StrEnum):
-    """How aggressively draft generation should minimize manual fields."""
-
-    EXACT = "exact"
-    MINIMAL = "minimal"

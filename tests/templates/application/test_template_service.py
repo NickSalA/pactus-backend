@@ -235,6 +235,8 @@ class TestGenerateContract:
         assert document_payload["start_date"] == "2026-04-13"
         assert document_payload["end_date"] == "2026-04-13"
         assert document_payload["service_items"] == []
+        generated_markdown = document_generator.generate_pdf.await_args.kwargs["markdown_content"]
+        assert 'data-generated-signatures="true"' in generated_markdown
 
     @pytest.mark.asyncio
     async def test_generate_contract_raises_when_required_visible_field_is_empty(self, monkeypatch):
@@ -247,8 +249,8 @@ class TestGenerateContract:
             name="Plantilla Empresa",
             document_type=DocumentType.COMPANY,
             content=TemplateContent(
-                body_md="# Contrato\nRUC: {{ ruc_empresa }}",
-                fields=[TemplateField(key="ruc_empresa", label="RUC de La Empresa", required=False)],
+                body_md="# Contrato\nRUC: {{ gerente_ruc }}",
+                fields=[TemplateField(key="gerente_ruc", label="RUC del Gerente", required=False)],
                 version="1.0",
             ).model_dump(mode="python"),
             state=TemplateState.PUBLISHED,
@@ -266,11 +268,11 @@ class TestGenerateContract:
             document_adapter=document_adapter,
         )
 
-        with pytest.raises(ValidationError, match="Faltan campos obligatorios.*RUC de La Empresa"):
+        with pytest.raises(ValidationError, match="Faltan campos obligatorios.*RUC del Gerente"):
             await service.generate_contract(
                 template_id=1,
                 organization_id=1,
-                form_data={"ruc_empresa": "   "},
+                form_data={"gerente_ruc": "   "},
                 user_role=None,
             )
 

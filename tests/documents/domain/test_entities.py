@@ -163,7 +163,10 @@ class TestDocumentServiceRules:
             _make_service_item(start_date=date(2023, 12, 1), end_date=date(2024, 6, 1)),
         ]
 
-        with pytest.raises(DocumentValidationError, match="dentro del rango"):
+        with pytest.raises(
+            DocumentValidationError,
+            match=r"contrato: 2024-01-01 a 2024-12-31, servicio: 2023-12-01 a 2024-06-01",
+        ):
             validate_service_periods(
                 document_start_date=date(2024, 1, 1),
                 document_end_date=date(2024, 12, 31),
