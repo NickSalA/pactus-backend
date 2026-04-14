@@ -15,10 +15,10 @@ def get_llm() -> AzureChatOpenAI:
     try:
         return AzureChatOpenAI(
             api_version="2024-12-01-preview",
-            azure_endpoint="https://AgenteAI-Instance.openai.azure.com/",
+            azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
             api_key=settings.AZURE_OPENAI_API_KEY,
             temperature=settings.MODEL_TEMPERATURE,
-            azure_deployment="geopoint-agent-model",
+            azure_deployment=settings.AZURE_DEPLOYMENT,
         )
     except Exception as e:
         raise LLMInitializationError(message=f"Fallo en credenciales o modelo: {e!s}") from e
