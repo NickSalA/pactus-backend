@@ -7,7 +7,7 @@ from typing import Any
 from ....users.domain.value_objs import UserRole
 from ...domain import DocumentServiceTable, DocumentTable
 from ...domain.access_policy import can_read_document_type, get_readable_document_types
-from ...domain.value_objs import DocumentType
+from ...domain.value_objs import DocumentState, DocumentType
 from ..dto import ContractQueryDTO
 from ..repositories import DocumentQueryRepository
 from ....catalog.application.repositories import ServiceRepository
@@ -54,6 +54,29 @@ class ContractQueryService:
             return query.model_copy(update={"document_type": next(iter(readable_document_types))})
 
         return query
+
+    @staticmethod
+    def has_required_chatbot_contract_data(document: DocumentTable) -> bool:
+        form_data = document.form_data if isinstance(document.form_data, dict) else {}
+        return (
+            document.name is not None
+            and document.client is not None
+            and document.type is not None
+            and document.start_date is not None
+            and document.end_date is not None
+            and form_data.get("value") is not None
+            and form_data.get("currency") is not None
+        )
+
+    @classmethod
+    def is_chatbot_visible_contract(cls, document: DocumentTable) -> bool:
+        return document.state == DocumentState.ACTIVE and cls.has_required_chatbot_contract_data(document=document)
+
+    @staticmethod
+    def _scope_query_for_chatbot(query: ContractQueryDTO) -> ContractQueryDTO:
+        if query.state is not None:
+            return query
+        return query.model_copy(update={"state": DocumentState.ACTIVE})
 
     @staticmethod
     def _serialize_service_item(
@@ -125,10 +148,12 @@ class ContractQueryService:
         scoped_query = self._scope_query_by_role(query=query, user_role=user_role)
         if scoped_query is None:
             return {"status": "forbidden", "message": ROLE_PERMISSION_DENIED_RESPONSE}
+        scoped_query = self._scope_query_for_chatbot(query=scoped_query)
 
-        base_query = self._scope_query_by_role(query=ContractQueryDTO(operation=query.operation), user_role=user_role)
+        base_query = self._scope_query_by_role(query=ContractQueryDTO(operation=query.operation, state=query.state), user_role=user_role)
         if base_query is None:
             return {"status": "forbidden", "message": ROLE_PERMISSION_DENIED_RESPONSE}
+        base_query = self._scope_query_for_chatbot(query=base_query)
 
         if (scoped_query.min_value is not None or scoped_query.max_value is not None) and not scoped_query.currency:
             return {
@@ -147,6 +172,7 @@ class ContractQueryService:
         total_contracts = await self.sql_repo.count_contracts(
             organization_id=organization_id,
             query=base_query,
+            chatbot_ready_only=True,
         )
         if total_contracts == 0:
             return {
@@ -154,7 +180,11 @@ class ContractQueryService:
                 "message": "No hay contratos cargados para la organizacion actual.",
             }
 
-        filtered_count = await self.sql_repo.count_contracts(organization_id=organization_id, query=scoped_query)
+        filtered_count = await self.sql_repo.count_contracts(
+            organization_id=organization_id,
+            query=scoped_query,
+            chatbot_ready_only=True,
+        )
 
         response: dict[str, Any] = {
             "status": "success",
@@ -187,13 +217,19 @@ class ContractQueryService:
                 organization_id=organization_id,
                 query=scoped_query,
                 limit=resolved_limit,
+                chatbot_ready_only=True,
             )
             response["items"] = items
             response["returned_items"] = len(items)
             response["limit"] = resolved_limit
             return response
 
-        documents = await self.sql_repo.search_contracts(organization_id=organization_id, query=scoped_query, limit=resolved_limit)
+        documents = await self.sql_repo.search_contracts(
+            organization_id=organization_id,
+            query=scoped_query,
+            limit=resolved_limit,
+            chatbot_ready_only=True,
+        )
         service_items_by_document, service_names = await self._load_service_context(
             organization_id=organization_id,
             documents=documents,

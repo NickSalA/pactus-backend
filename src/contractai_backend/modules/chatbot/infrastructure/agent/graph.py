@@ -17,6 +17,7 @@ from .decisions import ContextAgentDecision, coerce_content_to_text, parse_struc
 from .llm import bind_tools_for_llm
 from .prompts import get_context_agent_prompt, get_conversation_agent_prompt
 from .state import AgentState
+from .tools import resolve_requested_document_state
 
 DEFAULT_PERMISSION_DENIED_RESPONSE = (
     "No tengo un contexto de permisos valido para atender esta consulta. Por favor vuelve a iniciar sesion o contacta a un administrador."
@@ -125,7 +126,12 @@ async def _resolve_named_party_access(
     if party_lookup_tool is None:
         return None
 
-    raw_result = await party_lookup_tool.ainvoke({"party_name": party_candidate, "limit": 10})
+    tool_payload: dict[str, Any] = {"party_name": party_candidate, "limit": 10}
+    requested_state = resolve_requested_document_state(message)
+    if requested_state is not None:
+        tool_payload["state"] = requested_state
+
+    raw_result = await party_lookup_tool.ainvoke(tool_payload)
     try:
         lookup_result = json.loads(str(raw_result))
     except json.JSONDecodeError:

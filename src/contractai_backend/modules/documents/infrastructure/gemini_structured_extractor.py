@@ -117,9 +117,13 @@ class GeminiDocumentStructuredExtractor(DocumentStructuredExtractor):
             "Allowed currency values: PEN, USD, EUR, null.\n"
             "If there are many dates, choose the main contract start/end dates only when explicit. Otherwise use null.\n"
             "If the title is not explicit, name must be null.\n"
-            "client should be the external company/person identified as cliente, contratante, contraparte or worker/employee when applicable. If ambiguous, null.\n"
+            "For COMPANY, client should be the external company/person identified as cliente, contratante or contraparte. If ambiguous, null.\n"
+            "For LABOR, client must be the natural person who works under the contract. Never use the employer, institution, company, clinic, school, municipality or any other organization as client. If the worker/person is not explicit, client must be null.\n"
+            "For LABOR, worker_name must be the worker/employee/person name only. If the worker/person is not explicit, worker_name must be null.\n"
             "type should be COMPANY for corporate/commercial/company contracts and LABOR for employment or HR contracts.\n"
-            "value should be the total contract amount only, not monthly or partial amounts unless the total is explicit.\n"
+            "For COMPANY, form_data.value should be the total contract amount only, not monthly or partial amounts unless the total is explicit.\n"
+            "For LABOR, labor_monthly_value and labor_monthly_currency must be the worker's monthly pay/remuneration/salary only when explicit. Never annualize it, never multiply by months, and never use a total contract amount. If monthly pay is not explicit, both must be null.\n"
+            "For LABOR, form_data.value and form_data.currency must match labor_monthly_value and labor_monthly_currency. If monthly pay is not explicit, set both to null.\n"
             "For service_items, you MUST use only service_id values from the provided organization catalog.\n"
             "Include a service item only when the mapping to a catalog service is clear AND the contract explicitly provides value, currency, start_date and end_date for that specific service.\n"
             "If any service field is missing or ambiguous, omit that item entirely.\n"
@@ -128,9 +132,12 @@ class GeminiDocumentStructuredExtractor(DocumentStructuredExtractor):
             "{\n"
             '  "name": string | null,\n'
             '  "client": string | null,\n'
+            '  "worker_name": string | null,\n'
             '  "type": "COMPANY" | "LABOR" | null,\n'
             '  "start_date": "YYYY-MM-DD" | null,\n'
             '  "end_date": "YYYY-MM-DD" | null,\n'
+            '  "labor_monthly_value": number | null,\n'
+            '  "labor_monthly_currency": "PEN" | "USD" | "EUR" | null,\n'
             '  "form_data": {\n'
             '    "value": number | null,\n'
             '    "currency": "PEN" | "USD" | "EUR" | null\n'

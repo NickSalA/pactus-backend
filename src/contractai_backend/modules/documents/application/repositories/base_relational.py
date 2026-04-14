@@ -30,7 +30,14 @@ class DocumentQueryRepository(ABC):
         pass
 
     @abstractmethod
-    async def search_contract_access_candidates(self, organization_id: int, query: str, limit: int = 10) -> Sequence[dict[str, Any]]:
+    async def search_contract_access_candidates(
+        self,
+        organization_id: int,
+        query: str,
+        limit: int = 10,
+        chatbot_ready_only: bool = False,
+        state: str | None = None,
+    ) -> Sequence[dict[str, Any]]:
         """Lists contracts whose counterparty may match a user-provided name for access decisions."""
         pass
 
@@ -40,6 +47,7 @@ class DocumentQueryRepository(ABC):
         organization_id: int,
         query: ContractQueryDTO,
         limit: int | None = None,
+        chatbot_ready_only: bool = False,
     ) -> Sequence[DocumentTable]:
         """Lists contracts matching structured filters."""
         pass
@@ -49,6 +57,7 @@ class DocumentQueryRepository(ABC):
         self,
         organization_id: int,
         query: ContractQueryDTO,
+        chatbot_ready_only: bool = False,
     ) -> int:
         """Counts contracts matching structured filters."""
         pass
@@ -59,6 +68,7 @@ class DocumentQueryRepository(ABC):
         organization_id: int,
         query: ContractQueryDTO,
         limit: int | None = None,
+        chatbot_ready_only: bool = False,
     ) -> Sequence[dict[str, Any]]:
         """Returns a client ranking based on filtered contracts."""
         pass

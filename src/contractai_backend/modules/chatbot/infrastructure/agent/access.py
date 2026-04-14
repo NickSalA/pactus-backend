@@ -30,7 +30,10 @@ EXPLICIT_DOCUMENT_TYPE_PATTERNS: dict[DocumentType, tuple[str, ...]] = {
     ),
 }
 
-CONTRACT_PARTY_PATTERN = re.compile(r"\bcontratos?\s+(?:de|con)\s+(?P<party>[^?.!,;]+)")
+NAMED_PARTY_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bcontratos?\s+(?:de|con)\s+(?P<party>[^?.!,;]+)"),
+    re.compile(r"\b(?:puesto(?:\s+de\s+trabajo)?|cargo|rol|funcion)\s+de\s+(?P<party>[^?.!,;]+)"),
+)
 TRAILING_PARTY_PATTERN = re.compile(r"\b(?:por favor|gracias|porfa)\b.*$")
 
 
@@ -89,15 +92,19 @@ def infer_requested_document_types(message: str) -> frozenset[DocumentType]:
 
 
 def extract_contract_party_candidate(message: str) -> str | None:
-    """Extract the party name from direct contract queries like 'contrato de X'."""
+    """Extract the named person/company from contract-related queries like 'contrato de X' or 'cargo de X'."""
     normalized = normalize_access_text(message)
-    matches = list(CONTRACT_PARTY_PATTERN.finditer(normalized))
-    if not matches:
-        return None
+    for pattern in NAMED_PARTY_PATTERNS:
+        matches = list(pattern.finditer(normalized))
+        if not matches:
+            continue
 
-    candidate = matches[-1].group("party").strip()
-    candidate = TRAILING_PARTY_PATTERN.sub("", candidate).strip()
-    return candidate or None
+        candidate = matches[-1].group("party").strip()
+        candidate = TRAILING_PARTY_PATTERN.sub("", candidate).strip()
+        if candidate:
+            return candidate
+
+    return None
 
 
 def evaluate_document_access(message: str, user_role: UserRole | str | None) -> DocumentAccessDecision:

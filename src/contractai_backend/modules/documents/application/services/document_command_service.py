@@ -53,6 +53,10 @@ class DocumentUpdatePayload:
 
 
 class DocumentCommandService:
+    DEFAULT_VECTOR_INDEX_NAMES = ("contracts_index", "drive_contracts_index")
+    LABOR_CONTRACT_NAME_PREFIX = "Contrato Estándar de Trabajador"
+    COMPANY_CONTRACT_NAME_PREFIX = "Contrato Estándar de Empresa"
+
     def __init__(  # noqa: PLR0913
         self,
         command_repo: DocumentCommandRepository,
@@ -121,6 +125,75 @@ class DocumentCommandService:
     @staticmethod
     def _serialize_optional_enum(value: Any) -> Any:
         return value.value if hasattr(value, "value") else value
+
+    @classmethod
+    def _build_labor_contract_name(cls, worker_name: str | None) -> str:
+        normalized_worker_name = worker_name.strip() if isinstance(worker_name, str) else ""
+        if normalized_worker_name:
+            return f"{cls.LABOR_CONTRACT_NAME_PREFIX} - {normalized_worker_name}"
+        return cls.LABOR_CONTRACT_NAME_PREFIX
+
+    @classmethod
+    def _build_company_contract_name(cls, company_name: str | None) -> str:
+        normalized_company_name = company_name.strip() if isinstance(company_name, str) else ""
+        if normalized_company_name:
+            return f"{cls.COMPANY_CONTRACT_NAME_PREFIX} - {normalized_company_name}"
+        return cls.COMPANY_CONTRACT_NAME_PREFIX
+
+    @classmethod
+    def _resolve_vector_index_names(cls, primary_index_name: str) -> tuple[str, ...]:
+        return tuple(dict.fromkeys((primary_index_name, *cls.DEFAULT_VECTOR_INDEX_NAMES)))
+
+    @staticmethod
+    def _resolve_extracted_client(*, extracted_data: ExtractedDocumentData, resolved_type: Any) -> str | None:
+        if resolved_type == DocumentType.LABOR:
+            return extracted_data.worker_name
+        return extracted_data.client
+
+    @classmethod
+    def _resolve_document_name(
+        cls,
+        *,
+        provided_name: str | None,
+        extracted_data: ExtractedDocumentData,
+        resolved_type: Any,
+        resolved_client: str | None,
+    ) -> str | None:
+        if provided_name is not None:
+            return provided_name
+
+        if resolved_type == DocumentType.LABOR:
+            worker_name = extracted_data.worker_name or resolved_client
+            if worker_name is not None:
+                return cls._build_labor_contract_name(worker_name=worker_name)
+
+        if resolved_type == DocumentType.COMPANY and resolved_client is not None:
+            return cls._build_company_contract_name(company_name=resolved_client)
+
+        return extracted_data.name
+
+    @classmethod
+    def _apply_extracted_form_data(
+        cls,
+        *,
+        normalized_form_data: dict[str, Any],
+        extracted_data: ExtractedDocumentData,
+        resolved_type: Any,
+    ) -> dict[str, Any]:
+        updated_form_data = dict(normalized_form_data)
+
+        if resolved_type == DocumentType.LABOR:
+            if updated_form_data.get("value") is None:
+                updated_form_data["value"] = extracted_data.labor_monthly_value
+            if updated_form_data.get("currency") is None:
+                updated_form_data["currency"] = cls._serialize_optional_enum(extracted_data.labor_monthly_currency)
+            return updated_form_data
+
+        if updated_form_data.get("value") is None:
+            updated_form_data["value"] = extracted_data.form_data.value
+        if updated_form_data.get("currency") is None:
+            updated_form_data["currency"] = cls._serialize_optional_enum(extracted_data.form_data.currency)
+        return updated_form_data
 
     @staticmethod
     def _is_draft_request(data: CreateDocumentRequest | CreateDocumentDraftRequest) -> bool:
@@ -211,18 +284,26 @@ class DocumentCommandService:
         extracted_data: ExtractedDocumentData,
     ) -> tuple[DocumentTable, list[DocumentServiceItemRequest], dict[str, Any]]:
         is_draft_request = self._is_draft_request(data)
-        resolved_name = data.name if data.name is not None else extracted_data.name
-        resolved_client = data.client if data.client is not None else extracted_data.client
         resolved_type = data.type if data.type is not None else extracted_data.type
+        resolved_client = (
+            data.client if data.client is not None else self._resolve_extracted_client(extracted_data=extracted_data, resolved_type=resolved_type)
+        )
+        resolved_name = self._resolve_document_name(
+            provided_name=data.name,
+            extracted_data=extracted_data,
+            resolved_type=resolved_type,
+            resolved_client=resolved_client,
+        )
         resolved_start_date = data.start_date if data.start_date is not None else extracted_data.start_date
         resolved_end_date = data.end_date if data.end_date is not None else extracted_data.end_date
         resolved_state = data.state if data.state is not None else (DocumentState.DRAFT if is_draft_request else None)
 
         normalized_form_data = dict(data.form_data or {})
-        if normalized_form_data.get("value") is None:
-            normalized_form_data["value"] = extracted_data.form_data.value
-        if normalized_form_data.get("currency") is None:
-            normalized_form_data["currency"] = self._serialize_optional_enum(extracted_data.form_data.currency)
+        normalized_form_data = self._apply_extracted_form_data(
+            normalized_form_data=normalized_form_data,
+            extracted_data=extracted_data,
+            resolved_type=resolved_type,
+        )
 
         manual_service_items = list(data.service_items)
         if manual_service_items:
@@ -385,7 +466,8 @@ class DocumentCommandService:
             self._ensure_write_access(document_type=DocumentType(document.type), user_role=user_role)
 
         try:
-            await self.vector_repo.delete_vectors(index_name=index_name, document_id=id)
+            for vector_index_name in self._resolve_vector_index_names(primary_index_name=index_name):
+                await self.vector_repo.delete_vectors(index_name=vector_index_name, document_id=id)
         except Exception as exc:
             raise DocumentTransactionError(operation="delete vectors", details=str(object=exc)) from exc
 

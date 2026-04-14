@@ -41,6 +41,12 @@ def test_extract_contract_party_candidate_returns_entity_name() -> None:
     assert candidate == "nick salcedo"
 
 
+def test_extract_contract_party_candidate_supports_job_title_queries() -> None:
+    candidate = extract_contract_party_candidate("Cual es el puesto de trabajo de Nick Salcedo?")
+
+    assert candidate == "nick salcedo"
+
+
 def test_evaluate_document_access_allows_generic_queries_for_restricted_roles() -> None:
     decision = evaluate_document_access("Dame los contratos vigentes", "HR")
 

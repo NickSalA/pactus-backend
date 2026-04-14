@@ -12,6 +12,8 @@ from ..repositories.base_render import ITemplateRenderer
 
 
 class TemplateService:
+    LABOR_CONTRACT_NAME_PREFIX = "Contrato Estándar de Trabajador"
+
     def __init__(
         self,
         template_repo: ITemplateRepository,
@@ -26,6 +28,13 @@ class TemplateService:
         self.renderer: ITemplateRenderer = renderer
         self.document_generator: IDocumentGenerator = document_generator
         self.document_adapter: IDocumentModuleAdapter = document_adapter
+
+    @classmethod
+    def _build_labor_contract_name(cls, worker_name: str | None) -> str:
+        normalized_worker_name = worker_name.strip() if isinstance(worker_name, str) else ""
+        if normalized_worker_name:
+            return f"{cls.LABOR_CONTRACT_NAME_PREFIX} - {normalized_worker_name}"
+        return cls.LABOR_CONTRACT_NAME_PREFIX
 
     async def generate_contract(self, template_id: int, organization_id: int, form_data: dict[str, Any]):
         """Genera un contrato a partir de una plantilla."""
@@ -56,7 +65,8 @@ class TemplateService:
         md_final = await self.renderer.render(template_md=body_md, payload=master_dict)
 
         pdf_bytes: bytes = await self.document_generator.generate_pdf(markdown_content=md_final)
-        cliente_nombre = form_data.get("trabajador_nombre") or form_data.get("cliente_nombre") or "cliente"
+        trabajador_nombre = form_data.get("trabajador_nombre") or form_data.get("cliente_nombre")
+        cliente_nombre = trabajador_nombre or "cliente"
         base_name: str = template.name.replace(" ", "_").lower()
         cliente_seguro = cliente_nombre.replace(" ", "_").lower()
         timestamp = int(now.timestamp())
@@ -64,7 +74,7 @@ class TemplateService:
         document_payload: dict[str, int | str | bytes | Any | dict[str, Any | int | str]] = {
             "organization_id": organization_id,
             "template_id": template_id,
-            "name": f"{template.name} - {cliente_nombre}",
+            "name": self._build_labor_contract_name(worker_name=trabajador_nombre),
             "client": cliente_nombre,
             "type": "LABOR",
             "state": "PENDING_SIGNATURE",
