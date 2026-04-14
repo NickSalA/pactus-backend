@@ -1,8 +1,8 @@
 """Service for generating, validating and managing templates."""
 
-from datetime import datetime
 import re
 import unicodedata
+from datetime import datetime
 from typing import Any
 
 from contractai_backend.core.exceptions.base import AppError, ForbiddenError, NotFoundError, ValidationError
@@ -24,7 +24,7 @@ from ...api.schemas import (
     build_template_response,
 )
 from ...domain.entities import TemplateContent, TemplateField, TemplateFormatTable, TemplateTable
-from ...domain.value_objs import TemplateState
+from ...domain.value_objs import TemplateFieldMode, TemplateGenerationMode, TemplateState
 from ..repositories import IOrganizationRepository, ITemplateFormatRepository, ITemplateRenderer, ITemplateRepository
 from ..repositories.base_draft_generator import ITemplateDraftGenerator
 from .template_content_synchronizer import TemplateContentSynchronizer
@@ -39,6 +39,18 @@ ROLE_LOCKED_DOCUMENT_TYPES: dict[UserRole, DocumentType] = {
 
 class TemplateAuthoringService:
     """Coordinates template authoring flows and access control."""
+
+    EXPLICIT_CONTRACT_DATES_REQUIRED_MESSAGE = (
+        "La plantilla de referencia no expone fechas de inicio y fin del contrato de forma explícita. "
+        "Usa generation_mode='adaptive' para permitir que la IA las complete."
+    )
+
+    CONTRACT_CLOSING_PATTERNS = (
+        r"(?im)^en se[nñ]al de conformidad\b",
+        r"(?im)^para constancia\b",
+        r"(?im)^firman\b",
+        r"(?im)^suscriben\b",
+    )
 
     LABOR_CLASSIFIER_PATTERNS = (
         r"\btrabajador(?:es)?\b",
@@ -123,8 +135,20 @@ class TemplateAuthoringService:
 
         organization_context = await self._build_organization_context(organization_id=organization_id)
         draft = await self.draft_generator.generate(request=resolved_request, organization_context=organization_context)
-        draft.content = self.content_synchronizer.sync(draft.content)
-        draft.warnings.extend(self.validator.validate(draft.content))
+        draft.content, preparation_warnings = self._prepare_generated_content(
+            draft.content,
+            document_type=document_type,
+            generation_mode=resolved_request.generation_mode,
+            field_mode=resolved_request.field_mode,
+        )
+        draft.warnings.extend(self.validator.validate(draft.content, document_type=document_type))
+        draft.warnings.extend(preparation_warnings)
+        draft.source = {
+            **draft.source,
+            "mode": draft.source.get("mode", "prompt"),
+            "generation_mode": resolved_request.generation_mode.value,
+            "field_mode": resolved_request.field_mode.value,
+        }
         return draft, document_type
 
     async def generate_and_save_draft_from_prompt(
@@ -177,6 +201,8 @@ class TemplateAuthoringService:
         draft.source = {
             "mode": "file_reference",
             "filename": filename,
+            "generation_mode": resolved_request.generation_mode.value,
+            "field_mode": resolved_request.field_mode.value,
             "reference_mode": reference_context.mode,
             "detected_document_type": document_type.value,
             "section_titles": list(reference_context.section_titles),
@@ -228,10 +254,10 @@ class TemplateAuthoringService:
         await self._get_template_format_or_raise(document_type=document_type, format_code=request.format_code)
 
         synced_content = self.content_synchronizer.sync(request.content)
-        warnings = self.validator.validate(synced_content)
+        warnings = self.validator.validate(synced_content, document_type=document_type)
         org_data = await self.organization_repo.get_organization_data(organization_id=organization_id)
         payload = {
-            **self._build_mock_payload(synced_content.fields),
+            **self._build_mock_payload(synced_content.fields + synced_content.operational_fields),
             **org_data,
             **self._build_time_payload(),
             **request.sample_data,
@@ -250,7 +276,7 @@ class TemplateAuthoringService:
         template_format = await self._get_template_format_or_raise(document_type=document_type, format_code=request.format_code)
 
         synced_content = self.content_synchronizer.sync(request.content)
-        self.validator.validate(synced_content)
+        self.validator.validate(synced_content, document_type=document_type)
         template = self._build_template_entity(
             organization_id=organization_id,
             name=request.name or self._resolve_template_default_name(template_format),
@@ -281,7 +307,7 @@ class TemplateAuthoringService:
             if request.content is None:
                 raise ValidationError("Content cannot be null")
             synced_content = self.content_synchronizer.sync(request.content)
-            self.validator.validate(synced_content)
+            self.validator.validate(synced_content, document_type=template.document_type)
             template.content = synced_content.model_dump(mode="python")
         if "name" in fields_set:
             if request.name is None:
@@ -311,7 +337,11 @@ class TemplateAuthoringService:
         await self._get_template_format_or_raise(document_type=template.document_type, format_code=template_format.format_code)
 
         content = self.content_synchronizer.sync(TemplateContent.model_validate(template.content))
-        self.validator.validate(content)
+        self.validator.validate(
+            content,
+            document_type=template.document_type,
+            require_contract_date_mapping=template.document_type == DocumentType.COMPANY,
+        )
         content.version = self._resolve_publish_version(content.version)
 
         template.content = content.model_dump(mode="python")
@@ -374,10 +404,21 @@ class TemplateAuthoringService:
                 organization_context=organization_context,
                 validation_feedback=retry_feedback or None,
             )
-            draft.content = self.content_synchronizer.sync(draft.content)
+            try:
+                draft.content, preparation_warnings = self._prepare_generated_content(
+                    draft.content,
+                    document_type=request.document_type,
+                    generation_mode=request.generation_mode,
+                    field_mode=request.field_mode,
+                )
+            except ValueError as exc:
+                if attempt == max_attempts - 1:
+                    raise
+                retry_feedback = [str(exc)]
+                continue
 
             try:
-                warnings = self.validator.validate(draft.content)
+                warnings = self.validator.validate(draft.content, document_type=request.document_type)
             except ValueError as exc:
                 if attempt == max_attempts - 1:
                     raise
@@ -393,13 +434,19 @@ class TemplateAuthoringService:
                     draft.content.body_md,
                     reference_context.structure_sequence,
                 )
-            retryable_issues = [warning for warning in warnings if warning.startswith("Numeración de cláusulas")] + reference_warnings
+            retryable_issues = [
+                warning
+                for warning in warnings
+                if warning.startswith("Numeración de cláusulas") or warning.startswith(self.validator.MISSING_CONTRACT_DATE_MAPPING_WARNING)
+            ] + reference_warnings
             if not retryable_issues:
                 draft.warnings.extend(warnings)
+                draft.warnings.extend(preparation_warnings)
                 return draft, attempt
 
             if attempt == max_attempts - 1:
                 draft.warnings.extend(warnings)
+                draft.warnings.extend(preparation_warnings)
                 draft.warnings.extend(reference_warnings)
                 return draft, attempt
 
@@ -413,6 +460,194 @@ class TemplateAuthoringService:
         if template is None:
             raise NotFoundError("Plantilla no encontrada")
         return template
+
+    def _prepare_generated_content(
+        self,
+        content: TemplateContent,
+        *,
+        document_type: DocumentType,
+        generation_mode: TemplateGenerationMode,
+        field_mode: TemplateFieldMode,
+    ) -> tuple[TemplateContent, list[str]]:
+        """Synchronizes generated content and applies draft post-processing modes."""
+        synced_content = self.content_synchronizer.sync(content)
+        warnings: list[str] = []
+
+        if document_type == DocumentType.COMPANY:
+            if generation_mode == TemplateGenerationMode.ADAPTIVE:
+                enriched_content = self._inject_contract_date_clause(synced_content)
+                if enriched_content.body_md != synced_content.body_md:
+                    synced_content = self.content_synchronizer.sync(enriched_content)
+            else:
+                self._ensure_explicit_contract_dates(synced_content)
+
+        if field_mode == TemplateFieldMode.MINIMAL:
+            synced_content, minimization_warnings = self._minimize_generated_content(synced_content)
+            warnings.extend(minimization_warnings)
+
+        if document_type == DocumentType.COMPANY and generation_mode == TemplateGenerationMode.STRICT:
+            self._ensure_explicit_contract_dates(synced_content)
+
+        return synced_content, warnings
+
+    def _ensure_explicit_contract_dates(self, content: TemplateContent) -> None:
+        """Requires start and end placeholders to be explicit in body_md."""
+        mapping = content.contract_date_mapping
+        if mapping is None:
+            raise ValueError(self.EXPLICIT_CONTRACT_DATES_REQUIRED_MESSAGE)
+
+        placeholders = self.validator.extract(content.body_md)
+        if mapping.start_date_field not in placeholders or mapping.end_date_field not in placeholders:
+            raise ValueError(self.EXPLICIT_CONTRACT_DATES_REQUIRED_MESSAGE)
+
+    def _minimize_generated_content(self, content: TemplateContent) -> tuple[TemplateContent, list[str]]:
+        """Reduces redundant manual fields when a lighter authoring mode is requested."""
+        body_md = content.body_md
+        replacements: list[tuple[str, str]] = []
+        for field in content.fields:
+            auto_variable = self._resolve_auto_variable_alias(field)
+            if auto_variable is None or auto_variable == field.key:
+                continue
+            updated_body_md = self._replace_placeholder_key(body_md, field.key, auto_variable)
+            if updated_body_md == body_md:
+                continue
+            body_md = updated_body_md
+            replacements.append((field.key, auto_variable))
+
+        mapping_keys = self._mapping_keys(content)
+        operational_fields = [
+            field for field in content.operational_fields if field.key in mapping_keys or self._resolve_auto_variable_alias(field) is None
+        ]
+
+        minimized_content = content
+        if body_md != content.body_md or len(operational_fields) != len(content.operational_fields):
+            minimized_content = self.content_synchronizer.sync(
+                content.model_copy(update={"body_md": body_md, "operational_fields": operational_fields})
+            )
+
+        warnings: list[str] = []
+        if replacements:
+            replacements_text = ", ".join(f"{old_key} -> {new_key}" for old_key, new_key in replacements)
+            warnings.append(f"Se redujeron campos manuales usando variables automáticas: {replacements_text}")
+
+        redundant_duration_fields = self._find_redundant_duration_fields(minimized_content)
+        if redundant_duration_fields:
+            warnings.append(
+                "La plantilla conserva campos de duración junto con fechas explícitas de inicio y fin: " + ", ".join(redundant_duration_fields)
+            )
+
+        return minimized_content, warnings
+
+    def _replace_placeholder_key(self, body_md: str, old_key: str, new_key: str) -> str:
+        """Replaces one placeholder key regardless of surrounding spaces."""
+        pattern = re.compile(r"{{\s*" + re.escape(old_key) + r"\s*}}")
+        return pattern.sub("{{ " + new_key + " }}", body_md)
+
+    def _resolve_auto_variable_alias(self, field: TemplateField) -> str | None:
+        """Maps common organization fields to existing automatic variables."""
+        if field.key in self.validator.AUTO_VARIABLES:
+            return field.key
+
+        tokens = self._field_tokens(field)
+        company_tokens = {"empresa", "empleador", "contratante", "principal"}
+        if "gerente" in tokens or "proveedor" in tokens or "cliente" in tokens:
+            return None
+
+        if "jurisdiccion" in tokens:
+            return "jurisdiccion"
+        if {"lugar", "firma"} <= tokens:
+            return "lugar_firma"
+        if {"autorizacion", "fecha"} <= tokens:
+            return "autorizacion_fecha"
+        if {"autorizacion", "entidad"} <= tokens:
+            return "autorizacion_entidad"
+        if {"autorizacion", "emitida", "por"} <= tokens or {"autorizacion", "otorgada", "por"} <= tokens:
+            return "autorizacion_emitida_por"
+        if {"representante", "nombre"} <= tokens and tokens & company_tokens:
+            return "representante_nombre"
+        if {"representante", "dni"} <= tokens and tokens & company_tokens:
+            return "representante_dni"
+        if "ruc" in tokens and tokens & company_tokens:
+            return "empleador_ruc"
+        if "domicilio" in tokens and tokens & company_tokens:
+            return "empleador_domicilio"
+        if {"objeto", "social"} <= tokens and tokens & company_tokens:
+            return "empleador_objeto_social"
+        if "descripcion" in tokens and tokens & company_tokens:
+            return "empleador_descripcion"
+        if tokens & company_tokens and ({"razon", "social"} <= tokens or ({"nombre"} <= tokens and "representante" not in tokens)):
+            return "empleador_razon_social"
+        return None
+
+    def _field_tokens(self, field: TemplateField) -> set[str]:
+        """Builds normalized tokens from a field key and label."""
+        normalized = self._normalize_reference_text(field.key + " " + field.label)
+        return {token for token in normalized.replace("_", " ").split() if token}
+
+    def _mapping_keys(self, content: TemplateContent) -> set[str]:
+        """Returns the contract mapping keys when present."""
+        if content.contract_date_mapping is None:
+            return set()
+        return {
+            content.contract_date_mapping.start_date_field,
+            content.contract_date_mapping.end_date_field,
+        }
+
+    def _find_redundant_duration_fields(self, content: TemplateContent) -> list[str]:
+        """Detects duration fields that coexist with explicit start and end placeholders."""
+        mapping = content.contract_date_mapping
+        if mapping is None:
+            return []
+
+        placeholders = self.validator.extract(content.body_md)
+        if mapping.start_date_field not in placeholders or mapping.end_date_field not in placeholders:
+            return []
+
+        redundant_fields: list[str] = []
+        for field in content.fields + content.operational_fields:
+            if field.key in {mapping.start_date_field, mapping.end_date_field}:
+                continue
+            tokens = self._field_tokens(field)
+            if "duracion" in tokens or ({"plazo", "contrato"} <= tokens):
+                redundant_fields.append(field.key)
+        return redundant_fields
+
+    def _inject_contract_date_clause(self, content: TemplateContent) -> TemplateContent:
+        """Adds a minimal vigencia clause when the draft has a date mapping but the body does not expose it."""
+        mapping = content.contract_date_mapping
+        if mapping is None:
+            return content
+
+        placeholders = self.validator.extract(content.body_md)
+        has_start = mapping.start_date_field in placeholders
+        has_end = mapping.end_date_field in placeholders
+        if has_start and has_end:
+            return content
+
+        start_placeholder = f"{{{{ {mapping.start_date_field} }}}}"
+        end_placeholder = f"{{{{ {mapping.end_date_field} }}}}"
+        if not has_start and not has_end:
+            clause_text = (
+                f"**VIGENCIA DEL CONTRATO.-** La vigencia del presente contrato inicia el {start_placeholder} y concluye el {end_placeholder}."
+            )
+        elif not has_start:
+            clause_text = f"**INICIO DE VIGENCIA.-** La vigencia del presente contrato inicia el {start_placeholder}."
+        else:
+            clause_text = f"**FIN DE VIGENCIA.-** La vigencia del presente contrato concluye el {end_placeholder}."
+
+        return content.model_copy(update={"body_md": self._insert_clause_before_closing(content.body_md, clause_text)})
+
+    def _insert_clause_before_closing(self, body_md: str, clause_text: str) -> str:
+        """Places the generated clause before the closing section when possible."""
+        stripped_body = body_md.rstrip()
+        for pattern in self.CONTRACT_CLOSING_PATTERNS:
+            match = re.search(pattern, stripped_body)
+            if match is None:
+                continue
+            prefix = stripped_body[: match.start()].rstrip()
+            suffix = stripped_body[match.start() :].lstrip()
+            return f"{prefix}\n\n{clause_text}\n\n{suffix}" if prefix else f"{clause_text}\n\n{suffix}"
+        return f"{stripped_body}\n\n{clause_text}" if stripped_body else clause_text
 
     def _resolve_publish_version(self, version: str | None) -> str:
         """Normalizes the version on publish."""

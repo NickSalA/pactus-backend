@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from sqlalchemy import Column, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlmodel import Field
@@ -21,10 +21,37 @@ class TemplateField(BaseModel):
     required: bool = Field(default=False, description="Indicates if the field is required")
 
 
+class TemplateContractDateMapping(BaseModel):
+    start_date_field: str = Field(default=..., description="Field key used as the contract start date")
+    end_date_field: str = Field(default=..., description="Field key used as the contract end date")
+
+    @field_validator("start_date_field", "end_date_field")
+    @classmethod
+    def validate_field_key(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Contract date mapping fields cannot be empty")
+        return cleaned
+
+    @model_validator(mode="after")
+    def validate_distinct_fields(self) -> "TemplateContractDateMapping":
+        if self.start_date_field == self.end_date_field:
+            raise ValueError("Contract date mapping fields must be different")
+        return self
+
+
 class TemplateContent(BaseModel):
     body_md: str = Field(default=..., description="The main content of the template")
     fields: list[TemplateField] = Field(default=..., description="List of fields in the template")
+    operational_fields: list[TemplateField] = Field(
+        default_factory=list,
+        description="Extra form fields required by backend logic but not necessarily rendered in body_md",
+    )
     version: str | None = Field(default="1.0", description="Version of the template")
+    contract_date_mapping: TemplateContractDateMapping | None = Field(
+        default=None,
+        description="Maps which template fields represent the contract start and end dates",
+    )
 
 
 class TemplateTable(BaseTable, table=True):

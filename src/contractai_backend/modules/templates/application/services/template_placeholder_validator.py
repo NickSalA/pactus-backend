@@ -5,6 +5,7 @@ import unicodedata
 from collections.abc import Sequence
 from typing import ClassVar
 
+from ....documents.domain import DocumentType
 from ...domain.entities import TemplateContent
 
 EXPRESSION_PATTERN = re.compile(r"{{\s*(.*?)\s*}}")
@@ -42,6 +43,7 @@ CLAUSE_ORDER: dict[str, int] = {
 
 
 class TemplatePlaceholderValidator:
+    MISSING_CONTRACT_DATE_MAPPING_WARNING: ClassVar[str] = "La plantilla no define un mapeo de vigencia del contrato para fecha de inicio y fin."
     AUTO_VARIABLES: ClassVar[frozenset[str]] = frozenset(
         {
             "empleador_razon_social",
@@ -69,7 +71,13 @@ class TemplatePlaceholderValidator:
         expressions = self._extract_expressions(body_md)
         return {expression for expression in expressions if SIMPLE_PLACEHOLDER_PATTERN.fullmatch(expression)}
 
-    def validate(self, content: TemplateContent) -> list[str]:
+    def validate(
+        self,
+        content: TemplateContent,
+        *,
+        document_type: DocumentType | None = None,
+        require_contract_date_mapping: bool = False,
+    ) -> list[str]:
         """Valida placeholders y devuelve warnings."""
         expressions = self._extract_expressions(content.body_md)
         unsupported_expressions = sorted({expression for expression in expressions if not SIMPLE_PLACEHOLDER_PATTERN.fullmatch(expression)})
@@ -78,6 +86,7 @@ class TemplatePlaceholderValidator:
 
         placeholders = set(expressions)
         field_keys = {field.key for field in content.fields}
+        operational_field_keys = {field.key for field in content.operational_fields}
         allowed_keys = field_keys | self.AUTO_VARIABLES
 
         unknown = sorted(placeholders - allowed_keys)
@@ -89,8 +98,37 @@ class TemplatePlaceholderValidator:
         warnings: list[str] = []
         if unused:
             warnings.append(f"Campos definidos pero no usados: {', '.join(unused)}")
+        warnings.extend(
+            self._validate_contract_date_mapping(
+                content=content,
+                all_field_keys=field_keys | operational_field_keys,
+                document_type=document_type,
+                require_contract_date_mapping=require_contract_date_mapping,
+            )
+        )
         warnings.extend(self._validate_clause_sequence(content.body_md))
         return warnings
+
+    def _validate_contract_date_mapping(
+        self,
+        *,
+        content: TemplateContent,
+        all_field_keys: set[str],
+        document_type: DocumentType | None,
+        require_contract_date_mapping: bool,
+    ) -> list[str]:
+        mapping = content.contract_date_mapping
+        if mapping is None:
+            if document_type == DocumentType.COMPANY and require_contract_date_mapping:
+                raise ValueError(self.MISSING_CONTRACT_DATE_MAPPING_WARNING)
+            if document_type == DocumentType.COMPANY:
+                return [self.MISSING_CONTRACT_DATE_MAPPING_WARNING]
+            return []
+
+        missing_fields = [field_key for field_key in (mapping.start_date_field, mapping.end_date_field) if field_key not in all_field_keys]
+        if missing_fields:
+            raise ValueError("El mapeo de vigencia del contrato referencia campos inexistentes: " + ", ".join(sorted(missing_fields)))
+        return []
 
     def validate_against_reference(self, body_md: str, reference_clause_sequence: Sequence[str]) -> list[str]:
         """Compara el draft contra la secuencia de clausulas de referencia."""

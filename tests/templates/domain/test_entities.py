@@ -2,7 +2,12 @@
 
 import pytest
 
-from contractai_backend.modules.templates.domain.entities import TemplateContent, TemplateField, TemplateTable
+from contractai_backend.modules.templates.domain.entities import (
+    TemplateContent,
+    TemplateContractDateMapping,
+    TemplateField,
+    TemplateTable,
+)
 
 
 def _valid_content() -> dict:
@@ -55,3 +60,36 @@ class TestTemplateContent:
     def test_default_version(self):
         content = TemplateContent(body_md="# Test", fields=[])
         assert content.version == "1.0"
+        assert content.operational_fields == []
+
+    def test_accepts_contract_date_mapping(self):
+        content = TemplateContent(
+            body_md="# Test {{ fecha_inicio }} {{ fecha_fin }}",
+            fields=[
+                TemplateField(key="fecha_inicio", label="Fecha inicio", type="date"),
+                TemplateField(key="fecha_fin", label="Fecha fin", type="date"),
+            ],
+            contract_date_mapping=TemplateContractDateMapping(
+                start_date_field="fecha_inicio",
+                end_date_field="fecha_fin",
+            ),
+        )
+
+        assert content.contract_date_mapping is not None
+        assert content.contract_date_mapping.start_date_field == "fecha_inicio"
+
+    def test_accepts_operational_fields(self):
+        content = TemplateContent(
+            body_md="# Test {{ nombre }}",
+            fields=[TemplateField(key="nombre", label="Nombre")],
+            operational_fields=[TemplateField(key="start_date", label="Fecha inicio", type="date", required=True)],
+        )
+
+        assert len(content.operational_fields) == 1
+        assert content.operational_fields[0].key == "start_date"
+
+
+class TestTemplateContractDateMapping:
+    def test_rejects_same_field_for_both_dates(self):
+        with pytest.raises(ValueError, match="must be different"):
+            TemplateContractDateMapping(start_date_field="fecha_inicio", end_date_field="fecha_inicio")

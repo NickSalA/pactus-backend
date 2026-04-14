@@ -113,6 +113,8 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
         document_type = request.document_type.value if request.document_type is not None else ""
         format_code = request.format_code
         jurisdiction = request.jurisdiction or ""
+        generation_mode = request.generation_mode.value
+        field_mode = request.field_mode.value
 
         reference_section = ""
         if reference_context:
@@ -142,6 +144,10 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             '    "fields": [\n'
             '      {"key": string, "label": string, "type": string, "required": boolean}\n'
             "    ],\n"
+            '    "operational_fields": [\n'
+            '      {"key": string, "label": string, "type": string, "required": boolean}\n'
+            "    ],\n"
+            '    "contract_date_mapping": {"start_date_field": string, "end_date_field": string} | null,\n'
             '    "version": "1.0"\n'
             "  },\n"
             '  "warnings": [string],\n'
@@ -160,16 +166,31 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "- If ORGANIZATION_CONTEXT is present, use it only as drafting context. Do not hardcode those values in body_md when an auto variable exists.\n"  # noqa: E501
             "- Use only the auto variables that are relevant for the contract. Do not force every available variable into the template.\n"
             "- Do not use filters inside placeholders.\n"
+            "- content.fields must include only placeholders that actually appear in body_md.\n"
+            "- Any placeholder that appears directly in body_md must be marked as required=true. Optional visible placeholders are not allowed because they break the contract text when empty.\n"
+            "- Use content.operational_fields for extra form fields needed by backend workflows when they should not appear in body_md.\n"
+            "- When the contract defines a validity term, duration, plazo or vigencia, expose the contract start and end as dedicated placeholders if they belong in the contract text; otherwise put them in content.operational_fields, and set content.contract_date_mapping accordingly.\n"
+            "- A duration-only field such as duracion_contrato or plazo_contrato is not equivalent to start_date or end_date and must not be mapped as either boundary.\n"
+            "- The fields referenced by content.contract_date_mapping must exist either in content.fields or content.operational_fields. Prefer type 'date' for those fields.\n"
+            "- If the contract does not expose both dates clearly enough, set content.contract_date_mapping to null and add a warning describing the ambiguity.\n"
             "- If REFERENCE_CONTEXT is present, preserve the original contract structure as faithfully as possible. Replace variable values with placeholders, but do not freely rewrite or summarize clauses.\n"  # noqa: E501
             "- If REFERENCE_OUTLINE is present, preserve every item in clause_sequence when available, and otherwise preserve the order of structure_sequence. Do not omit structural markers that appear in the reference.\n"  # noqa: E501
             "- Preserve section titles and the closing section when they appear in the reference.\n"
             "- When the reference mode is full_clean, stay as close as possible to the original wording and only abstract variable data into placeholders.\n"  # noqa: E501
+            "- GENERATION_MODE controls how strictly the result must follow the reference.\n"
+            "- If GENERATION_MODE is strict, do not add new legal clauses that are absent from the reference just to make the template operational.\n"
+            "- If GENERATION_MODE is adaptive, the reference is guidance, not a literal constraint. You may add a concise vigencia clause to body_md when explicit contract start and end placeholders are needed.\n"
+            "- FIELD_MODE controls how many manual fields should remain in the output.\n"
+            "- If FIELD_MODE is exact, preserve distinct placeholders from the reference unless they are clearly invalid.\n"
+            "- If FIELD_MODE is minimal, prefer the fewest manual fields possible, reuse organization auto variables, and avoid redundant placeholders when explicit contract dates already exist.\n"
             "- If VALIDATION_FEEDBACK is present, correct every listed issue in this attempt.\n"
             "- Use Spanish legal language in body_md.\n\n"
             f"NAME_HINT: {name_hint}\n"
             f"DESCRIPTION_HINT: {description_hint}\n"
             f"DOCUMENT_TYPE: {document_type}\n"
             f"FORMAT_CODE: {format_code}\n"
+            f"GENERATION_MODE: {generation_mode}\n"
+            f"FIELD_MODE: {field_mode}\n"
             f"JURISDICTION: {jurisdiction}\n"
             f"INSTRUCTIONS: {instructions}\n"
             f"{organization_section}"

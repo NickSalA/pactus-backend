@@ -4,17 +4,18 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from .....core.exceptions.base import ForbiddenError
+from .....core.exceptions.base import ForbiddenError, ValidationError
 from ....documents.domain import DocumentType
 from ....documents.domain.access_policy import can_write_document_type
 from ....users.domain.value_objs import UserRole
 from ...api.schemas import TemplateResponse, build_template_response
-from ...domain.entities import TemplateFormatTable, TemplateTable
+from ...domain.entities import TemplateContent, TemplateFormatTable, TemplateTable
 from ...domain.formats import normalize_format_code
 from ...domain.value_objs import TemplateState
 from ..repositories.base_generate import IDocumentGenerator
 from ..repositories.base_relational import IDocumentModuleAdapter, IOrganizationRepository, ITemplateFormatRepository, ITemplateRepository
 from ..repositories.base_render import ITemplateRenderer
+from .template_content_synchronizer import TemplateContentSynchronizer
 
 
 class TemplateService:
@@ -34,6 +35,7 @@ class TemplateService:
         self.renderer = renderer
         self.document_generator = document_generator
         self.document_adapter = document_adapter
+        self.content_synchronizer = TemplateContentSynchronizer()
 
     async def generate_contract(
         self,
@@ -51,8 +53,19 @@ class TemplateService:
         if not can_write_document_type(user_role=user_role, document_type=template.document_type):
             raise ForbiddenError("No tiene permisos para generar contratos con esta plantilla")
 
-        org_data = await self.organization_repo.get_organization_data(organization_id=organization_id)
+        template_content = (
+            self.content_synchronizer.sync(TemplateContent.model_validate(template.content)) if isinstance(template.content, dict) else None
+        )
         now = datetime.now()
+        service_items = (form_data.get("service_items") or []) if template.document_type == DocumentType.COMPANY else []
+        start_date, end_date = self._resolve_generated_dates(
+            form_data=form_data,
+            now=now,
+            template_content=template_content,
+            require_explicit_dates=bool(service_items),
+        )
+
+        org_data = await self.organization_repo.get_organization_data(organization_id=organization_id)
         months = [
             "enero",
             "febrero",
@@ -69,7 +82,9 @@ class TemplateService:
         ]
         time_auto: dict[str, int | str] = {"day_sign": now.day, "month_sign": months[now.month - 1], "year_sign": now.year}
         master_dict: dict[str, Any | int | str] = {**form_data, **org_data, **time_auto}
-        body_md = template.content.get("body_md", "") if isinstance(template.content, dict) else template.content
+        if template_content is not None:
+            self._validate_required_fields(template_content=template_content, payload=master_dict)
+        body_md = template_content.body_md if template_content is not None else template.content
         md_final = await self.renderer.render(template_md=body_md, payload=master_dict)
 
         pdf_bytes = await self.document_generator.generate_pdf(markdown_content=md_final)
@@ -78,8 +93,6 @@ class TemplateService:
         cliente_seguro = cliente_nombre.replace(" ", "_").lower()
         timestamp = int(now.timestamp())
         generated_file_name = f"{base_name}_{cliente_seguro}_{timestamp}.pdf"
-        service_items = form_data.get("service_items", []) if template.document_type == DocumentType.COMPANY else []
-        start_date, end_date = self._resolve_generated_dates(form_data=form_data, now=now)
         document_payload: dict[str, int | str | bytes | Any | dict[str, Any | int | str]] = {
             "organization_id": organization_id,
             "template_id": template_id,
@@ -157,22 +170,41 @@ class TemplateService:
         formats = await self.template_format_repo.list_by_ids(format_ids)
         return {template_format.id: template_format for template_format in formats}
 
-    def _resolve_generated_dates(self, form_data: dict[str, Any], now: datetime) -> tuple[str, str]:
+    def _resolve_generated_dates(
+        self,
+        form_data: dict[str, Any],
+        now: datetime,
+        template_content: TemplateContent | None,
+        *,
+        require_explicit_dates: bool = False,
+    ) -> tuple[str, str]:
         """Normaliza fechas de vigencia desde los nombres más comunes del payload."""
-        start_date = self._first_non_empty_value(
-            form_data,
-            "contrato_fecha_inicio",
-            "contract_start_date",
-            "fecha_inicio",
-            "start_date",
-        )
-        end_date = self._first_non_empty_value(
-            form_data,
-            "contrato_fecha_fin",
-            "contract_end_date",
-            "fecha_fin",
-            "end_date",
-        )
+        mapping = template_content.contract_date_mapping if template_content is not None else None
+        if mapping is not None:
+            start_date = self._first_non_empty_value(form_data, mapping.start_date_field)
+            end_date = self._first_non_empty_value(form_data, mapping.end_date_field)
+        else:
+            start_date = self._first_non_empty_value(
+                form_data,
+                "contrato_fecha_inicio",
+                "contract_start_date",
+                "fecha_inicio",
+                "start_date",
+            )
+            end_date = self._first_non_empty_value(
+                form_data,
+                "contrato_fecha_fin",
+                "contract_end_date",
+                "fecha_fin",
+                "end_date",
+            )
+        if require_explicit_dates and (start_date is None or end_date is None):
+            mapping_hint = (
+                f"Verifica que el payload incluya los campos configurados en la plantilla: {mapping.start_date_field} y {mapping.end_date_field}."
+                if mapping is not None
+                else "Verifica que la plantilla exponga y mapee los campos de inicio y fin del contrato."
+            )
+            raise ValidationError("No se pudieron resolver las fechas de vigencia del contrato desde la plantilla. " + mapping_hint)
         fallback = now.date().isoformat()
         return start_date or fallback, end_date or fallback
 
@@ -181,7 +213,26 @@ class TemplateService:
         """Devuelve el primer valor no vacío entre varias claves posibles."""
         for key in keys:
             value = payload.get(key)
-            if value in (None, ""):
+            if TemplateService._is_empty_value(value):
                 continue
             return str(value)
         return None
+
+    def _validate_required_fields(self, *, template_content: TemplateContent, payload: dict[str, Any]) -> None:
+        """Ensures every required template field has a concrete value before rendering."""
+        missing_fields = [
+            field.label
+            for field in template_content.fields + template_content.operational_fields
+            if field.required and self._is_empty_value(payload.get(field.key))
+        ]
+        if missing_fields:
+            raise ValidationError("Faltan campos obligatorios para generar el contrato: " + ", ".join(missing_fields))
+
+    @staticmethod
+    def _is_empty_value(value: Any) -> bool:
+        """Returns True when the provided value should be considered missing."""
+        if value is None:
+            return True
+        if isinstance(value, str):
+            return value.strip() == ""
+        return False

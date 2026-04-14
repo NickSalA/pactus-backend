@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from ...documents.domain import DocumentType
 from ..domain.entities import TemplateContent, TemplateFormatTable, TemplateTable
 from ..domain.formats import normalize_format_code
-from ..domain.value_objs import TemplateState
+from ..domain.value_objs import TemplateFieldMode, TemplateGenerationMode, TemplateState
 
 
 class GenerateTemplateDraftRequest(BaseModel):
@@ -18,6 +18,8 @@ class GenerateTemplateDraftRequest(BaseModel):
     jurisdiction: str | None = None
     document_type: DocumentType | None = None
     format_code: str
+    generation_mode: TemplateGenerationMode = TemplateGenerationMode.ADAPTIVE
+    field_mode: TemplateFieldMode = TemplateFieldMode.MINIMAL
 
     @field_validator("format_code")
     @classmethod
