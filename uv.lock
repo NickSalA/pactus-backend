@@ -309,7 +309,7 @@ wheels = [
 
 [[package]]
 name = "contractai-backend"
-version = "0.31.0"
+version = "0.31.1"
 source = { editable = "." }
 dependencies = [
     { name = "asyncpg" },
