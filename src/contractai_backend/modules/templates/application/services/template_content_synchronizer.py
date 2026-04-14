@@ -4,14 +4,23 @@ import re
 import unicodedata
 
 from ...domain.entities import TemplateContent, TemplateContractDateMapping, TemplateField
-from .template_placeholder_validator import EXPRESSION_PATTERN, SIMPLE_PLACEHOLDER_PATTERN, TemplatePlaceholderValidator
+from .template_placeholder_validator import (
+    EXPRESSION_PATTERN,
+    TemplatePlaceholderValidator,
+    extract_supported_placeholder_key,
+)
 
 
 class TemplateContentSynchronizer:
     """Keeps template fields aligned with body_md placeholders."""
 
     BRACKET_PLACEHOLDER_PATTERN = re.compile(r"\[([^\[\]\n]{2,200})\]")
-    FORMAT_DATE_FILTER_PATTERN = re.compile(r"{{\s*(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*\|\s*format_date\s*\((?P<args>[^{}]*)\)\s*}}")
+    TIME_PLACEHOLDER_PATTERN = re.compile(r"^(?:[01]?\d|2[0-3]):[0-5]\d(?:\s?(?:AM|PM|am|pm))?$")
+    MARKDOWN_IMAGE_PATTERN = re.compile(r"^\s*!\[[^\]]*\]\([^\)]+\)\s*$", re.MULTILINE)
+    REFERENCE_IMAGE_ARTIFACT_PATTERN = re.compile(r"^\s*!{{[^{}\n]+}}\([^\)]+\)\s*$", re.MULTILINE)
+    LEGACY_DATE_FILTER_PATTERN = re.compile(r"{{\s*(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*\|\s*date\s*:\s*(?P<quote>['\"])(?P<fmt>.*?)\2\s*}}")
+    SHORTHAND_DATE_FILTER_PATTERN = re.compile(r"{{\s*(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*\|\s*date\s*\(\s*(?P<quote>['\"])(?P<fmt>.*?)\2\s*\)\s*}}")
+    DATE_COMPONENT_FILTER_PATTERN = re.compile(r"{{\s*(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*\|\s*(?P<component>day|month|year)\s*}}")
     IGNORED_BRACKET_MARKERS: frozenset[str] = frozenset({"cierre_documento"})
     AUTO_VARIABLE_ALIASES: dict[str, str] = {
         "representante_nombre_empresa": "representante_nombre",
@@ -52,7 +61,7 @@ class TemplateContentSynchronizer:
         """Rebuilds fields from the placeholders present in body_md."""
         normalized_body_md = self._normalize_reference_markers(content.body_md)
         expressions = [expression.strip() for expression in EXPRESSION_PATTERN.findall(normalized_body_md)]
-        unsupported_expressions = sorted({expression for expression in expressions if not SIMPLE_PLACEHOLDER_PATTERN.fullmatch(expression)})
+        unsupported_expressions = sorted({expression for expression in expressions if extract_supported_placeholder_key(expression) is None})
         if unsupported_expressions:
             raise ValueError(f"Expresiones Jinja no soportadas: {', '.join(unsupported_expressions)}")
 
@@ -103,14 +112,33 @@ class TemplateContentSynchronizer:
                 return ""
             return "{{ " + marker_key + " }}"
 
-        normalized_body_md = self.BRACKET_PLACEHOLDER_PATTERN.sub(replace_marker, body_md)
+        normalized_body_md = self._remove_reference_artifacts(body_md)
+        normalized_body_md = self.BRACKET_PLACEHOLDER_PATTERN.sub(replace_marker, normalized_body_md)
         normalized_body_md = self._canonicalize_auto_variable_aliases(normalized_body_md)
-        normalized_body_md = self._sanitize_supported_jinja_filters(normalized_body_md)
+        normalized_body_md = self._normalize_supported_jinja_filters(normalized_body_md)
         return re.sub(r"\n{3,}", "\n\n", normalized_body_md)
 
-    def _sanitize_supported_jinja_filters(self, body_md: str) -> str:
-        """Simplifies supported legacy Jinja filters to plain placeholders."""
-        return self.FORMAT_DATE_FILTER_PATTERN.sub(lambda match: "{{ " + match.group("key") + " }}", body_md)
+    def _remove_reference_artifacts(self, body_md: str) -> str:
+        """Removes markdown image artifacts copied from source documents."""
+        normalized_body_md = self.MARKDOWN_IMAGE_PATTERN.sub("", body_md)
+        normalized_body_md = self.REFERENCE_IMAGE_ARTIFACT_PATTERN.sub("", normalized_body_md)
+        return normalized_body_md
+
+    def _normalize_supported_jinja_filters(self, body_md: str) -> str:
+        """Normalizes legacy date filters to the supported format_date filter."""
+        normalized_body_md = self.LEGACY_DATE_FILTER_PATTERN.sub(self._build_format_date_placeholder, body_md)
+        normalized_body_md = self.SHORTHAND_DATE_FILTER_PATTERN.sub(self._build_format_date_placeholder, normalized_body_md)
+        normalized_body_md = self.DATE_COMPONENT_FILTER_PATTERN.sub(self._build_date_component_placeholder, normalized_body_md)
+        return normalized_body_md
+
+    def _build_format_date_placeholder(self, match: re.Match[str]) -> str:
+        """Builds a canonical format_date placeholder from regex matches."""
+        return "{{ " + match.group("key") + " | format_date('" + match.group("fmt") + "') }}"
+
+    def _build_date_component_placeholder(self, match: re.Match[str]) -> str:
+        """Builds a canonical format_date placeholder from date component filters."""
+        date_formats = {"day": "%d", "month": "%m", "year": "%Y"}
+        return "{{ " + match.group("key") + " | format_date('" + date_formats[match.group("component")] + "') }}"
 
     def _canonicalize_auto_variable_aliases(self, body_md: str) -> str:
         """Replaces obvious employer-side aliases with canonical auto variables."""
@@ -156,8 +184,9 @@ class TemplateContentSynchronizer:
     def _normalize_visible_field(self, field: TemplateField, *, is_contract_date_field: bool) -> TemplateField:
         """Visible placeholders are always required because they render directly in the contract body."""
         updates: dict[str, str | bool] = {"required": True}
-        if is_contract_date_field and field.type != "date":
-            updates["type"] = "date"
+        inferred_type = "date" if is_contract_date_field else self._normalize_existing_field_type(field)
+        if inferred_type != field.type:
+            updates["type"] = inferred_type
         resolved_type = str(updates.get("type", field.type))
         if field.placeholder is None or resolved_type != field.type:
             updates["placeholder"] = TemplateField.build_placeholder(
@@ -170,10 +199,11 @@ class TemplateContentSynchronizer:
     def _normalize_operational_field(self, field: TemplateField, *, is_contract_date_field: bool) -> TemplateField:
         """Contract-date operational fields must stay required and typed as dates."""
         updates: dict[str, str | bool] = {}
+        inferred_type = "date" if is_contract_date_field else self._normalize_existing_field_type(field)
         if is_contract_date_field:
             updates["required"] = True
-            if field.type != "date":
-                updates["type"] = "date"
+        if inferred_type != field.type:
+            updates["type"] = inferred_type
         resolved_type = str(updates.get("type", field.type))
         if field.placeholder is None or resolved_type != field.type:
             updates["placeholder"] = TemplateField.build_placeholder(
@@ -182,6 +212,12 @@ class TemplateContentSynchronizer:
                 field_type=resolved_type,
             )
         return field if not updates else TemplateField.model_validate({**field.model_dump(), **updates})
+
+    def _normalize_existing_field_type(self, field: TemplateField) -> str:
+        """Fixes obvious type mismatches returned by the draft generator."""
+        if field.type != "text":
+            return field.type
+        return self._infer_field_type(field.key, field.label, field.placeholder)
 
     def _merge_existing_fields(
         self,
@@ -286,10 +322,11 @@ class TemplateContentSynchronizer:
         seen_keys: set[str] = set()
 
         for expression in expressions:
-            if expression in TemplatePlaceholderValidator.AUTO_VARIABLES or expression in seen_keys:
+            key = extract_supported_placeholder_key(expression)
+            if key is None or key in TemplatePlaceholderValidator.AUTO_VARIABLES or key in seen_keys:
                 continue
-            ordered_keys.append(expression)
-            seen_keys.add(expression)
+            ordered_keys.append(key)
+            seen_keys.add(key)
 
         return ordered_keys
 
@@ -318,7 +355,7 @@ class TemplateContentSynchronizer:
 
     def _build_default_field(self, key: str, *, field_type: str = "text") -> TemplateField:
         """Builds a default field for a new placeholder."""
-        resolved_field_type = self._infer_default_field_type(key) if field_type == "text" else field_type
+        resolved_field_type = self._infer_field_type(key, self._humanize_key(key), None) if field_type == "text" else field_type
         return TemplateField(
             key=key,
             label=self._humanize_key(key),
@@ -326,9 +363,17 @@ class TemplateContentSynchronizer:
             required=True,
         )
 
-    def _infer_default_field_type(self, key: str) -> str:
-        """Infers a sensible type for newly created placeholders."""
-        tokens = set(key.split("_"))
+    def _infer_field_type(self, key: str, label: str, placeholder: str | None) -> str:
+        """Infers a sensible field type from key and label semantics."""
+        tokens = self._tokenize_field(TemplateField(key=key, label=label, placeholder=placeholder))
+        if placeholder and self.TIME_PLACEHOLDER_PATTERN.fullmatch(placeholder.strip()):
+            return "time"
+        if tokens & {"hora", "horario"} and not tokens & {"duracion", "dias", "laborales"}:
+            return "time"
+        if tokens & {"ingreso", "salida", "entrada"}:
+            return "time"
+        if "refrigerio" in tokens and tokens & {"inicio", "fin"}:
+            return "time"
         if "fecha" in tokens or key.endswith("_date"):
             return "date"
         if tokens & {"numero", "cantidad", "monto", "porcentaje", "valor"}:

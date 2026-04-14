@@ -42,6 +42,8 @@ class TemplateField(BaseModel):
         tokens = TemplateField._field_tokens(key=key, label=label)
         if field_type == "date":
             return "Ej. 2026-12-31"
+        if field_type == "time":
+            return "Ej. 09:00"
         if "partida" in tokens:
             return "Ej. 11012345"
         if "registro" in tokens:

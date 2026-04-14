@@ -10,6 +10,9 @@ from ...domain.entities import TemplateContent
 
 EXPRESSION_PATTERN = re.compile(r"{{\s*(.*?)\s*}}")
 SIMPLE_PLACEHOLDER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+SUPPORTED_FORMAT_DATE_EXPRESSION_PATTERN = re.compile(
+    r"^(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*\|\s*format_date\s*\(\s*(?P<quote>['\"])(?P<fmt>.*?)\2\s*\)$"
+)
 CLAUSE_PATTERN = re.compile(r"\*\*(?P<label>[A-ZÁÉÍÓÚÑ ]+?)\.\-\*\*", re.IGNORECASE)
 MARKDOWN_HEADING_PATTERN = re.compile(r"^#{1,6}\s+(?P<title>.+)$")
 NAMED_STRUCTURE_PATTERN = re.compile(
@@ -42,6 +45,16 @@ CLAUSE_ORDER: dict[str, int] = {
 }
 
 
+def extract_supported_placeholder_key(expression: str) -> str | None:
+    """Returns the placeholder key from supported expressions."""
+    if SIMPLE_PLACEHOLDER_PATTERN.fullmatch(expression):
+        return expression
+    match = SUPPORTED_FORMAT_DATE_EXPRESSION_PATTERN.fullmatch(expression)
+    if match is None:
+        return None
+    return match.group("key")
+
+
 class TemplatePlaceholderValidator:
     MISSING_CONTRACT_DATE_MAPPING_WARNING: ClassVar[str] = "La plantilla no define un mapeo de vigencia del contrato para fecha de inicio y fin."
     AUTO_VARIABLES: ClassVar[frozenset[str]] = frozenset(
@@ -69,7 +82,7 @@ class TemplatePlaceholderValidator:
     def extract(self, body_md: str) -> set[str]:
         """Extrae placeholders Jinja simples del markdown."""
         expressions = self._extract_expressions(body_md)
-        return {expression for expression in expressions if SIMPLE_PLACEHOLDER_PATTERN.fullmatch(expression)}
+        return {key for expression in expressions if (key := extract_supported_placeholder_key(expression)) is not None}
 
     def validate(
         self,
@@ -80,11 +93,11 @@ class TemplatePlaceholderValidator:
     ) -> list[str]:
         """Valida placeholders y devuelve warnings."""
         expressions = self._extract_expressions(content.body_md)
-        unsupported_expressions = sorted({expression for expression in expressions if not SIMPLE_PLACEHOLDER_PATTERN.fullmatch(expression)})
+        unsupported_expressions = sorted({expression for expression in expressions if extract_supported_placeholder_key(expression) is None})
         if unsupported_expressions:
             raise ValueError(f"Expresiones Jinja no soportadas: {', '.join(unsupported_expressions)}")
 
-        placeholders = set(expressions)
+        placeholders = {key for expression in expressions if (key := extract_supported_placeholder_key(expression)) is not None}
         field_keys = {field.key for field in content.fields}
         operational_field_keys = {field.key for field in content.operational_fields}
         allowed_keys = field_keys | self.AUTO_VARIABLES

@@ -795,6 +795,8 @@ class TemplateAuthoringService:
         """Builds a mock value by field type."""
         if field.type == "date":
             return "2026-01-01"
+        if field.type == "time":
+            return "09:00"
         if field.type == "number":
             return 1000
         if field.type == "boolean":
