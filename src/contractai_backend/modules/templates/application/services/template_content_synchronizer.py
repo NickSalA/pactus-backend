@@ -10,6 +10,25 @@ from .template_placeholder_validator import EXPRESSION_PATTERN, SIMPLE_PLACEHOLD
 class TemplateContentSynchronizer:
     """Keeps template fields aligned with body_md placeholders."""
 
+    BRACKET_PLACEHOLDER_PATTERN = re.compile(r"\[([^\[\]\n]{2,200})\]")
+    IGNORED_BRACKET_MARKERS: frozenset[str] = frozenset({"cierre_documento"})
+    AUTO_VARIABLE_ALIASES: dict[str, str] = {
+        "representante_nombre_empresa": "representante_nombre",
+        "representante_nombre_empleador": "representante_nombre",
+        "representante_dni_empresa": "representante_dni",
+        "representante_dni_empleador": "representante_dni",
+        "ruc_empresa": "empleador_ruc",
+        "empresa_ruc": "empleador_ruc",
+        "razon_social_empresa": "empleador_razon_social",
+        "empresa_razon_social": "empleador_razon_social",
+        "domicilio_empresa": "empleador_domicilio",
+        "empresa_domicilio": "empleador_domicilio",
+        "objeto_social_empresa": "empleador_objeto_social",
+        "empresa_objeto_social": "empleador_objeto_social",
+        "empleador_tipo_sociedad": "empleador_descripcion",
+        "tipo_sociedad_empresa": "empleador_descripcion",
+    }
+
     START_DATE_KEYS: tuple[str, ...] = (
         "contrato_fecha_inicio",
         "contract_start_date",
@@ -30,7 +49,8 @@ class TemplateContentSynchronizer:
 
     def sync(self, content: TemplateContent) -> TemplateContent:
         """Rebuilds fields from the placeholders present in body_md."""
-        expressions = [expression.strip() for expression in EXPRESSION_PATTERN.findall(content.body_md)]
+        normalized_body_md = self._normalize_reference_markers(content.body_md)
+        expressions = [expression.strip() for expression in EXPRESSION_PATTERN.findall(normalized_body_md)]
         unsupported_expressions = sorted({expression for expression in expressions if not SIMPLE_PLACEHOLDER_PATTERN.fullmatch(expression)})
         if unsupported_expressions:
             raise ValueError(f"Expresiones Jinja no soportadas: {', '.join(unsupported_expressions)}")
@@ -59,12 +79,42 @@ class TemplateContentSynchronizer:
         )
 
         return TemplateContent(
-            body_md=content.body_md,
+            body_md=normalized_body_md,
             fields=synced_fields,
             operational_fields=synced_operational_fields,
             version=content.version,
             contract_date_mapping=inferred_mapping,
         )
+
+    def _normalize_reference_markers(self, body_md: str) -> str:
+        """Converts reference markers like [NOMBRE CAMPO] into Jinja placeholders."""
+
+        def replace_marker(match: re.Match[str]) -> str:
+            raw_marker = match.group(1).strip()
+            marker_key = self._build_reference_marker_key(raw_marker)
+            if marker_key in self.IGNORED_BRACKET_MARKERS:
+                return ""
+            return "{{ " + marker_key + " }}"
+
+        normalized_body_md = self.BRACKET_PLACEHOLDER_PATTERN.sub(replace_marker, body_md)
+        normalized_body_md = self._canonicalize_auto_variable_aliases(normalized_body_md)
+        return re.sub(r"\n{3,}", "\n\n", normalized_body_md)
+
+    def _canonicalize_auto_variable_aliases(self, body_md: str) -> str:
+        """Replaces obvious employer-side aliases with canonical auto variables."""
+        normalized_body_md = body_md
+        for alias, canonical_key in self.AUTO_VARIABLE_ALIASES.items():
+            pattern = re.compile(r"{{\s*" + re.escape(alias) + r"\s*}}")
+            normalized_body_md = pattern.sub("{{ " + canonical_key + " }}", normalized_body_md)
+        return normalized_body_md
+
+    def _build_reference_marker_key(self, raw_marker: str) -> str:
+        """Builds a stable snake_case key from a bracket marker."""
+        normalized_marker = self._normalize_text(raw_marker)
+        stopwords = {"de", "del", "la", "las", "el", "los", "o", "u", "y", "para", "por", "en", "a"}
+        tokens = [token for token in normalized_marker.split("_") if token and token not in stopwords]
+        collapsed_key = "_".join(tokens) or normalized_marker or "campo_referencia"
+        return collapsed_key
 
     def _build_operational_fields(
         self,
@@ -96,7 +146,14 @@ class TemplateContentSynchronizer:
         updates: dict[str, str | bool] = {"required": True}
         if is_contract_date_field and field.type != "date":
             updates["type"] = "date"
-        return field.model_copy(update=updates)
+        resolved_type = str(updates.get("type", field.type))
+        if field.placeholder is None or resolved_type != field.type:
+            updates["placeholder"] = TemplateField.build_placeholder(
+                key=field.key,
+                label=field.label,
+                field_type=resolved_type,
+            )
+        return TemplateField.model_validate({**field.model_dump(), **updates})
 
     def _normalize_operational_field(self, field: TemplateField, *, is_contract_date_field: bool) -> TemplateField:
         """Contract-date operational fields must stay required and typed as dates."""
@@ -105,7 +162,14 @@ class TemplateContentSynchronizer:
             updates["required"] = True
             if field.type != "date":
                 updates["type"] = "date"
-        return field if not updates else field.model_copy(update=updates)
+        resolved_type = str(updates.get("type", field.type))
+        if field.placeholder is None or resolved_type != field.type:
+            updates["placeholder"] = TemplateField.build_placeholder(
+                key=field.key,
+                label=field.label,
+                field_type=resolved_type,
+            )
+        return field if not updates else TemplateField.model_validate({**field.model_dump(), **updates})
 
     def _merge_existing_fields(
         self,
@@ -242,12 +306,22 @@ class TemplateContentSynchronizer:
 
     def _build_default_field(self, key: str, *, field_type: str = "text") -> TemplateField:
         """Builds a default field for a new placeholder."""
+        resolved_field_type = self._infer_default_field_type(key) if field_type == "text" else field_type
         return TemplateField(
             key=key,
             label=self._humanize_key(key),
-            type=field_type,
+            type=resolved_field_type,
             required=True,
         )
+
+    def _infer_default_field_type(self, key: str) -> str:
+        """Infers a sensible type for newly created placeholders."""
+        tokens = set(key.split("_"))
+        if "fecha" in tokens or key.endswith("_date"):
+            return "date"
+        if tokens & {"numero", "cantidad", "monto", "porcentaje", "valor"}:
+            return "number"
+        return "text"
 
     def _humanize_key(self, key: str) -> str:
         """Builds a human-readable label from a placeholder key."""

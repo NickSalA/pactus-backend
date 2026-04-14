@@ -114,7 +114,6 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
         format_code = request.format_code
         jurisdiction = request.jurisdiction or ""
         generation_mode = request.generation_mode.value
-        field_mode = request.field_mode.value
 
         reference_section = ""
         if reference_context:
@@ -142,10 +141,10 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             '  "content": {\n'
             '    "body_md": string,\n'
             '    "fields": [\n'
-            '      {"key": string, "label": string, "type": string, "required": boolean}\n'
+            '      {"key": string, "label": string, "type": string, "required": boolean, "placeholder": string|null}\n'
             "    ],\n"
             '    "operational_fields": [\n'
-            '      {"key": string, "label": string, "type": string, "required": boolean}\n'
+            '      {"key": string, "label": string, "type": string, "required": boolean, "placeholder": string|null}\n'
             "    ],\n"
             '    "contract_date_mapping": {"start_date_field": string, "end_date_field": string} | null,\n'
             '    "version": "1.0"\n'
@@ -157,6 +156,7 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "- Use only these field types: text, number, date, boolean.\n"
             "- Use snake_case for keys.\n"
             "- Use Jinja placeholders like {{ key }} in body_md.\n"
+            "- Provide a useful placeholder example for every field and operational field.\n"
             "- Respect DOCUMENT_TYPE and FORMAT_CODE as the target base format for the draft.\n"
             "- Every placeholder must exist in fields or be one of these auto variables:\n"
             "  empleador_razon_social, empleador_ruc, empleador_domicilio, empleador_descripcion,\n"
@@ -165,6 +165,7 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "  empleador_email, empleador_telefono, day_sign, month_sign, year_sign.\n"
             "- If ORGANIZATION_CONTEXT is present, use it only as drafting context. Do not hardcode those values in body_md when an auto variable exists.\n"  # noqa: E501
             "- Use only the auto variables that are relevant for the contract. Do not force every available variable into the template.\n"
+            "- For employer-side data that already exists as an auto variable, use the canonical auto variable name instead of creating aliases like representante_nombre_empresa or ruc_empresa.\n"
             "- Do not use filters inside placeholders.\n"
             "- content.fields must include only placeholders that actually appear in body_md.\n"
             "- Any placeholder that appears directly in body_md must be marked as required=true. Optional visible placeholders are not allowed because they break the contract text when empty.\n"
@@ -180,9 +181,8 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "- GENERATION_MODE controls how strictly the result must follow the reference.\n"
             "- If GENERATION_MODE is strict, do not add new legal clauses that are absent from the reference just to make the template operational.\n"
             "- If GENERATION_MODE is adaptive, the reference is guidance, not a literal constraint. You may add a concise vigencia clause to body_md when explicit contract start and end placeholders are needed.\n"
-            "- FIELD_MODE controls how many manual fields should remain in the output.\n"
-            "- If FIELD_MODE is exact, preserve distinct placeholders from the reference unless they are clearly invalid.\n"
-            "- If FIELD_MODE is minimal, prefer the fewest manual fields possible, reuse organization auto variables, and avoid redundant placeholders when explicit contract dates already exist.\n"
+            "- Preserve distinct placeholders from the reference unless they are clearly invalid. Do not aggressively merge or remove fields.\n"
+            "- Convert reference markers written as [NOMBRE DEL CAMPO] into proper Jinja placeholders instead of leaving them literal in body_md.\n"
             "- If VALIDATION_FEEDBACK is present, correct every listed issue in this attempt.\n"
             "- Use Spanish legal language in body_md.\n\n"
             f"NAME_HINT: {name_hint}\n"
@@ -190,7 +190,6 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             f"DOCUMENT_TYPE: {document_type}\n"
             f"FORMAT_CODE: {format_code}\n"
             f"GENERATION_MODE: {generation_mode}\n"
-            f"FIELD_MODE: {field_mode}\n"
             f"JURISDICTION: {jurisdiction}\n"
             f"INSTRUCTIONS: {instructions}\n"
             f"{organization_section}"

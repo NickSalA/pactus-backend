@@ -1,5 +1,7 @@
 """Defines the database tables for templates and template formats."""
 
+import re
+import unicodedata
 from datetime import UTC, datetime
 from typing import Any
 
@@ -19,6 +21,69 @@ class TemplateField(BaseModel):
     label: str = Field(default=..., description="Human-readable label for the field")
     type: str = Field(default="text", description="Data type of the field (e.g., string, number, date)")
     required: bool = Field(default=False, description="Indicates if the field is required")
+    placeholder: str | None = Field(default=None, description="Optional example shown in the UI input")
+
+    @field_validator("placeholder")
+    @classmethod
+    def normalize_placeholder(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    @model_validator(mode="after")
+    def populate_placeholder(self) -> "TemplateField":
+        if self.placeholder is None:
+            self.placeholder = self.build_placeholder(key=self.key, label=self.label, field_type=self.type)
+        return self
+
+    @staticmethod
+    def build_placeholder(*, key: str, label: str, field_type: str) -> str:
+        tokens = TemplateField._field_tokens(key=key, label=label)
+        if field_type == "date":
+            return "Ej. 2026-12-31"
+        if "partida" in tokens:
+            return "Ej. 11012345"
+        if "registro" in tokens:
+            return "Ej. Registro de Personas Juridicas de Lima"
+        if field_type == "number":
+            if "porcentaje" in tokens:
+                return "Ej. 10"
+            if tokens & {"monto", "valor", "precio", "renta", "retribucion", "utilidad"}:
+                return "Ej. 1500"
+            return "Ej. 1000"
+        if field_type == "boolean":
+            return "Ej. Sí"
+        if "ruc" in tokens:
+            return "Ej. 20123456789"
+        if "dni" in tokens:
+            return "Ej. 12345678"
+        if "email" in tokens or "correo" in tokens:
+            return "Ej. contacto@empresa.com"
+        if "telefono" in tokens or "celular" in tokens:
+            return "Ej. +51 999 888 777"
+        if "domicilio" in tokens or "direccion" in tokens:
+            return "Ej. Av. Javier Prado 123, Lima"
+        if {"razon", "social"} <= tokens:
+            return "Ej. Inversiones Andinas S.A.C."
+        if "nombre" in tokens:
+            return "Ej. Juan Perez"
+        if "moneda" in tokens:
+            return "Ej. USD"
+        if "jurisdiccion" in tokens or ({"camara", "comercio"} <= tokens):
+            return "Ej. Lima"
+        if "plazo" in tokens or "duracion" in tokens:
+            return "Ej. 12 meses"
+        if "objeto" in tokens:
+            return "Ej. Administracion integral del hotel"
+        return f"Ej. {label}"
+
+    @staticmethod
+    def _field_tokens(*, key: str, label: str) -> set[str]:
+        normalized = unicodedata.normalize("NFD", key + " " + label)
+        normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+        normalized = re.sub(r"[^a-zA-Z0-9]+", "_", normalized).strip("_").lower()
+        return {token for token in normalized.split("_") if token}
 
 
 class TemplateContractDateMapping(BaseModel):

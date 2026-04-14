@@ -25,22 +25,61 @@ class WeasyPrintGenerator(IDocumentGenerator):
             text-align: justify;
             font-size: 11pt;
         }
-        h1 { text-align: center; text-transform: uppercase; font-size: 14pt; }
+        h1 {
+            text-align: center;
+            text-transform: uppercase;
+            font-size: 16pt;
+            margin: 0 0 18pt;
+        }
+        h2 {
+            font-size: 13.5pt;
+            margin: 18pt 0 10pt;
+            font-weight: bold;
+        }
+        h3 {
+            font-size: 12pt;
+            margin: 14pt 0 8pt;
+            font-weight: bold;
+        }
+        h4, h5, h6 {
+            font-size: 11pt;
+            margin: 12pt 0 6pt;
+            font-weight: bold;
+        }
+        p {
+            margin: 0 0 10pt;
+        }
 
-        /* Contenedor de Firmas con Flexbox */
-        .signature-container {
+        .signature-section {
+            margin-top: 56pt;
+            page-break-inside: avoid;
+        }
+        .signature-grid {
             display: flex;
             justify-content: space-between;
-            margin-top: 80px;
-            page-break-inside: avoid; /* Evita que la firma se parta entre páginas */
+            gap: 28pt;
         }
-        .sig-box {
+        .signature-card {
             width: 40%;
             text-align: center;
         }
-        .sig-line {
+        .signature-line {
             border-top: 1px solid black;
-            margin-bottom: 5px;
+            margin: 0 auto 10pt;
+            width: 85%;
+        }
+        .signature-title {
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 4pt;
+        }
+        .signature-name {
+            font-size: 10.5pt;
+            margin-bottom: 4pt;
+        }
+        .signature-meta {
+            font-size: 9.5pt;
+            color: #333;
         }
         """
 

@@ -8,7 +8,7 @@ from contractai_backend.modules.documents.domain import DocumentType
 from contractai_backend.modules.templates.api.schemas import GenerateTemplateDraftRequest, PreviewTemplateRequest, TemplateDraftResponse
 from contractai_backend.modules.templates.application.services.template_authoring_service import TemplateAuthoringService
 from contractai_backend.modules.templates.domain.entities import TemplateContent, TemplateField, TemplateFormatTable, TemplateTable
-from contractai_backend.modules.templates.domain.value_objs import TemplateFieldMode, TemplateGenerationMode, TemplateState
+from contractai_backend.modules.templates.domain.value_objs import TemplateGenerationMode, TemplateState
 from contractai_backend.modules.users.domain.value_objs import UserRole
 
 
@@ -155,7 +155,7 @@ class TestGenerateDraftFromPrompt:
             )
 
     @pytest.mark.asyncio
-    async def test_generate_draft_from_prompt_minimal_mode_reuses_auto_variables(self):
+    async def test_generate_draft_from_prompt_converts_bracket_reference_markers_to_fields(self):
         template_format_repo = AsyncMock()
         template_format_repo.get_by_document_type_and_code.return_value = _make_format()
         organization_repo = AsyncMock()
@@ -165,12 +165,8 @@ class TestGenerateDraftFromPrompt:
             name="Plantilla Empresa",
             description=None,
             content=TemplateContent(
-                body_md="# Contrato\n{{ ruc_empresa }}\n{{ representante_nombre_empresa }}\n{{ nombre_gerente }}",
-                fields=[
-                    TemplateField(key="ruc_empresa", label="RUC de La Empresa", required=True),
-                    TemplateField(key="representante_nombre_empresa", label="Nombre del Representante de La Empresa", required=True),
-                    TemplateField(key="nombre_gerente", label="Nombre del Gerente", required=True),
-                ],
+                body_md="# Contrato\n[NÚMERO DE PARTIDA EMPRESA]\n[FECHA ACUERDO DIRECTORIO]\n[CIERRE DEL DOCUMENTO]",
+                fields=[],
             ),
             warnings=[],
             source={},
@@ -182,21 +178,21 @@ class TestGenerateDraftFromPrompt:
         )
 
         draft, _ = await service.generate_draft_from_prompt(
-            request=GenerateTemplateDraftRequest(
-                format_code="base_company",
-                field_mode=TemplateFieldMode.MINIMAL,
-            ),
+            request=GenerateTemplateDraftRequest(format_code="base_company"),
             organization_id=1,
             user_role=UserRole.MANAGER,
         )
 
-        assert "{{ empleador_ruc }}" in draft.content.body_md
-        assert "{{ representante_nombre }}" in draft.content.body_md
-        assert [field.key for field in draft.content.fields] == ["nombre_gerente"]
-        assert any("variables automáticas" in warning for warning in draft.warnings)
+        assert "{{ numero_partida_empresa }}" in draft.content.body_md
+        assert "{{ fecha_acuerdo_directorio }}" in draft.content.body_md
+        assert "[CIERRE DEL DOCUMENTO]" not in draft.content.body_md
+        assert [field.key for field in draft.content.fields] == ["numero_partida_empresa", "fecha_acuerdo_directorio"]
+        assert draft.content.fields[1].type == "date"
+        assert draft.content.fields[0].placeholder == "Ej. 11012345"
+        assert draft.content.fields[1].placeholder == "Ej. 2026-12-31"
 
     @pytest.mark.asyncio
-    async def test_generate_draft_from_prompt_exact_mode_keeps_manual_fields(self):
+    async def test_generate_draft_from_prompt_keeps_manual_fields_as_detected(self):
         template_format_repo = AsyncMock()
         template_format_repo.get_by_document_type_and_code.return_value = _make_format()
         organization_repo = AsyncMock()
@@ -206,10 +202,10 @@ class TestGenerateDraftFromPrompt:
             name="Plantilla Empresa",
             description=None,
             content=TemplateContent(
-                body_md="# Contrato\n{{ ruc_empresa }}\n{{ representante_nombre_empresa }}",
+                body_md="# Contrato\n{{ contratista_ruc }}\n{{ representante_nombre_contratista }}",
                 fields=[
-                    TemplateField(key="ruc_empresa", label="RUC de La Empresa", required=True),
-                    TemplateField(key="representante_nombre_empresa", label="Nombre del Representante de La Empresa", required=True),
+                    TemplateField(key="contratista_ruc", label="RUC del Contratista", required=True),
+                    TemplateField(key="representante_nombre_contratista", label="Nombre del Representante del Contratista", required=True),
                 ],
             ),
             warnings=[],
@@ -222,17 +218,90 @@ class TestGenerateDraftFromPrompt:
         )
 
         draft, _ = await service.generate_draft_from_prompt(
-            request=GenerateTemplateDraftRequest(
-                format_code="base_company",
-                field_mode=TemplateFieldMode.EXACT,
-            ),
+            request=GenerateTemplateDraftRequest(format_code="base_company"),
             organization_id=1,
             user_role=UserRole.MANAGER,
         )
 
-        assert "{{ ruc_empresa }}" in draft.content.body_md
-        assert "{{ representante_nombre_empresa }}" in draft.content.body_md
-        assert [field.key for field in draft.content.fields] == ["ruc_empresa", "representante_nombre_empresa"]
+        assert "{{ contratista_ruc }}" in draft.content.body_md
+        assert "{{ representante_nombre_contratista }}" in draft.content.body_md
+        assert [field.key for field in draft.content.fields] == ["contratista_ruc", "representante_nombre_contratista"]
+
+    @pytest.mark.asyncio
+    async def test_generate_draft_from_prompt_canonicalizes_employer_aliases_to_auto_variables(self):
+        template_format_repo = AsyncMock()
+        template_format_repo.get_by_document_type_and_code.return_value = _make_format()
+        organization_repo = AsyncMock()
+        organization_repo.get_organization_data.return_value = {}
+        draft_generator = AsyncMock()
+        draft_generator.generate.return_value = TemplateDraftResponse(
+            name="Plantilla Empresa",
+            description=None,
+            content=TemplateContent(
+                body_md="# Contrato\n{{ representante_nombre_empresa }}\n{{ representante_dni_empresa }}\n{{ empleador_tipo_sociedad }}",
+                fields=[
+                    TemplateField(key="representante_nombre_empresa", label="Nombre del Representante de La Empresa", required=True),
+                    TemplateField(key="representante_dni_empresa", label="DNI del Representante de La Empresa", required=True),
+                    TemplateField(key="empleador_tipo_sociedad", label="Tipo de Sociedad de la Empresa", required=True),
+                ],
+            ),
+            warnings=[],
+            source={},
+        )
+        service = _make_authoring_service(
+            template_format_repo=template_format_repo,
+            organization_repo=organization_repo,
+            draft_generator=draft_generator,
+        )
+
+        draft, _ = await service.generate_draft_from_prompt(
+            request=GenerateTemplateDraftRequest(format_code="base_company"),
+            organization_id=1,
+            user_role=UserRole.MANAGER,
+        )
+
+        assert "{{ representante_nombre }}" in draft.content.body_md
+        assert "{{ representante_dni }}" in draft.content.body_md
+        assert "{{ empleador_descripcion }}" in draft.content.body_md
+        assert draft.content.fields == []
+
+    @pytest.mark.asyncio
+    async def test_generate_draft_from_prompt_discards_stale_ai_warnings_after_backend_sync(self):
+        template_format_repo = AsyncMock()
+        template_format_repo.get_by_document_type_and_code.return_value = _make_format()
+        organization_repo = AsyncMock()
+        organization_repo.get_organization_data.return_value = {}
+        draft_generator = AsyncMock()
+        draft_generator.generate.return_value = TemplateDraftResponse(
+            name="Plantilla Empresa",
+            description=None,
+            content=TemplateContent(
+                body_md="# Contrato\n{{ contrato_fecha_inicio }}\n{{ contrato_fecha_fin }}",
+                fields=[
+                    TemplateField(key="contrato_fecha_inicio", label="Fecha inicio", type="date", required=True),
+                    TemplateField(key="contrato_fecha_fin", label="Fecha fin", type="date", required=True),
+                ],
+            ),
+            warnings=[
+                "La plantilla no define un mapeo de vigencia del contrato para fecha de inicio y fin.",
+                "El campo 'empleador_email' no está siendo utilizado en el cuerpo del documento.",
+            ],
+            source={},
+        )
+        service = _make_authoring_service(
+            template_format_repo=template_format_repo,
+            organization_repo=organization_repo,
+            draft_generator=draft_generator,
+        )
+
+        draft, _ = await service.generate_draft_from_prompt(
+            request=GenerateTemplateDraftRequest(format_code="base_company"),
+            organization_id=1,
+            user_role=UserRole.MANAGER,
+        )
+
+        assert draft.content.contract_date_mapping is not None
+        assert draft.warnings == []
 
     @pytest.mark.asyncio
     async def test_generate_draft_from_prompt_forces_visible_placeholders_to_required(self):
@@ -245,9 +314,9 @@ class TestGenerateDraftFromPrompt:
             name="Plantilla Empresa",
             description=None,
             content=TemplateContent(
-                body_md="# Contrato\n{{ ruc_empresa }}\n{{ monto_retribucion_mensual }}",
+                body_md="# Contrato\n{{ gerente_ruc }}\n{{ monto_retribucion_mensual }}",
                 fields=[
-                    TemplateField(key="ruc_empresa", label="RUC de La Empresa", required=False),
+                    TemplateField(key="gerente_ruc", label="RUC del Gerente", required=False),
                     TemplateField(key="monto_retribucion_mensual", label="Monto", type="number", required=False),
                 ],
             ),
@@ -267,6 +336,8 @@ class TestGenerateDraftFromPrompt:
         )
 
         assert all(field.required for field in draft.content.fields)
+        assert draft.content.fields[0].placeholder == "Ej. 20123456789"
+        assert draft.content.fields[1].placeholder == "Ej. 1500"
 
     @pytest.mark.asyncio
     async def test_preview_template_includes_operational_fields_in_mock_payload(self):
@@ -301,6 +372,7 @@ class TestGenerateDraftFromPrompt:
 
         assert response.resolved_payload["start_date"] == "2026-01-01"
         assert response.resolved_payload["end_date"] == "2026-01-01"
+        assert 'data-generated-signatures="true"' in response.markdown
 
 
 class TestPublishTemplate:

@@ -15,6 +15,7 @@ from ...domain.value_objs import TemplateState
 from ..repositories.base_generate import IDocumentGenerator
 from ..repositories.base_relational import IDocumentModuleAdapter, IOrganizationRepository, ITemplateFormatRepository, ITemplateRepository
 from ..repositories.base_render import ITemplateRenderer
+from .rendered_contract_formatter import RenderedContractFormatter
 from .template_content_synchronizer import TemplateContentSynchronizer
 
 
@@ -36,6 +37,7 @@ class TemplateService:
         self.document_generator = document_generator
         self.document_adapter = document_adapter
         self.content_synchronizer = TemplateContentSynchronizer()
+        self.rendered_contract_formatter = RenderedContractFormatter()
 
     async def generate_contract(
         self,
@@ -86,6 +88,7 @@ class TemplateService:
             self._validate_required_fields(template_content=template_content, payload=master_dict)
         body_md = template_content.body_md if template_content is not None else template.content
         md_final = await self.renderer.render(template_md=body_md, payload=master_dict)
+        md_final = self.rendered_contract_formatter.format(md_final, document_type=template.document_type, payload=master_dict)
 
         pdf_bytes = await self.document_generator.generate_pdf(markdown_content=md_final)
         cliente_nombre = form_data.get("trabajador_nombre") or form_data.get("cliente_nombre") or "cliente"
@@ -128,7 +131,7 @@ class TemplateService:
             return None
 
         template_format = await self.template_format_repo.get_by_id(template.template_format_id) if template.template_format_id else None
-        return build_template_response(template, template_format=template_format)
+        return self._build_synced_template_response(template, template_format=template_format)
 
     async def list_templates(
         self,
@@ -162,7 +165,20 @@ class TemplateService:
                 and format_map[template.template_format_id].format_code == normalized_format_code
             ]
 
-        return [build_template_response(template, template_format=format_map.get(template.template_format_id)) for template in templates]
+        return [self._build_synced_template_response(template, template_format=format_map.get(template.template_format_id)) for template in templates]
+
+    def _build_synced_template_response(
+        self,
+        template: TemplateTable,
+        *,
+        template_format: TemplateFormatTable | None,
+    ) -> TemplateResponse:
+        """Serializes templates after normalizing derived placeholders."""
+        if isinstance(template.content, dict):
+            template = template.model_copy(
+                update={"content": self.content_synchronizer.sync(TemplateContent.model_validate(template.content)).model_dump(mode="python")}
+            )
+        return build_template_response(template, template_format=template_format)
 
     async def _load_format_map(self, templates: Sequence[TemplateTable]) -> dict[int, TemplateFormatTable]:
         """Loads template formats referenced by the provided templates."""

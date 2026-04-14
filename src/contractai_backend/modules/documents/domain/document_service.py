@@ -38,7 +38,13 @@ def validate_service_periods(
     """Ensures service dates stay inside the document range."""
     for item in service_items:
         if item.start_date < document_start_date or item.end_date > document_end_date:
-            raise DocumentValidationError(message=f"El servicio {item.service_id} debe tener fechas dentro del rango del contrato.")
+            raise DocumentValidationError(
+                message=(
+                    f"El servicio {item.service_id} debe tener fechas dentro del rango del contrato "
+                    f"(contrato: {document_start_date.isoformat()} a {document_end_date.isoformat()}, "
+                    f"servicio: {item.start_date.isoformat()} a {item.end_date.isoformat()})."
+                )
+            )
 
 
 class DocumentServiceTable(BaseTable, table=True):
