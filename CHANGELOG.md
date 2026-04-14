@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.31.2 (2026-04-14)
+
+### Bug Fixes
+
+- Dehardcode azure openai settings
+  ([`4d5a674`](https://github.com/NickSalA/ContractAI-Backend/commit/4d5a674937bd1ff77f225da7e51e05f5e9fda545))
+
+
 ## v0.31.1 (2026-04-14)
 
 ### Bug Fixes
