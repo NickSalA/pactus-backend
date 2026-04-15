@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.33.0 (2026-04-15)
+
+### Features
+
+- Enhance template processing with raw field issue detection and placeholder normalization
+  ([`2729e98`](https://github.com/NickSalA/ContractAI-Backend/commit/2729e98e491b3bc4e6ecd9147e3b246117ad5c92))
+
+
 ## v0.32.0 (2026-04-15)
 
 ### Bug Fixes
