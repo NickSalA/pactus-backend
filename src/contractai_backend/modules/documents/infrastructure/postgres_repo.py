@@ -17,6 +17,7 @@ from ....core.infrastructure.base import PostgresBaseRepository
 from ..application.dto import ContractQueryDTO
 from ..application.repositories import DocumentCommandRepository, DocumentQueryRepository
 from ..domain import DocumentServiceTable, DocumentTable
+from ..domain.value_objs import DocumentState
 from ..domain.exceptions import DocumentDatabaseError, DocumentDatabaseUnavailableError
 from ....shared.infrastructure.sqlmodel_utils import RelationalHelpersMixin
 
@@ -79,6 +80,18 @@ class SQLModelDocumentRepository(
                 col(DocumentTable.end_date) < today,
                 col(DocumentTable.start_date) > today,
             )
+        )
+
+    @staticmethod
+    def _apply_chatbot_ready_contract_filters(statement):
+        return (
+            statement.where(col(DocumentTable.name).is_not(None))
+            .where(col(DocumentTable.client).is_not(None))
+            .where(col(DocumentTable.type).is_not(None))
+            .where(col(DocumentTable.start_date).is_not(None))
+            .where(col(DocumentTable.end_date).is_not(None))
+            .where(DocumentTable.form_data["value"].astext.is_not(None))
+            .where(DocumentTable.form_data["currency"].astext.is_not(None))
         )
 
     @staticmethod
@@ -255,7 +268,12 @@ class SQLModelDocumentRepository(
             raise DocumentDatabaseError() from e
 
     async def search_contract_access_candidates(
-        self, organization_id: int, query: str, limit: int = 10
+        self,
+        organization_id: int,
+        query: str,
+        limit: int = 10,
+        chatbot_ready_only: bool = False,
+        state: str | None = None,
     ) -> Sequence[dict[str, str | int | float | None]]:
         """Searches real contracts by counterparty name for access decisions."""
         normalized_query = self._normalize_lookup_text(query)
@@ -275,6 +293,10 @@ class SQLModelDocumentRepository(
                 .where(col(DocumentTable.client).is_not(None))
                 .where(col(DocumentTable.type).is_not(None))
             )
+            if chatbot_ready_only:
+                statement = self._apply_chatbot_ready_contract_filters(statement)
+            if state is not None:
+                statement = statement.where(col(DocumentTable.state) == state)
 
             result = await self.session.exec(statement=statement)
             candidates: list[dict[str, str | int | float | None]] = []
@@ -335,7 +357,13 @@ class SQLModelDocumentRepository(
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
 
-    async def search_contracts(self, organization_id: int, query: ContractQueryDTO, limit: int | None = None) -> Sequence[DocumentTable]:
+    async def search_contracts(
+        self,
+        organization_id: int,
+        query: ContractQueryDTO,
+        limit: int | None = None,
+        chatbot_ready_only: bool = False,
+    ) -> Sequence[DocumentTable]:
         """Obtiene contratos aplicando filtros estructurados."""
         try:
             statement = select(DocumentTable)
@@ -344,6 +372,8 @@ class SQLModelDocumentRepository(
                 organization_id=organization_id,
                 filters=query,
             )
+            if chatbot_ready_only:
+                statement = self._apply_chatbot_ready_contract_filters(statement)
             statement = self._apply_contract_sorting(statement=statement, query=query)
 
             if limit is not None:
@@ -361,6 +391,7 @@ class SQLModelDocumentRepository(
         organization_id: int,
         query: ContractQueryDTO,
         limit: int | None = None,
+        chatbot_ready_only: bool = False,
     ) -> Sequence[dict[str, object]]:
         """Construye un ranking agregado por cliente y moneda."""
         try:
@@ -384,6 +415,8 @@ class SQLModelDocumentRepository(
                 organization_id=organization_id,
                 filters=query,
             )
+            if chatbot_ready_only:
+                statement = self._apply_chatbot_ready_contract_filters(statement)
             statement = statement.group_by(client_field, currency_field)
             statement = self._apply_client_ranking_sorting(
                 statement=statement,
@@ -418,7 +451,7 @@ class SQLModelDocumentRepository(
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
 
-    async def count_contracts(self, organization_id: int, query: ContractQueryDTO) -> int:
+    async def count_contracts(self, organization_id: int, query: ContractQueryDTO, chatbot_ready_only: bool = False) -> int:
         """Cuenta contratos aplicando filtros estructurados."""
         try:
             statement = select(func.count()).select_from(DocumentTable)
@@ -427,6 +460,8 @@ class SQLModelDocumentRepository(
                 organization_id=organization_id,
                 filters=query,
             )
+            if chatbot_ready_only:
+                statement = self._apply_chatbot_ready_contract_filters(statement)
             result = await self.session.exec(statement=statement)
             count = result.one()
             return int(count or 0)

@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v0.31.2 (2026-04-14)
+
+### Bug Fixes
+
+- Dehardcode azure openai settings
+  ([`4d5a674`](https://github.com/NickSalA/ContractAI-Backend/commit/4d5a674937bd1ff77f225da7e51e05f5e9fda545))
+
+
+## v0.31.1 (2026-04-14)
+
+### Bug Fixes
+
+- Change extraction process and chatbot capabilities
+  ([`31ad42e`](https://github.com/NickSalA/ContractAI-Backend/commit/31ad42e4669249b8e0cc7af7814270b31afab7b0))
+
+
 ## v0.31.0 (2026-04-11)
 
 ### Features

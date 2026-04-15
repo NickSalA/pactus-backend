@@ -210,6 +210,81 @@ async def test_graph_allows_named_party_lookup_for_hr_and_restricts_to_resolved_
 
 
 @pytest.mark.asyncio
+async def test_graph_resolves_job_title_queries_to_named_labor_contract() -> None:
+    @tool
+    async def party_lookup_tool(party_name: str, limit: int = 5) -> str:
+        """Returns a stored named-party match for job-title permission tests."""
+        return json.dumps(
+            {
+                "status": "success",
+                "query": party_name,
+                "matches": [
+                    {
+                        "document_id": 68,
+                        "name": "Contrato Estándar de Trabajador - Nick Salcedo",
+                        "client": "Nick Emanuel Salcedo Alfaro",
+                        "document_type": "LABOR",
+                        "file_name": "contrato_nick_emanuel_salcedo_alfaro.pdf",
+                        "match_score": 0.97,
+                    }
+                ],
+                "matched_document_types": ["LABOR"],
+                "match_count": 1,
+            },
+            ensure_ascii=True,
+        )
+
+    graph, decision_ainvoke, conversation_ainvoke = _make_graph(
+        a1_route="a2_permissions",
+        a1_response=None,
+        a3_response="El puesto es Analista.",
+        permission_tools=[party_lookup_tool],
+    )
+
+    result = await graph.ainvoke(
+        {
+            "messages": [HumanMessage(content="Cual es el puesto de trabajo de Nick Salcedo?")],
+            "user_context": {"organization_id": 1, "role": "HR", "allowed_document_types": ["LABOR"]},
+        }
+    )
+
+    assert result["messages"][-1].content == "El puesto es Analista."
+    assert decision_ainvoke.await_count == 1
+    conversation_ainvoke.assert_awaited_once()
+    system_messages = conversation_ainvoke.await_args.args[0]
+    assert any("document_ids=[68]" in message.content for message in system_messages if hasattr(message, "content"))
+
+
+@pytest.mark.asyncio
+async def test_graph_passes_explicit_state_to_named_party_lookup() -> None:
+    captured_payloads: list[dict[str, object]] = []
+
+    @tool
+    async def party_lookup_tool(party_name: str, limit: int = 5, state: str | None = None) -> str:
+        """Captures lookup payloads for permission tests."""
+        captured_payloads.append({"party_name": party_name, "limit": limit, "state": state})
+        return json.dumps(
+            {"status": "no_match", "query": party_name, "matches": [], "matched_document_types": [], "match_count": 0}, ensure_ascii=True
+        )
+
+    graph, _, conversation_ainvoke = _make_graph(
+        a1_route="a2_permissions",
+        a1_response=None,
+        permission_tools=[party_lookup_tool],
+    )
+
+    await graph.ainvoke(
+        {
+            "messages": [HumanMessage(content="Hablame del contrato de Nick Salcedo, es borrador")],
+            "user_context": {"organization_id": 1, "role": "HR", "allowed_document_types": ["LABOR"]},
+        }
+    )
+
+    assert captured_payloads == [{"party_name": "nick salcedo", "limit": 10, "state": "DRAFT"}]
+    conversation_ainvoke.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_graph_clarifies_only_with_allowed_matches_when_lookup_is_ambiguous() -> None:
     @tool
     async def party_lookup_tool(party_name: str, limit: int = 5) -> str:

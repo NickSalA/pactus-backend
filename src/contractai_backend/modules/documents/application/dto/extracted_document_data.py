@@ -30,8 +30,11 @@ class ExtractedDocumentData(BaseModel):
 
     name: str | None = None
     client: str | None = None
+    worker_name: str | None = None
     type: DocumentType | None = None
     start_date: date | None = None
     end_date: date | None = None
+    labor_monthly_value: float | None = None
+    labor_monthly_currency: CurrencyType | None = None
     form_data: ExtractedDocumentFormData = Field(default_factory=ExtractedDocumentFormData)
     service_items: list[ExtractedDocumentServiceItem] = Field(default_factory=list)

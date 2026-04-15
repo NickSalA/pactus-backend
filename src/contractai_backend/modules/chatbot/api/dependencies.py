@@ -24,6 +24,7 @@ from ..infrastructure.agent import (
     build_party_lookup_tool,
     get_llm,
 )
+from ....modules.documents.domain.value_objs import DocumentState, DocumentType
 
 
 async def get_conversation_service(session: Annotated[AsyncSession, Depends(get_session)]) -> ConversationService:
@@ -50,15 +51,26 @@ async def get_llm_provider(
     service_catalog_repo = SQLModelServiceRepository(session=session)
     contract_query_service = ContractQueryService(sql_repo=contract_repo, service_repo=service_catalog_repo)
     readable_document_types = get_readable_document_types(current_user.role)
-
-    allowed_document_ids: set[int] | None = None
+    document_filters = {"organization_id": current_user.organization_id}
+    documents = await contract_repo.get_all(filters=document_filters)
     if readable_document_types is not None:
-        allowed_document_ids = set()
-        for document_type in readable_document_types:
-            documents = await contract_repo.get_all(filters={"organization_id": current_user.organization_id, "type": document_type})
-            allowed_document_ids.update(document.id for document in documents if document.id is not None)
+        documents = [document for document in documents if document.type is not None and DocumentType(document.type) in readable_document_types]
 
-    bc_tool = build_bc_tool(repo=vector_repo, user_role=current_user.role, allowed_document_ids=allowed_document_ids)
+    default_document_ids = {
+        document.id for document in documents if document.id is not None and ContractQueryService.is_chatbot_visible_contract(document=document)
+    }
+    document_ids_by_state: dict[DocumentState, set[int]] = {}
+    for document in documents:
+        if document.id is None or document.state is None or not ContractQueryService.has_required_chatbot_contract_data(document=document):
+            continue
+        document_ids_by_state.setdefault(DocumentState(document.state), set()).add(document.id)
+
+    bc_tool = build_bc_tool(
+        repo=vector_repo,
+        user_role=current_user.role,
+        allowed_document_ids=default_document_ids,
+        document_ids_by_state=document_ids_by_state,
+    )
     party_lookup_tool = build_party_lookup_tool(repo=contract_repo, organization_id=current_user.organization_id)
     contracts_query_tool = build_contracts_query_tool(
         service=contract_query_service,

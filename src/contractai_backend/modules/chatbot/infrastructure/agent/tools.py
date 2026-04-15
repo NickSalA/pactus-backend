@@ -1,9 +1,11 @@
 """Tools personalizados para el agente de chatbot, integrando la búsqueda en la base de conocimientos contractual."""
 
 import json
+import re
 from collections.abc import Iterable
 from datetime import datetime
 from typing import Any, Protocol
+import unicodedata
 
 from langchain_core.tools import tool
 from pydantic import ValidationError
@@ -23,7 +25,27 @@ class CounterpartyLookupRepository(Protocol):
         organization_id: int,
         query: str,
         limit: int = 10,
+        chatbot_ready_only: bool = False,
+        state: str | None = None,
     ) -> list[dict[str, Any]] | tuple[dict[str, Any], ...]: ...
+
+
+STATE_PATTERNS: tuple[tuple[DocumentState, tuple[str, ...]], ...] = (
+    (DocumentState.PENDING_SIGNATURE, (r"\bpendiente(?:s)? de firma\b", r"\bpor firmar\b", r"\bpending signature\b")),
+    (DocumentState.EXPIRING_SOON, (r"\bpor vencer\b", r"\bpor vencerse\b", r"\bexpira(?:n)? pronto\b", r"\bexpiring soon\b")),
+    (DocumentState.EXPIRED, (r"\bvencid(?:o|a|os|as)\b", r"\bexpirad(?:o|a|os|as)\b", r"\bexpired\b")),
+    (DocumentState.TERMINATED, (r"\bterminad(?:o|a|os|as)\b", r"\bresuelt(?:o|a|os|as)\b", r"\bterminated\b")),
+    (DocumentState.DRAFT, (r"\bborrador(?:es)?\b", r"\bdrafts?\b")),
+    (DocumentState.ACTIVE, (r"\bactive\b", r"\bactiv(?:o|a|os|as)\b", r"\bvigente(?:s)?\b")),
+)
+
+
+def resolve_requested_document_state(message: str) -> DocumentState | None:
+    normalized = unicodedata.normalize("NFKD", message or "").encode("ascii", "ignore").decode("ascii").lower()
+    for document_state, patterns in STATE_PATTERNS:
+        if any(re.search(pattern, normalized) for pattern in patterns):
+            return document_state
+    return None
 
 
 def _resolve_scoped_document_ids(document_ids: list[int] | None, allowed_document_ids: frozenset[int] | None) -> list[int] | None:
@@ -39,10 +61,16 @@ def _resolve_scoped_document_ids(document_ids: list[int] | None, allowed_documen
     return [document_id for document_id in document_ids if document_id in allowed_document_ids]
 
 
-def build_bc_tool(repo: VectorRepository, user_role: UserRole | None, allowed_document_ids: Iterable[int] | None = None):
+def build_bc_tool(
+    repo: VectorRepository,
+    user_role: UserRole | None,
+    allowed_document_ids: Iterable[int] | None = None,
+    document_ids_by_state: dict[DocumentState, Iterable[int]] | None = None,
+):
     """Construye una herramienta para el agente, que utiliza el repositorio vectorial para buscar información en la base de conocimientos."""
 
     scoped_document_ids = None if allowed_document_ids is None else frozenset(allowed_document_ids)
+    scoped_document_ids_by_state = {document_state: frozenset(document_ids) for document_state, document_ids in (document_ids_by_state or {}).items()}
 
     @tool(
         name_or_callable="bc_tool",
@@ -59,10 +87,15 @@ def build_bc_tool(repo: VectorRepository, user_role: UserRole | None, allowed_do
         if access_decision.is_denied:
             return ROLE_PERMISSION_DENIED_RESPONSE
 
-        if scoped_document_ids is not None and not scoped_document_ids:
+        requested_state = resolve_requested_document_state(query)
+        applicable_document_ids = (
+            scoped_document_ids_by_state.get(requested_state, frozenset()) if requested_state is not None else scoped_document_ids
+        )
+
+        if applicable_document_ids is not None and not applicable_document_ids:
             return ""
 
-        filtered_document_ids = _resolve_scoped_document_ids(document_ids=document_ids, allowed_document_ids=scoped_document_ids)
+        filtered_document_ids = _resolve_scoped_document_ids(document_ids=document_ids, allowed_document_ids=applicable_document_ids)
         if document_ids is not None and filtered_document_ids == []:
             return ROLE_PERMISSION_DENIED_RESPONSE
 
@@ -82,7 +115,7 @@ def build_party_lookup_tool(repo: CounterpartyLookupRepository, organization_id:
             "No responde contenido contractual; solo resuelve contratos candidatos para COMPANY o LABOR."
         ),
     )
-    async def party_lookup_tool(party_name: str, limit: int = 5) -> str:
+    async def party_lookup_tool(party_name: str, limit: int = 5, state: DocumentState | None = None) -> str:
         normalized_party_name = " ".join(party_name.strip().split())
         if not normalized_party_name:
             return json.dumps(
@@ -93,7 +126,16 @@ def build_party_lookup_tool(repo: CounterpartyLookupRepository, organization_id:
                 ensure_ascii=True,
             )
 
-        matches = list(await repo.search_contract_access_candidates(organization_id=organization_id, query=normalized_party_name, limit=limit))
+        resolved_state = state or DocumentState.ACTIVE
+        matches = list(
+            await repo.search_contract_access_candidates(
+                organization_id=organization_id,
+                query=normalized_party_name,
+                limit=limit,
+                chatbot_ready_only=True,
+                state=resolved_state,
+            )
+        )
         matched_document_types = sorted({document_type for item in matches if (document_type := item.get("document_type")) is not None})
         result = {
             "status": "success" if matches else "no_match",

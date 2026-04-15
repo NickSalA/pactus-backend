@@ -177,9 +177,18 @@ class TestCreateDocument:
 
     @pytest.mark.asyncio
     async def test_create_document_autofills_missing_fields_from_extraction(self):
-        saved = _make_doc(name="Contrato extraido", client="Cliente extraido", doc_type=DocumentType.LABOR, state=DocumentState.DRAFT)
+        saved = _make_doc(
+            name="Contrato Estándar de Trabajador - Ana Perez",
+            client="Ana Perez",
+            doc_type=DocumentType.LABOR,
+            state=DocumentState.DRAFT,
+        )
         updated = _make_doc(
-            file_path="docs/1/file.pdf", name="Contrato extraido", client="Cliente extraido", doc_type=DocumentType.LABOR, state=DocumentState.DRAFT
+            file_path="docs/1/file.pdf",
+            name="Contrato Estándar de Trabajador - Ana Perez",
+            client="Ana Perez",
+            doc_type=DocumentType.LABOR,
+            state=DocumentState.DRAFT,
         )
 
         sql_repo = AsyncMock()
@@ -194,9 +203,67 @@ class TestCreateDocument:
         structured_extractor = AsyncMock()
         structured_extractor.extract.return_value = ExtractedDocumentData(
             name="Contrato extraido",
-            client="Cliente extraido",
+            client="Institucion Convenio SAC",
+            worker_name="Ana Perez",
             type=DocumentType.LABOR,
-            form_data=ExtractedDocumentFormData(value=1200.0, currency=CurrencyType.USD),
+            labor_monthly_value=1200.0,
+            labor_monthly_currency=CurrencyType.USD,
+            form_data=ExtractedDocumentFormData(value=24000.0, currency=CurrencyType.USD),
+        )
+
+        storage_repo = AsyncMock()
+        storage_repo.upload_file.return_value = "docs/1/file.pdf"
+
+        service = _make_service(
+            sql_repo=sql_repo,
+            extractor=extractor,
+            structured_extractor=structured_extractor,
+            storage_repo=storage_repo,
+        )
+
+        await service.create_document(_create_draft_request(), _file_request(), organization_id=1)
+
+        saved_entity = sql_repo.save.await_args.kwargs["entity"]
+        assert saved_entity.name == "Contrato Estándar de Trabajador - Ana Perez"
+        assert saved_entity.client == "Ana Perez"
+        assert saved_entity.type == DocumentType.LABOR
+        assert saved_entity.form_data["value"] == 1200.0
+        assert saved_entity.form_data["currency"] == "USD"
+        assert saved_entity.state == DocumentState.DRAFT
+
+    @pytest.mark.asyncio
+    async def test_create_document_labor_uses_nulls_when_worker_or_monthly_pay_are_not_explicit(self):
+        saved = _make_doc(
+            name="Contrato extraido",
+            client=None,
+            doc_type=DocumentType.LABOR,
+            state=DocumentState.DRAFT,
+            form_data={"value": None, "currency": None},
+        )
+        updated = _make_doc(
+            file_path="docs/1/file.pdf",
+            name="Contrato extraido",
+            client=None,
+            doc_type=DocumentType.LABOR,
+            state=DocumentState.DRAFT,
+            form_data={"value": None, "currency": None},
+        )
+
+        sql_repo = AsyncMock()
+        sql_repo.save.return_value = saved
+        sql_repo.update.return_value = updated
+        sql_repo.replace_document_services.return_value = []
+        sql_repo.get_document_services.return_value = []
+
+        extractor = AsyncMock()
+        extractor.extract.return_value = [type("Chunk", (), {"text": "contenido"})()]
+
+        structured_extractor = AsyncMock()
+        structured_extractor.extract.return_value = ExtractedDocumentData(
+            name="Contrato extraido",
+            client="Institucion Convenio SAC",
+            type=DocumentType.LABOR,
+            form_data=ExtractedDocumentFormData(value=24000.0, currency=CurrencyType.USD),
         )
 
         storage_repo = AsyncMock()
@@ -213,11 +280,64 @@ class TestCreateDocument:
 
         saved_entity = sql_repo.save.await_args.kwargs["entity"]
         assert saved_entity.name == "Contrato extraido"
-        assert saved_entity.client == "Cliente extraido"
+        assert saved_entity.client is None
         assert saved_entity.type == DocumentType.LABOR
-        assert saved_entity.form_data["value"] == 1200.0
-        assert saved_entity.form_data["currency"] == "USD"
-        assert saved_entity.state == DocumentState.DRAFT
+        assert saved_entity.form_data["value"] is None
+        assert saved_entity.form_data["currency"] is None
+
+    @pytest.mark.asyncio
+    async def test_create_document_company_uses_standard_company_contract_name_from_client(self):
+        saved = _make_doc(
+            name="Contrato Estándar de Empresa - Nova Gestión Integral Académica S.A.C.",
+            client="Nova Gestión Integral Académica S.A.C.",
+            doc_type=DocumentType.COMPANY,
+            state=DocumentState.DRAFT,
+        )
+        updated = _make_doc(
+            file_path="docs/1/file.pdf",
+            name="Contrato Estándar de Empresa - Nova Gestión Integral Académica S.A.C.",
+            client="Nova Gestión Integral Académica S.A.C.",
+            doc_type=DocumentType.COMPANY,
+            state=DocumentState.DRAFT,
+        )
+
+        sql_repo = AsyncMock()
+        sql_repo.save.return_value = saved
+        sql_repo.update.return_value = updated
+        sql_repo.replace_document_services.return_value = []
+        sql_repo.get_document_services.return_value = []
+
+        extractor = AsyncMock()
+        extractor.extract.return_value = [type("Chunk", (), {"text": "contenido"})()]
+
+        structured_extractor = AsyncMock()
+        structured_extractor.extract.return_value = ExtractedDocumentData(
+            name="Contrato de prestación de servicios",
+            client="Nova Gestión Integral Académica S.A.C.",
+            type=DocumentType.COMPANY,
+            start_date=date(2026, 3, 3),
+            end_date=date(2026, 8, 31),
+            form_data=ExtractedDocumentFormData(value=22900.0, currency=CurrencyType.PEN),
+        )
+
+        storage_repo = AsyncMock()
+        storage_repo.upload_file.return_value = "docs/1/file.pdf"
+
+        service = _make_service(
+            sql_repo=sql_repo,
+            extractor=extractor,
+            structured_extractor=structured_extractor,
+            storage_repo=storage_repo,
+        )
+
+        await service.create_document(_create_draft_request(), _file_request(), organization_id=1)
+
+        saved_entity = sql_repo.save.await_args.kwargs["entity"]
+        assert saved_entity.name == "Contrato Estándar de Empresa - Nova Gestión Integral Académica S.A.C."
+        assert saved_entity.client == "Nova Gestión Integral Académica S.A.C."
+        assert saved_entity.type == DocumentType.COMPANY
+        assert saved_entity.form_data["value"] == 22900.0
+        assert saved_entity.form_data["currency"] == "PEN"
 
     @pytest.mark.asyncio
     async def test_create_document_manual_fields_override_extraction(self):
@@ -762,8 +882,29 @@ class TestDeleteDocument:
         result = await service.delete_document(1, organization_id=1)
 
         assert result is True
-        vector_repo.delete_vectors.assert_called_once()
+        assert vector_repo.delete_vectors.await_args_list == [
+            ((), {"index_name": "contracts_index", "document_id": 1}),
+            ((), {"index_name": "drive_contracts_index", "document_id": 1}),
+        ]
         storage_repo.delete_file.assert_called_once_with(path=doc.file_path)
+
+    @pytest.mark.asyncio
+    async def test_delete_document_cleans_both_known_indexes_even_when_drive_is_primary(self):
+        doc = _make_doc()
+        sql_repo = AsyncMock()
+        sql_repo.get_by_id.return_value = doc
+        sql_repo.delete.return_value = True
+        vector_repo = AsyncMock()
+        storage_repo = AsyncMock()
+
+        service = _make_service(sql_repo=sql_repo, vector_repo=vector_repo, storage_repo=storage_repo)
+        result = await service.delete_document(1, organization_id=1, index_name="drive_contracts_index")
+
+        assert result is True
+        assert vector_repo.delete_vectors.await_args_list == [
+            ((), {"index_name": "drive_contracts_index", "document_id": 1}),
+            ((), {"index_name": "contracts_index", "document_id": 1}),
+        ]
 
     @pytest.mark.asyncio
     async def test_delete_document_not_found_raises(self):
@@ -819,7 +960,11 @@ class TestContractQueryService:
         assert result["status"] == "success"
         assert result["count"] == 2
         assert result["filters_applied"]["currency"] == "USD"
-        sql_repo.count_contracts.assert_any_call(organization_id=1, query=ContractQueryDTO(operation="count"))
+        sql_repo.count_contracts.assert_any_call(
+            organization_id=1,
+            query=ContractQueryDTO(operation="count", state=DocumentState.ACTIVE),
+            chatbot_ready_only=True,
+        )
         sql_repo.count_contracts.assert_any_call(
             organization_id=1,
             query=ContractQueryDTO(
@@ -828,7 +973,9 @@ class TestContractQueryService:
                 currency="USD",
                 period_start=date(2024, 1, 1),
                 period_end=date(2024, 3, 31),
+                state=DocumentState.ACTIVE,
             ),
+            chatbot_ready_only=True,
         )
 
     @pytest.mark.asyncio
@@ -852,8 +999,9 @@ class TestContractQueryService:
         assert result["returned_items"] == 1
         sql_repo.search_contracts.assert_called_once_with(
             organization_id=1,
-            query=ContractQueryDTO(operation="list", client="Cliente", limit=5),
+            query=ContractQueryDTO(operation="list", client="Cliente", limit=5, state=DocumentState.ACTIVE),
             limit=5,
+            chatbot_ready_only=True,
         )
 
     @pytest.mark.asyncio
@@ -878,6 +1026,7 @@ class TestContractQueryService:
 
         assert result["items"][0]["is_currently_active"] is True
         assert result["filters_applied"]["currently_active"] is True
+        assert result["filters_applied"]["state"] == DocumentState.ACTIVE
 
     @pytest.mark.asyncio
     async def test_returns_client_ranking(self):
@@ -899,28 +1048,51 @@ class TestContractQueryService:
         assert result["items"][0]["contracts_count"] == 3
         sql_repo.rank_contracts_by_client.assert_called_once_with(
             organization_id=1,
-            query=ContractQueryDTO(operation="ranking", currently_active=True, limit=10),
+            query=ContractQueryDTO(operation="ranking", currently_active=True, limit=10, state=DocumentState.ACTIVE),
             limit=10,
+            chatbot_ready_only=True,
         )
 
     @pytest.mark.asyncio
-    async def test_lists_contracts_with_nullable_top_level_fields(self):
+    async def test_defaults_chatbot_contract_queries_to_active_state(self):
         sql_repo = AsyncMock()
         sql_repo.count_contracts.side_effect = [1, 1]
-        sql_repo.search_contracts.return_value = [
-            _make_doc(name=None, client=None, doc_type=None, start_date=None, end_date=None, state=DocumentState.DRAFT)
-        ]
+        sql_repo.search_contracts.return_value = [_make_doc()]
         sql_repo.get_document_services_by_document_ids.return_value = {1: []}
         sql_repo.get_services_by_ids.return_value = []
         service = _make_contract_query_service(sql_repo=sql_repo)
 
         result = await service.run_query(organization_id=1, query=ContractQueryDTO(operation="list"))
 
-        assert result["items"][0]["name"] is None
-        assert result["items"][0]["client"] is None
-        assert result["items"][0]["start_date"] is None
-        assert result["items"][0]["end_date"] is None
-        assert result["items"][0]["is_currently_active"] is False
+        assert result["filters_applied"]["state"] == DocumentState.ACTIVE
+        sql_repo.search_contracts.assert_called_once_with(
+            organization_id=1,
+            query=ContractQueryDTO(operation="list", state=DocumentState.ACTIVE),
+            limit=20,
+            chatbot_ready_only=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_respects_explicit_state_for_chatbot_contract_queries(self):
+        sql_repo = AsyncMock()
+        sql_repo.count_contracts.side_effect = [1, 1]
+        sql_repo.search_contracts.return_value = [_make_doc(state=DocumentState.DRAFT)]
+        sql_repo.get_document_services_by_document_ids.return_value = {1: []}
+        sql_repo.get_services_by_ids.return_value = []
+        service = _make_contract_query_service(sql_repo=sql_repo)
+
+        result = await service.run_query(
+            organization_id=1,
+            query=ContractQueryDTO(operation="list", state=DocumentState.DRAFT),
+        )
+
+        assert result["filters_applied"]["state"] == DocumentState.DRAFT
+        sql_repo.search_contracts.assert_called_once_with(
+            organization_id=1,
+            query=ContractQueryDTO(operation="list", state=DocumentState.DRAFT),
+            limit=20,
+            chatbot_ready_only=True,
+        )
 
     @pytest.mark.asyncio
     async def test_denies_queries_for_unreadable_document_type(self):
@@ -955,8 +1127,9 @@ class TestContractQueryService:
         assert result["filters_applied"]["document_type"] == DocumentType.LABOR
         sql_repo.search_contracts.assert_called_once_with(
             organization_id=1,
-            query=ContractQueryDTO(operation="list", document_type=DocumentType.LABOR),
+            query=ContractQueryDTO(operation="list", document_type=DocumentType.LABOR, state=DocumentState.ACTIVE),
             limit=20,
+            chatbot_ready_only=True,
         )
 
 
