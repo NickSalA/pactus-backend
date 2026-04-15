@@ -2,6 +2,49 @@
 
 <!-- version list -->
 
+## v0.32.0 (2026-04-15)
+
+### Bug Fixes
+
+- Update configuration to use placeholders for sensitive keys and disable secret retrieval
+  ([`4cdc340`](https://github.com/NickSalA/ContractAI-Backend/commit/4cdc340d5e0f0b83be79a4fafdb859365918df39))
+
+- Update CORS settings to allow all origins and format CORS_ORIGINS list
+  ([`b29bbf6`](https://github.com/NickSalA/ContractAI-Backend/commit/b29bbf6864c0c5d6c86d785838b8efc2c7696353))
+
+- Update query parameters to use None as default for template format endpoints
+  ([`5e35221`](https://github.com/NickSalA/ContractAI-Backend/commit/5e3522196d00a1f2227bed911cffa17b4ce8edb7))
+
+### Features
+
+- Add organization context to file uploads
+  ([`cd7e341`](https://github.com/NickSalA/ContractAI-Backend/commit/cd7e34175837638d01517935b445ad7eab90ce7f))
+
+- Add publish method to ITemplateRepository and implement in SQLModelTemplateRepository
+  ([`ac77e13`](https://github.com/NickSalA/ContractAI-Backend/commit/ac77e13b472d8f06333950ef1e4e693ec8734cbd))
+
+- Add support for time fields and enhance template processing with new placeholder normalization
+  ([`0795ba6`](https://github.com/NickSalA/ContractAI-Backend/commit/0795ba6a792e043f514077434caad2e2952082e1))
+
+- Enhance template authoring service with validation retries and scoring for classifier patterns
+  ([`5d60fa9`](https://github.com/NickSalA/ContractAI-Backend/commit/5d60fa9a8b4fa24e6bad892933e9ef6bbb8fee5b))
+
+- Enhance template content synchronization and rendering
+  ([`10aa040`](https://github.com/NickSalA/ContractAI-Backend/commit/10aa040af9ce671a890955593bcc5986edf4ae99))
+
+- Enhance template generation with document type and format code support
+  ([`52be304`](https://github.com/NickSalA/ContractAI-Backend/commit/52be3045431a55c1ee2c9fbab10b78bec4d79b94))
+
+- Enhance template validation and generation with contract date mapping
+  ([`fab91a2`](https://github.com/NickSalA/ContractAI-Backend/commit/fab91a2a6e41d454eac6604c95df9a0bfd1829d4))
+
+- Implement document type-based access control and dynamic date resolution for template generation
+  ([`7d1567c`](https://github.com/NickSalA/ContractAI-Backend/commit/7d1567c7de3d9d0d9a2e8131c34f5d7ab11c370a))
+
+- Implement template format repository and integrate into template services
+  ([`7c7ccca`](https://github.com/NickSalA/ContractAI-Backend/commit/7c7ccca084d952fa4670c03e6f9b4b624641c5eb))
+
+
 ## v0.31.2 (2026-04-14)
 
 ### Bug Fixes
