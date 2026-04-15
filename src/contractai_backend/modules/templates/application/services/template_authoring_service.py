@@ -438,12 +438,17 @@ class TemplateAuthoringService:
                     draft.content.body_md,
                     reference_context.structure_sequence,
                 )
-            retryable_issues = [
-                warning
-                for warning in warnings
-                if warning.startswith("Numeración de cláusulas") or warning.startswith(self.validator.MISSING_CONTRACT_DATE_MAPPING_WARNING)
-            ] + reference_warnings
+            retryable_issues = (
+                [
+                    warning
+                    for warning in warnings
+                    if warning.startswith("Numeración de cláusulas") or warning.startswith(self.validator.MISSING_CONTRACT_DATE_MAPPING_WARNING)
+                ]
+                + reference_warnings
+                + self._extract_raw_field_issues(draft)
+            )
             if not retryable_issues:
+                self._strip_internal_draft_source(draft)
                 draft.warnings = self._merge_warnings(
                     self._filter_stale_ai_warnings(draft.warnings),
                     warnings,
@@ -452,6 +457,7 @@ class TemplateAuthoringService:
                 return draft, attempt
 
             if attempt == max_attempts - 1:
+                self._strip_internal_draft_source(draft)
                 draft.warnings = self._merge_warnings(
                     self._filter_stale_ai_warnings(draft.warnings),
                     warnings,
@@ -492,6 +498,21 @@ class TemplateAuthoringService:
                 retry_feedback = [str(exc)]
                 continue
 
+            raw_field_issues = self._extract_raw_field_issues(draft)
+            if raw_field_issues:
+                if attempt == max_attempts - 1:
+                    self._strip_internal_draft_source(draft)
+                    draft.warnings = self._merge_warnings(
+                        self._filter_stale_ai_warnings(draft.warnings),
+                        backend_warnings,
+                        preparation_warnings,
+                        raw_field_issues,
+                    )
+                    return draft, attempt
+                retry_feedback = raw_field_issues
+                continue
+
+            self._strip_internal_draft_source(draft)
             draft.warnings = self._merge_warnings(
                 self._filter_stale_ai_warnings(draft.warnings),
                 backend_warnings,
@@ -554,6 +575,17 @@ class TemplateAuthoringService:
                 merged_warnings.append(warning)
                 seen.add(warning)
         return merged_warnings
+
+    def _extract_raw_field_issues(self, draft: TemplateDraftResponse) -> list[str]:
+        """Reads raw field issues captured before backend normalization."""
+        issues = draft.source.get("field_issues")
+        if not isinstance(issues, list):
+            return []
+        return [str(issue) for issue in issues if str(issue).strip()]
+
+    def _strip_internal_draft_source(self, draft: TemplateDraftResponse) -> None:
+        """Removes internal metadata not meant for API consumers."""
+        draft.source.pop("field_issues", None)
 
     def _ensure_explicit_contract_dates(self, content: TemplateContent) -> None:
         """Requires start and end placeholders to be explicit in body_md."""

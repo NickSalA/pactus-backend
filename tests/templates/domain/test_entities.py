@@ -71,6 +71,18 @@ class TestTemplateField:
         field = TemplateField(key="gerente_ruc", label="RUC del Gerente", placeholder="Ej. 20445566777")
         assert field.placeholder == "Ej. 20445566777"
 
+    def test_replaces_instructional_placeholder_with_example(self):
+        field = TemplateField(
+            key="trabajador_dni",
+            label="DNI del Trabajador",
+            placeholder="Ingrese el número de DNI del trabajador",
+        )
+        assert field.placeholder == "Ej. 12345678"
+
+    def test_infers_literal_placeholder_for_textual_amounts(self):
+        field = TemplateField(key="monto_remuneracion_literal", label="Monto de la Remuneración en letras")
+        assert field.placeholder == "Ej. mil quinientos"
+
 
 class TestTemplateContent:
     def test_default_version(self):
