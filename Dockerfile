@@ -35,19 +35,32 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# 1. Creamos el usuario no-root (Seguridad)
+# 1. Instalamos dependencias nativas requeridas por WeasyPrint
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcairo2 \
+    libffi8 \
+    libgdk-pixbuf-2.0-0 \
+    libglib2.0-0 \
+    libharfbuzz0b \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    shared-mime-info \
+    fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Creamos el usuario no-root (Seguridad)
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# 2. Traemos el entorno virtual listo desde el builder
+# 3. Traemos el entorno virtual listo desde el builder
 COPY --from=builder /opt/venv /opt/venv
 
-# 3. Copiamos el código de la app con los permisos correctos
+# 4. Copiamos el código de la app con los permisos correctos
 COPY --chown=appuser:appuser . .
 
-# 4. Cambiamos al usuario seguro
+# 5. Cambiamos al usuario seguro
 USER appuser
 
 EXPOSE 8000
 
-# 5. Arrancamos uvicorn
+# 6. Arrancamos uvicorn
 CMD ["uvicorn", "contractai_backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -2,6 +2,97 @@
 
 <!-- version list -->
 
+## v0.33.5 (2026-04-16)
+
+### Bug Fixes
+
+- Add ProxyHeadersMiddleware to FastAPI application
+  ([`a3307cc`](https://github.com/NickSalA/ContractAI-Backend/commit/a3307cce4ea943f2f47fd54aac7863f7d7021a7d))
+
+
+## v0.33.4 (2026-04-16)
+
+### Bug Fixes
+
+- Remove ProxyHeadersMiddleware and update FastAPI initialization
+  ([`7f39d09`](https://github.com/NickSalA/ContractAI-Backend/commit/7f39d090687ba47eb2b5d5eb5c25cf0f70e9b892))
+
+
+## v0.33.3 (2026-04-16)
+
+### Bug Fixes
+
+- Add ProxyHeadersMiddleware and update FastAPI initialization
+  ([`1ba0423`](https://github.com/NickSalA/ContractAI-Backend/commit/1ba0423b395a098d6b56db40d710afb328d633e1))
+
+
+## v0.33.2 (2026-04-16)
+
+### Bug Fixes
+
+- Update Dockerfile to install native dependencies for WeasyPrint
+  ([`687200e`](https://github.com/NickSalA/ContractAI-Backend/commit/687200e5d31d6eaddbd719a7ae36c5a805a7bf70))
+
+
+## v0.33.1 (2026-04-16)
+
+### Bug Fixes
+
+- Update .dockerignore and refactor config.py for secret retrieval
+  ([`949ab2e`](https://github.com/NickSalA/ContractAI-Backend/commit/949ab2ebef1765512e85881fe6b611c69a5e9f32))
+
+
+## v0.33.0 (2026-04-15)
+
+### Features
+
+- Enhance template processing with raw field issue detection and placeholder normalization
+  ([`2729e98`](https://github.com/NickSalA/ContractAI-Backend/commit/2729e98e491b3bc4e6ecd9147e3b246117ad5c92))
+
+
+## v0.32.0 (2026-04-15)
+
+### Bug Fixes
+
+- Update configuration to use placeholders for sensitive keys and disable secret retrieval
+  ([`4cdc340`](https://github.com/NickSalA/ContractAI-Backend/commit/4cdc340d5e0f0b83be79a4fafdb859365918df39))
+
+- Update CORS settings to allow all origins and format CORS_ORIGINS list
+  ([`b29bbf6`](https://github.com/NickSalA/ContractAI-Backend/commit/b29bbf6864c0c5d6c86d785838b8efc2c7696353))
+
+- Update query parameters to use None as default for template format endpoints
+  ([`5e35221`](https://github.com/NickSalA/ContractAI-Backend/commit/5e3522196d00a1f2227bed911cffa17b4ce8edb7))
+
+### Features
+
+- Add organization context to file uploads
+  ([`cd7e341`](https://github.com/NickSalA/ContractAI-Backend/commit/cd7e34175837638d01517935b445ad7eab90ce7f))
+
+- Add publish method to ITemplateRepository and implement in SQLModelTemplateRepository
+  ([`ac77e13`](https://github.com/NickSalA/ContractAI-Backend/commit/ac77e13b472d8f06333950ef1e4e693ec8734cbd))
+
+- Add support for time fields and enhance template processing with new placeholder normalization
+  ([`0795ba6`](https://github.com/NickSalA/ContractAI-Backend/commit/0795ba6a792e043f514077434caad2e2952082e1))
+
+- Enhance template authoring service with validation retries and scoring for classifier patterns
+  ([`5d60fa9`](https://github.com/NickSalA/ContractAI-Backend/commit/5d60fa9a8b4fa24e6bad892933e9ef6bbb8fee5b))
+
+- Enhance template content synchronization and rendering
+  ([`10aa040`](https://github.com/NickSalA/ContractAI-Backend/commit/10aa040af9ce671a890955593bcc5986edf4ae99))
+
+- Enhance template generation with document type and format code support
+  ([`52be304`](https://github.com/NickSalA/ContractAI-Backend/commit/52be3045431a55c1ee2c9fbab10b78bec4d79b94))
+
+- Enhance template validation and generation with contract date mapping
+  ([`fab91a2`](https://github.com/NickSalA/ContractAI-Backend/commit/fab91a2a6e41d454eac6604c95df9a0bfd1829d4))
+
+- Implement document type-based access control and dynamic date resolution for template generation
+  ([`7d1567c`](https://github.com/NickSalA/ContractAI-Backend/commit/7d1567c7de3d9d0d9a2e8131c34f5d7ab11c370a))
+
+- Implement template format repository and integrate into template services
+  ([`7c7ccca`](https://github.com/NickSalA/ContractAI-Backend/commit/7c7ccca084d952fa4670c03e6f9b4b624641c5eb))
+
+
 ## v0.31.2 (2026-04-14)
 
 ### Bug Fixes

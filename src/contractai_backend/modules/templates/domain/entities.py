@@ -33,7 +33,7 @@ class TemplateField(BaseModel):
 
     @model_validator(mode="after")
     def populate_placeholder(self) -> "TemplateField":
-        if self.placeholder is None:
+        if self.placeholder is None or self.should_autogenerate_placeholder(self.placeholder):
             self.placeholder = self.build_placeholder(key=self.key, label=self.label, field_type=self.type)
         return self
 
@@ -44,6 +44,8 @@ class TemplateField(BaseModel):
             return "Ej. 2026-12-31"
         if field_type == "time":
             return "Ej. 09:00"
+        if tokens & {"literal", "letras"}:
+            return "Ej. mil quinientos"
         if "partida" in tokens:
             return "Ej. 11012345"
         if "registro" in tokens:
@@ -79,6 +81,24 @@ class TemplateField(BaseModel):
         if "objeto" in tokens:
             return "Ej. Administracion integral del hotel"
         return f"Ej. {label}"
+
+    @staticmethod
+    def should_autogenerate_placeholder(placeholder: str) -> bool:
+        normalized = unicodedata.normalize("NFD", placeholder)
+        normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+        normalized = normalized.strip().lower()
+        return normalized.startswith(
+            (
+                "ingrese",
+                "introduzca",
+                "escriba",
+                "seleccione",
+                "indique",
+                "coloque",
+                "digite",
+                "consigne",
+            )
+        )
 
     @staticmethod
     def _field_tokens(*, key: str, label: str) -> set[str]:

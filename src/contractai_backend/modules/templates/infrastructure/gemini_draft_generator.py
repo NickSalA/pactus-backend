@@ -1,6 +1,7 @@
 """GPT-based template draft generator."""
 
 import json
+import re
 from typing import Any
 
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -11,6 +12,8 @@ from ..application.repositories.base_draft_generator import ITemplateDraftGenera
 
 
 class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
+    TIME_PLACEHOLDER_PATTERN = re.compile(r"^(?:[01]?\d|2[0-3]):[0-5]\d(?:\s?(?:AM|PM|am|pm))?$")
+
     def __init__(self):
         """Configura el cliente Gemini."""
         self.llm = ChatGoogleGenerativeAI(
@@ -56,6 +59,13 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             content = str(raw_content)
 
         payload = self._parse_json(content)
+        field_issues = self._detect_raw_field_issues(payload)
+        if field_issues:
+            source = payload.get("source")
+            if not isinstance(source, dict):
+                source = {}
+                payload["source"] = source
+            source["field_issues"] = field_issues
         usage = self._extract_usage(response)
         if usage is not None:
             payload["usage"] = usage.model_dump()
@@ -97,6 +107,67 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             output_tokens=output_tokens,
             total_tokens=total_tokens,
         )
+
+    def _detect_raw_field_issues(self, payload: dict[str, Any]) -> list[str]:
+        """Detects semantic field issues before backend normalization hides them."""
+        content = payload.get("content")
+        if not isinstance(content, dict):
+            return []
+
+        issues: list[str] = []
+        for group_name in ("fields", "operational_fields"):
+            fields = content.get(group_name)
+            if not isinstance(fields, list):
+                continue
+            for raw_field in fields:
+                if not isinstance(raw_field, dict):
+                    continue
+                issues.extend(self._detect_single_field_issues(raw_field))
+        return issues
+
+    def _detect_single_field_issues(self, raw_field: dict[str, Any]) -> list[str]:
+        """Detects issues for one raw field definition."""
+        key = str(raw_field.get("key") or "").strip()
+        label = str(raw_field.get("label") or key).strip()
+        field_type = str(raw_field.get("type") or "text").strip().lower()
+        placeholder_value = raw_field.get("placeholder")
+        placeholder = str(placeholder_value).strip() if isinstance(placeholder_value, str) else None
+        if not key:
+            return []
+
+        tokens = self._field_tokens(key=key, label=label)
+        issues: list[str] = []
+        if tokens & {"literal", "letras"} and field_type != "text":
+            issues.append(f"El campo '{key}' debe usar type='text' porque representa un valor en letras.")
+        if tokens & {"dni", "ruc"} and field_type != "text":
+            issues.append(f"El campo '{key}' debe usar type='text' porque es un identificador, no un número para calcular.")
+        if self._looks_like_time_field(tokens=tokens, key=key, placeholder=placeholder) and field_type != "time":
+            issues.append(f"El campo '{key}' debe usar type='time' porque representa una hora puntual.")
+        if placeholder and self._is_instructional_placeholder(placeholder):
+            issues.append(f"El campo '{key}' debe usar un placeholder de ejemplo con 'Ej.' y no texto instruccional.")
+        return issues
+
+    def _field_tokens(self, *, key: str, label: str) -> set[str]:
+        """Builds normalized tokens from a field key and label."""
+        normalized = re.sub(r"[^a-z0-9]+", "_", (key + " " + label).lower()).strip("_")
+        return {token for token in normalized.split("_") if token}
+
+    def _looks_like_time_field(self, *, tokens: set[str], key: str, placeholder: str | None) -> bool:
+        """Detects whether a raw field semantically represents a time value."""
+        if placeholder and self.TIME_PLACEHOLDER_PATTERN.fullmatch(placeholder):
+            return True
+        if tokens & {"hora", "horario"} and not tokens & {"duracion", "dias", "laborales"}:
+            return True
+        if tokens & {"ingreso", "salida", "entrada"}:
+            return True
+        if "refrigerio" in tokens and tokens & {"inicio", "fin"}:
+            return True
+        return key.endswith("_time")
+
+    def _is_instructional_placeholder(self, placeholder: str) -> bool:
+        """Detects placeholders that instruct the user instead of showing an example."""
+        normalized = placeholder.strip().lower()
+        return normalized.startswith(("ingrese", "introduzca", "escriba", "seleccione", "indique", "coloque", "digite", "consigne"))
 
     def _build_prompt(
         self,
@@ -155,9 +226,11 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "Rules:\n"
             "- Use only these field types: text, number, date, time, boolean.\n"
             "- Use type 'time' for hour-only values such as hora_inicio, hora_fin, hora_ingreso or horario_refrigerio.\n"
+            "- Use type 'text' for identifiers such as DNI and RUC.\n"
+            "- Use type 'text' for fields expressed in words or letters, such as monto_literal or remuneracion_en_letras.\n"
             "- Use snake_case for keys.\n"
             "- Use Jinja placeholders like {{ key }} in body_md.\n"
-            "- Provide a useful placeholder example for every field and operational field.\n"
+            "- Provide a useful placeholder example for every field and operational field. Use examples prefixed with 'Ej.' and never instructional text like 'Ingrese', 'Seleccione' or 'Indique'.\n"
             "- Respect DOCUMENT_TYPE and FORMAT_CODE as the target base format for the draft.\n"
             "- Every placeholder must exist in fields or be one of these auto variables:\n"
             "  empleador_razon_social, empleador_ruc, empleador_domicilio, empleador_descripcion,\n"

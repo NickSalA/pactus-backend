@@ -215,9 +215,10 @@ class TemplateContentSynchronizer:
 
     def _normalize_existing_field_type(self, field: TemplateField) -> str:
         """Fixes obvious type mismatches returned by the draft generator."""
-        if field.type != "text":
-            return field.type
-        return self._infer_field_type(field.key, field.label, field.placeholder)
+        inferred_type = self._infer_field_type(field.key, field.label, field.placeholder)
+        if field.type in {"text", "number"} and inferred_type != field.type:
+            return inferred_type
+        return field.type
 
     def _merge_existing_fields(
         self,
@@ -366,6 +367,8 @@ class TemplateContentSynchronizer:
     def _infer_field_type(self, key: str, label: str, placeholder: str | None) -> str:
         """Infers a sensible field type from key and label semantics."""
         tokens = self._tokenize_field(TemplateField(key=key, label=label, placeholder=placeholder))
+        if tokens & {"literal", "letras"}:
+            return "text"
         if placeholder and self.TIME_PLACEHOLDER_PATTERN.fullmatch(placeholder.strip()):
             return "time"
         if tokens & {"hora", "horario"} and not tokens & {"duracion", "dias", "laborales"}:
