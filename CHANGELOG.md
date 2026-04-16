@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.33.2 (2026-04-16)
+
+### Bug Fixes
+
+- Update Dockerfile to install native dependencies for WeasyPrint
+  ([`687200e`](https://github.com/NickSalA/ContractAI-Backend/commit/687200e5d31d6eaddbd719a7ae36c5a805a7bf70))
+
+
 ## v0.33.1 (2026-04-16)
 
 ### Bug Fixes
