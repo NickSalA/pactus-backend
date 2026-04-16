@@ -20,7 +20,7 @@ class GeminiDocumentStructuredExtractor(DocumentStructuredExtractor):
             model=settings.OPENAI_CHAT_MODEL_NAME,
             api_key=settings.AZURE_OPENAI_API_KEY,
             azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
-            azure_deployment=settings.AZURE_OPENAI_CHAT_DEPLOYMENT,
+            azure_deployment=settings.AZURE_OPENAI_DEPLOYMENT,
             api_version=settings.AZURE_OPENAI_API_VERSION,
             temperature=0,
             max_retries=1,
