@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from contractai_backend.modules.integrations.api import integrations_router
 from contractai_backend.modules.organizations.api import organizations_router
@@ -57,6 +58,7 @@ def create() -> FastAPI:
     app.include_router(router=organizations_router, prefix="/organizations", tags=["Organizaciones"])
     app.include_router(router=notifications_router, prefix="/notifications", tags=["Notificaciones"])
     app.include_router(router=templates_router, prefix="/templates", tags=["Plantillas"])
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
     app.add_middleware(
         middleware_class=CORSMiddleware,
         allow_origins=["*"],
