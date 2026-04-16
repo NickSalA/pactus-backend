@@ -7,7 +7,6 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from contractai_backend.modules.integrations.api import integrations_router
 from contractai_backend.modules.organizations.api import organizations_router
@@ -45,7 +44,7 @@ def create() -> FastAPI:
         await app.state.http_client.aclose()
         await app.state.pool.close()
 
-    app = FastAPI(title=settings.PROJECT_NAME, version=__version__, lifespan=lifespan, redirect_slashes=False)
+    app = FastAPI(title=settings.PROJECT_NAME, version=__version__, lifespan=lifespan)
 
     app.include_router(router=documents_router, prefix="/documents", tags=["Documentos"])
     app.include_router(router=services_router, prefix="/services", tags=["Catálogo de Servicios"])
@@ -64,7 +63,6 @@ def create() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
     app.add_middleware(middleware_class=LoguruMiddleware)
 
     app.add_exception_handler(exc_class_or_status_code=AppError, handler=app_error_handler)  # ty:ignore[invalid-argument-type]
