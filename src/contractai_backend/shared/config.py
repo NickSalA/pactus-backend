@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     AZURE_OPENAI_ENDPOINT: str = Field(default="https://your-resource.openai.azure.com/")
     AZURE_OPENAI_API_KEY: str = Field(default="your-azure-openai-api-key")
     AZURE_OPENAI_API_VERSION: str = Field(default="2024-10-21")
-    AZURE_OPENAI_CHAT_DEPLOYMENT: str = Field(default="gpt-4.1-mini")
+    AZURE_OPENAI_DEPLOYMENT: str = Field(default="your-agent-model")
     OPENAI_CHAT_MODEL_NAME: str = Field(default="gpt-4.1-mini")
     OPENAI_EMBEDDING_MODEL_NAME: str = Field(default="text-embedding-3-small")
     OPENAI_API_KEY: str = Field(default_factory=lambda: get_secret("OPENAI-API-KEY"))

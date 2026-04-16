@@ -18,7 +18,7 @@ def get_llm() -> AzureChatOpenAI:
             azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
             api_key=settings.AZURE_OPENAI_API_KEY,
             temperature=settings.MODEL_TEMPERATURE,
-            azure_deployment=settings.AZURE_DEPLOYMENT,
+            azure_deployment=settings.AZURE_OPENAI_DEPLOYMENT,
         )
     except Exception as e:
         raise LLMInitializationError(message=f"Fallo en credenciales o modelo: {e!s}") from e
