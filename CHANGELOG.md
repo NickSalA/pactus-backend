@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.33.1 (2026-04-16)
+
+### Bug Fixes
+
+- Update .dockerignore and refactor config.py for secret retrieval
+  ([`949ab2e`](https://github.com/NickSalA/ContractAI-Backend/commit/949ab2ebef1765512e85881fe6b611c69a5e9f32))
+
+
 ## v0.33.0 (2026-04-15)
 
 ### Features
