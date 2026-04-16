@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.33.4 (2026-04-16)
+
+### Bug Fixes
+
+- Remove ProxyHeadersMiddleware and update FastAPI initialization
+  ([`7f39d09`](https://github.com/NickSalA/ContractAI-Backend/commit/7f39d090687ba47eb2b5d5eb5c25cf0f70e9b892))
+
+
 ## v0.33.3 (2026-04-16)
 
 ### Bug Fixes
