@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v0.37.0 (2026-04-17)
+
+### Features
+
+- Add cron endpoint for daily email alerts and implement notification send log
+  ([`b730736`](https://github.com/NickSalA/ContractAI-Backend/commit/b730736c4300a9a469c02e0c8b8c48cb886d3601))
+
+- Include NotificationSendLog in module exports
+  ([`b730736`](https://github.com/NickSalA/ContractAI-Backend/commit/b730736c4300a9a469c02e0c8b8c48cb886d3601))
+
+- Update CRON_SECRET to use secret management for enhanced security
+  ([`b730736`](https://github.com/NickSalA/ContractAI-Backend/commit/b730736c4300a9a469c02e0c8b8c48cb886d3601))
+
+
 ## v0.36.0 (2026-04-17)
 
 ### Features
