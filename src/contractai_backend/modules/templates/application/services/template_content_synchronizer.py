@@ -38,6 +38,13 @@ class TemplateContentSynchronizer:
         "empleador_tipo_sociedad": "empleador_descripcion",
         "tipo_sociedad_empresa": "empleador_descripcion",
     }
+    MANUAL_FIELD_ALIASES: dict[str, str] = {
+        "remuneracion_mensual_fija": "remuneracion_mensual",
+    }
+    PLACEHOLDER_KEY_ALIASES: dict[str, str] = {
+        **AUTO_VARIABLE_ALIASES,
+        **MANUAL_FIELD_ALIASES,
+    }
 
     START_DATE_KEYS: tuple[str, ...] = (
         "contrato_fecha_inicio",
@@ -65,11 +72,17 @@ class TemplateContentSynchronizer:
         if unsupported_expressions:
             raise ValueError(f"Expresiones Jinja no soportadas: {', '.join(unsupported_expressions)}")
 
-        visible_fields = self._filter_auto_variable_fields(content.fields)
-        operational_fields = self._filter_auto_variable_fields(content.operational_fields)
-        existing_fields = self._merge_existing_fields(visible_fields, operational_fields)
         ordered_manual_keys = self._extract_manual_keys(expressions)
-        mapping_keys = self._extract_contract_date_mapping_keys(content.contract_date_mapping)
+        normalized_mapping = self._normalize_contract_date_mapping(content.contract_date_mapping)
+        visible_fields = self._filter_auto_variable_fields(self._normalize_field_group(content.fields))
+        operational_fields = self._filter_auto_variable_fields(self._normalize_field_group(content.operational_fields))
+        existing_fields = self._merge_existing_fields(
+            visible_fields,
+            operational_fields,
+            visible_keys=ordered_manual_keys,
+        )
+        resolved_mapping = normalized_mapping or self._infer_contract_date_mapping(list(existing_fields.values()))
+        mapping_keys = self._extract_contract_date_mapping_keys(resolved_mapping)
 
         synced_fields: list[TemplateField] = []
         for key in ordered_manual_keys:
@@ -86,7 +99,7 @@ class TemplateContentSynchronizer:
             mapping_keys=mapping_keys,
         )
 
-        inferred_mapping = content.contract_date_mapping or self._infer_contract_date_mapping(
+        inferred_mapping = resolved_mapping or self._infer_contract_date_mapping(
             synced_fields + synced_operational_fields,
         )
 
@@ -102,6 +115,30 @@ class TemplateContentSynchronizer:
         """Drops organization auto variables from user-editable field groups."""
         return [field for field in fields if field.key not in TemplatePlaceholderValidator.AUTO_VARIABLES]
 
+    def _normalize_field_group(self, fields: list[TemplateField]) -> list[TemplateField]:
+        """Canonicalizes known field aliases before synchronization."""
+        normalized_fields: list[TemplateField] = []
+        for field in fields:
+            normalized_key = self._canonicalize_placeholder_key(field.key)
+            if normalized_key == field.key:
+                normalized_fields.append(field)
+                continue
+            normalized_fields.append(field.model_copy(update={"key": normalized_key}))
+        return normalized_fields
+
+    def _normalize_contract_date_mapping(
+        self,
+        mapping: TemplateContractDateMapping | None,
+    ) -> TemplateContractDateMapping | None:
+        """Canonicalizes mapping keys when they use supported aliases."""
+        if mapping is None:
+            return None
+        start_date_field = self._canonicalize_placeholder_key(mapping.start_date_field)
+        end_date_field = self._canonicalize_placeholder_key(mapping.end_date_field)
+        if start_date_field == mapping.start_date_field and end_date_field == mapping.end_date_field:
+            return mapping
+        return TemplateContractDateMapping(start_date_field=start_date_field, end_date_field=end_date_field)
+
     def _normalize_reference_markers(self, body_md: str) -> str:
         """Converts reference markers like [NOMBRE CAMPO] into Jinja placeholders."""
 
@@ -114,7 +151,7 @@ class TemplateContentSynchronizer:
 
         normalized_body_md = self._remove_reference_artifacts(body_md)
         normalized_body_md = self.BRACKET_PLACEHOLDER_PATTERN.sub(replace_marker, normalized_body_md)
-        normalized_body_md = self._canonicalize_auto_variable_aliases(normalized_body_md)
+        normalized_body_md = self._canonicalize_placeholder_aliases(normalized_body_md)
         normalized_body_md = self._normalize_supported_jinja_filters(normalized_body_md)
         return re.sub(r"\n{3,}", "\n\n", normalized_body_md)
 
@@ -140,13 +177,17 @@ class TemplateContentSynchronizer:
         date_formats = {"day": "%d", "month": "%m", "year": "%Y"}
         return "{{ " + match.group("key") + " | format_date('" + date_formats[match.group("component")] + "') }}"
 
-    def _canonicalize_auto_variable_aliases(self, body_md: str) -> str:
-        """Replaces obvious employer-side aliases with canonical auto variables."""
+    def _canonicalize_placeholder_aliases(self, body_md: str) -> str:
+        """Replaces known placeholder aliases with their canonical keys."""
         normalized_body_md = body_md
-        for alias, canonical_key in self.AUTO_VARIABLE_ALIASES.items():
+        for alias, canonical_key in self.PLACEHOLDER_KEY_ALIASES.items():
             pattern = re.compile(r"{{\s*" + re.escape(alias) + r"\s*}}")
             normalized_body_md = pattern.sub("{{ " + canonical_key + " }}", normalized_body_md)
         return normalized_body_md
+
+    def _canonicalize_placeholder_key(self, key: str) -> str:
+        """Returns the canonical key for supported aliases."""
+        return self.PLACEHOLDER_KEY_ALIASES.get(key, key)
 
     def _build_reference_marker_key(self, raw_marker: str) -> str:
         """Builds a stable snake_case key from a bracket marker."""
@@ -224,13 +265,21 @@ class TemplateContentSynchronizer:
         self,
         fields: list[TemplateField],
         operational_fields: list[TemplateField],
+        *,
+        visible_keys: list[str],
     ) -> dict[str, TemplateField]:
-        """Indexes fields and rejects duplicated keys across both groups."""
+        """Indexes fields and resolves duplicated keys across both groups."""
         indexed_fields = self._index_fields(fields)
         indexed_operational_fields = self._index_fields(operational_fields)
         overlapping_keys = sorted(set(indexed_fields) & set(indexed_operational_fields))
-        if overlapping_keys:
-            raise ValueError("Field keys duplicados entre fields y operational_fields: " + ", ".join(overlapping_keys))
+
+        visible_key_set = set(visible_keys)
+        for key in overlapping_keys:
+            if key in visible_key_set:
+                indexed_operational_fields.pop(key, None)
+                continue
+            indexed_fields.pop(key, None)
+
         return {**indexed_operational_fields, **indexed_fields}
 
     def _infer_contract_date_mapping(self, fields: list[TemplateField]) -> TemplateContractDateMapping | None:
@@ -379,7 +428,7 @@ class TemplateContentSynchronizer:
             return "time"
         if "fecha" in tokens or key.endswith("_date"):
             return "date"
-        if tokens & {"numero", "cantidad", "monto", "porcentaje", "valor"}:
+        if tokens & {"numero", "cantidad", "monto", "porcentaje", "valor", "retribucion", "remuneracion", "utilidad"}:
             return "number"
         return "text"
 

@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     PENDING_DAYS: int = Field(default=30)
 
-    GEMINI_MODEL_NAME: str = Field(default="gemini-2.5-flash-lite")
+    GEMINI_MODEL_NAME: str = Field(default="gemini-2.5-flash")
     GEMINI_MINI_MODEL_NAME: str = Field(default="gemini-2.5-flash-lite")
     GEMINI_API_KEY: str = Field(default="your-gemini-api-key")
     # MODEL_SECOND_API_KEY: str = Field(default="your-second-model-api-key")

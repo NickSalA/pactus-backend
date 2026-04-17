@@ -53,7 +53,7 @@ class TemplateField(BaseModel):
         if field_type == "number":
             if "porcentaje" in tokens:
                 return "Ej. 10"
-            if tokens & {"monto", "valor", "precio", "renta", "retribucion", "utilidad"}:
+            if tokens & {"monto", "valor", "precio", "renta", "retribucion", "remuneracion", "utilidad"}:
                 return "Ej. 1500"
             return "Ej. 1000"
         if field_type == "boolean":

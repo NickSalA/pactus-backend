@@ -17,6 +17,7 @@ from ..repositories.base_relational import IDocumentModuleAdapter, IOrganization
 from ..repositories.base_render import ITemplateRenderer
 from .rendered_contract_formatter import RenderedContractFormatter
 from .template_content_synchronizer import TemplateContentSynchronizer
+from .template_runtime_payloads import build_signature_time_payload
 
 
 class TemplateService:
@@ -68,21 +69,7 @@ class TemplateService:
         )
 
         org_data = await self.organization_repo.get_organization_data(organization_id=organization_id)
-        months = [
-            "enero",
-            "febrero",
-            "marzo",
-            "abril",
-            "mayo",
-            "junio",
-            "julio",
-            "agosto",
-            "septiembre",
-            "octubre",
-            "noviembre",
-            "diciembre",
-        ]
-        time_auto: dict[str, int | str] = {"day_sign": now.day, "month_sign": months[now.month - 1], "year_sign": now.year}
+        time_auto = build_signature_time_payload(now)
         master_dict: dict[str, Any | int | str] = {**form_data, **org_data, **time_auto}
         if template_content is not None:
             self._validate_required_fields(template_content=template_content, payload=master_dict)
