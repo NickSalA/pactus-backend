@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.36.0 (2026-04-17)
+
+### Features
+
+- Update GEMINI_API_KEY and remove hardcoded AZURE_OPENAI_API_KEY
+  ([`17ef9e9`](https://github.com/NickSalA/ContractAI-Backend/commit/17ef9e99c51dd99c0184dc17074c606b2eb39b2d))
+
+
 ## v0.35.0 (2026-04-17)
 
 ### Features
