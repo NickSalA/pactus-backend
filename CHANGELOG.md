@@ -2,6 +2,18 @@
 
 <!-- version list -->
 
+## v0.35.0 (2026-04-17)
+
+### Features
+
+- Enhance template synchronization and validation logic with new field normalization and alias
+  handling
+  ([`dbb9e2e`](https://github.com/NickSalA/ContractAI-Backend/commit/dbb9e2eaa1d0fc2f1e49c04f1037294a9b8b1114))
+
+- Refactor template authoring service and add signature time payload helper
+  ([`51d7a49`](https://github.com/NickSalA/ContractAI-Backend/commit/51d7a49886883f5d98b63f678310e84e61890c5f))
+
+
 ## v0.34.0 (2026-04-16)
 
 
