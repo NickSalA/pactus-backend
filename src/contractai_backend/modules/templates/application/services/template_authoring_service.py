@@ -5,12 +5,11 @@ import unicodedata
 from datetime import datetime
 from typing import Any
 
-from contractai_backend.core.exceptions.base import AppError, ForbiddenError, NotFoundError, ValidationError
-from contractai_backend.modules.documents.application.repositories import DocumentExtractor
-from contractai_backend.modules.documents.domain import DocumentType
-from contractai_backend.modules.documents.domain.access_policy import can_write_document_type
-from contractai_backend.modules.users.domain.value_objs import UserRole
-
+from .....core.exceptions.base import AppError, ForbiddenError, NotFoundError, ValidationError
+from ....documents.application.repositories import DocumentExtractor
+from ....documents.domain import DocumentType
+from ....documents.domain.access_policy import can_write_document_type
+from ....users.domain.value_objs import UserRole
 from ...api.schemas import (
     CreateTemplateRequest,
     GenerateTemplateDraftRequest,
@@ -31,6 +30,7 @@ from .rendered_contract_formatter import RenderedContractFormatter
 from .template_content_synchronizer import TemplateContentSynchronizer
 from .template_placeholder_validator import TemplatePlaceholderValidator
 from .template_reference_preprocessor import TemplateReferenceContext, TemplateReferencePreprocessor
+from .template_runtime_payloads import build_signature_time_payload
 
 ROLE_LOCKED_DOCUMENT_TYPES: dict[UserRole, DocumentType] = {
     UserRole.HR: DocumentType.LABOR,
@@ -146,6 +146,7 @@ class TemplateAuthoringService:
         organization_context = await self._build_organization_context(organization_id=organization_id)
         draft, retries_used = await self._generate_validated_prompt_draft(
             request=resolved_request,
+            document_type=document_type,
             organization_context=organization_context,
         )
         draft.source = {
@@ -200,6 +201,7 @@ class TemplateAuthoringService:
         organization_context = await self._build_organization_context(organization_id=organization_id)
         draft, retries_used = await self._generate_validated_file_draft(
             request=resolved_request,
+            document_type=document_type,
             reference_context=reference_context,
             organization_context=organization_context,
         )
@@ -394,6 +396,8 @@ class TemplateAuthoringService:
     async def _generate_validated_file_draft(
         self,
         request: GenerateTemplateDraftRequest,
+        *,
+        document_type: DocumentType,
         reference_context: TemplateReferenceContext,
         organization_context: dict[str, Any],
     ) -> tuple[TemplateDraftResponse, int]:
@@ -410,19 +414,11 @@ class TemplateAuthoringService:
                 validation_feedback=retry_feedback or None,
             )
             try:
-                draft.content, preparation_warnings = self._prepare_generated_content(
-                    draft.content,
-                    document_type=request.document_type,
+                preparation_warnings, backend_warnings = self._prepare_and_validate_generated_draft(
+                    draft,
+                    document_type=document_type,
                     generation_mode=request.generation_mode,
                 )
-            except ValueError as exc:
-                if attempt == max_attempts - 1:
-                    raise
-                retry_feedback = [str(exc)]
-                continue
-
-            try:
-                warnings = self.validator.validate(draft.content, document_type=request.document_type)
             except ValueError as exc:
                 if attempt == max_attempts - 1:
                     raise
@@ -441,29 +437,18 @@ class TemplateAuthoringService:
             retryable_issues = (
                 [
                     warning
-                    for warning in warnings
+                    for warning in backend_warnings
                     if warning.startswith("Numeración de cláusulas") or warning.startswith(self.validator.MISSING_CONTRACT_DATE_MAPPING_WARNING)
                 ]
                 + reference_warnings
                 + self._extract_raw_field_issues(draft)
             )
             if not retryable_issues:
-                self._strip_internal_draft_source(draft)
-                draft.warnings = self._merge_warnings(
-                    self._filter_stale_ai_warnings(draft.warnings),
-                    warnings,
-                    preparation_warnings,
-                )
+                self._finalize_draft(draft, backend_warnings, preparation_warnings)
                 return draft, attempt
 
             if attempt == max_attempts - 1:
-                self._strip_internal_draft_source(draft)
-                draft.warnings = self._merge_warnings(
-                    self._filter_stale_ai_warnings(draft.warnings),
-                    warnings,
-                    preparation_warnings,
-                    reference_warnings,
-                )
+                self._finalize_draft(draft, backend_warnings, preparation_warnings, reference_warnings)
                 return draft, attempt
 
             retry_feedback = retryable_issues
@@ -473,6 +458,8 @@ class TemplateAuthoringService:
     async def _generate_validated_prompt_draft(
         self,
         request: GenerateTemplateDraftRequest,
+        *,
+        document_type: DocumentType,
         organization_context: dict[str, Any],
     ) -> tuple[TemplateDraftResponse, int]:
         """Generates a prompt-based draft with one validation retry."""
@@ -486,12 +473,11 @@ class TemplateAuthoringService:
                 validation_feedback=retry_feedback or None,
             )
             try:
-                draft.content, preparation_warnings = self._prepare_generated_content(
-                    draft.content,
-                    document_type=request.document_type,
+                preparation_warnings, backend_warnings = self._prepare_and_validate_generated_draft(
+                    draft,
+                    document_type=document_type,
                     generation_mode=request.generation_mode,
                 )
-                backend_warnings = self.validator.validate(draft.content, document_type=request.document_type)
             except ValueError as exc:
                 if attempt == max_attempts - 1:
                     raise
@@ -501,23 +487,12 @@ class TemplateAuthoringService:
             raw_field_issues = self._extract_raw_field_issues(draft)
             if raw_field_issues:
                 if attempt == max_attempts - 1:
-                    self._strip_internal_draft_source(draft)
-                    draft.warnings = self._merge_warnings(
-                        self._filter_stale_ai_warnings(draft.warnings),
-                        backend_warnings,
-                        preparation_warnings,
-                        raw_field_issues,
-                    )
+                    self._finalize_draft(draft, backend_warnings, preparation_warnings, raw_field_issues)
                     return draft, attempt
                 retry_feedback = raw_field_issues
                 continue
 
-            self._strip_internal_draft_source(draft)
-            draft.warnings = self._merge_warnings(
-                self._filter_stale_ai_warnings(draft.warnings),
-                backend_warnings,
-                preparation_warnings,
-            )
+            self._finalize_draft(draft, backend_warnings, preparation_warnings)
             return draft, attempt
 
         raise ValidationError("No se pudo generar un borrador valido a partir de las instrucciones.")
@@ -553,6 +528,22 @@ class TemplateAuthoringService:
 
         return synced_content, warnings
 
+    def _prepare_and_validate_generated_draft(
+        self,
+        draft: TemplateDraftResponse,
+        *,
+        document_type: DocumentType,
+        generation_mode: TemplateGenerationMode,
+    ) -> tuple[list[str], list[str]]:
+        """Synchronizes generated content and returns authoritative backend warnings."""
+        draft.content, preparation_warnings = self._prepare_generated_content(
+            draft.content,
+            document_type=document_type,
+            generation_mode=generation_mode,
+        )
+        backend_warnings = self.validator.validate(draft.content, document_type=document_type)
+        return preparation_warnings, backend_warnings
+
     def _filter_stale_ai_warnings(self, warnings: list[str]) -> list[str]:
         """Drops AI-authored warnings that backend recalculates authoritatively."""
         filtered_warnings: list[str] = []
@@ -575,6 +566,14 @@ class TemplateAuthoringService:
                 merged_warnings.append(warning)
                 seen.add(warning)
         return merged_warnings
+
+    def _finalize_draft(self, draft: TemplateDraftResponse, *warning_groups: list[str]) -> None:
+        """Removes internal metadata and keeps backend warnings as the source of truth."""
+        self._strip_internal_draft_source(draft)
+        draft.warnings = self._merge_warnings(
+            self._filter_stale_ai_warnings(draft.warnings),
+            *warning_groups,
+        )
 
     def _extract_raw_field_issues(self, draft: TemplateDraftResponse) -> list[str]:
         """Reads raw field issues captured before backend normalization."""
@@ -795,26 +794,7 @@ class TemplateAuthoringService:
 
     def _build_time_payload(self) -> dict[str, int | str]:
         """Builds automatic date placeholders."""
-        now = datetime.now()
-        months = [
-            "enero",
-            "febrero",
-            "marzo",
-            "abril",
-            "mayo",
-            "junio",
-            "julio",
-            "agosto",
-            "septiembre",
-            "octubre",
-            "noviembre",
-            "diciembre",
-        ]
-        return {
-            "day_sign": now.day,
-            "month_sign": months[now.month - 1],
-            "year_sign": now.year,
-        }
+        return build_signature_time_payload(datetime.now())
 
     def _build_mock_payload(self, fields: list[TemplateField]) -> dict[str, Any]:
         """Builds mock payload values for preview."""
