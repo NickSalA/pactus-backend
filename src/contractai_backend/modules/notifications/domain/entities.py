@@ -1,11 +1,28 @@
 """Persistence models for notification preferences and rules."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, UniqueConstraint
 from sqlmodel import Field
 
 from ....core.domain.base import BaseTable
+
+
+class NotificationSendLog(BaseTable, table=True):
+    """Tracks daily email sends per organization to prevent duplicate sends on the same day."""
+
+    __tablename__ = "notification_send_logs"
+    __table_args__ = (UniqueConstraint("organization_id", "sent_date", name="uq_notification_send_log_org_date"),)
+
+    organization_id: int = Field(
+        sa_column=Column("organization_id", Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    )
+    sent_date: date = Field(sa_column=Column("sent_date", Date, nullable=False))
+    emails_sent: int = Field(default=0, sa_column=Column("emails_sent", Integer, nullable=False, default=0))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column("created_at", DateTime(timezone=True), nullable=False),
+    )
 
 
 class NotificationRuleTable(BaseTable, table=True):

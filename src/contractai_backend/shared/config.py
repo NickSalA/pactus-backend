@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     GMAIL_SENDER: str | None = Field(default=None)
     GMAIL_APP_PASSWORD: str | None = Field(default=None)
 
+    CRON_SECRET: str | None = Field(default_factory=lambda: get_secret("CRON-SECRET"))
+
     @property
     def DATABASE_URL(self) -> str:  # noqa: N802
         """Recupera la URL de la base de datos desde Key Vault o variable de entorno."""
