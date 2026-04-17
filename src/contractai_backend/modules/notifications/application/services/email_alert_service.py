@@ -3,11 +3,11 @@
 import html
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 
 from loguru import logger
 from sqlalchemy import text
-from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -16,6 +16,7 @@ from contractai_backend.modules.documents.domain.access_policy import can_read_d
 from contractai_backend.modules.documents.domain import DocumentTable
 from contractai_backend.modules.documents.domain.value_objs import DocumentState, DocumentType
 from contractai_backend.modules.notifications.domain import NotificationRuleTable, NotificationType
+from contractai_backend.modules.notifications.domain.entities import NotificationSendLog
 from contractai_backend.modules.notifications.infrastructure.gmail_service import GmailService
 from contractai_backend.modules.users.domain.entities import UserTable
 
@@ -162,6 +163,86 @@ class EmailAlertService:
                 logger.error("No se pudo enviar correo a {}: {}", recipient.email, e)
 
         return sent
+
+    async def send_daily_alerts_cron(self) -> dict[str, int]:
+        """Sends daily email alerts for all active organizations.
+
+        Iterates every organization that has at least one subscribed user and calls
+        send_daily_alerts() for each. Records a send log entry so that re-runs on
+        the same calendar day (UTC-5 / Lima) are safely skipped.
+        """
+        today = date.today()
+        org_ids = await self._get_active_organization_ids()
+
+        total_sent = 0
+        orgs_processed = 0
+        orgs_skipped = 0
+
+        for org_id in org_ids:
+            already_sent = await self._check_send_log(organization_id=org_id, sent_date=today)
+            if already_sent:
+                logger.info("Org {} ya recibió correos hoy ({}). Saltando.", org_id, today)
+                orgs_skipped += 1
+                continue
+
+            sent = await self.send_daily_alerts(organization_id=org_id)
+            await self._record_send_log(organization_id=org_id, sent_date=today, emails_sent=sent)
+            total_sent += sent
+            orgs_processed += 1
+
+        logger.info(
+            "Cron finalizado: {} correos enviados, {} orgs procesadas, {} orgs saltadas.",
+            total_sent, orgs_processed, orgs_skipped,
+        )
+        return {"emails_sent": total_sent, "orgs_processed": orgs_processed, "orgs_skipped": orgs_skipped}
+
+    async def _get_active_organization_ids(self) -> list[int]:
+        """Returns distinct organization IDs that have at least one active subscribed user."""
+        try:
+            result = await self.session.exec(
+                select(UserTable.organization_id)
+                .where(
+                    UserTable.is_active.is_(True),
+                    UserTable.receives_notifications.is_(True),
+                )
+                .distinct()
+            )
+            return list(result.all())
+        except OperationalError as e:
+            raise ServiceUnavailableError("La base de datos no está disponible") from e
+        except SQLAlchemyError as e:
+            raise InternalServerError("Error al consultar organizaciones activas") from e
+
+    async def _check_send_log(self, organization_id: int, sent_date: date) -> bool:
+        """Returns True if a send log entry already exists for this org and date."""
+        try:
+            result = await self.session.exec(
+                select(NotificationSendLog).where(
+                    NotificationSendLog.organization_id == organization_id,
+                    NotificationSendLog.sent_date == sent_date,
+                )
+            )
+            return result.first() is not None
+        except SQLAlchemyError as e:
+            raise InternalServerError("Error al consultar el log de envíos") from e
+
+    async def _record_send_log(self, organization_id: int, sent_date: date, emails_sent: int) -> None:
+        """Records a send log entry. Ignores conflicts (race condition safety)."""
+        try:
+            log_entry = NotificationSendLog(
+                organization_id=organization_id,
+                sent_date=sent_date,
+                emails_sent=emails_sent,
+                created_at=datetime.now(UTC),
+            )
+            self.session.add(log_entry)
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            logger.warning("Send log ya existe para org {} / {}. Ignorando.", organization_id, sent_date)
+        except SQLAlchemyError as e:
+            await self.session.rollback()
+            raise InternalServerError("Error al registrar el log de envío") from e
 
     async def _get_active_rule_map(self, organization_id: int) -> tuple[dict[int, list[int]], list[int]]:
         try:

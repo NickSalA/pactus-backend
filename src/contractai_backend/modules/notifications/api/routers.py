@@ -2,10 +2,11 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from ....core.domain.access import ensure_admin
 from ....shared.api.dependencies.security import CurrentUserDep
+from ....shared.config import settings
 from ..application.services import EmailAlertService, NotificationRuleService
 from .dependencies import get_email_alert_service, get_notification_rule_service
 from .schemas import (
@@ -56,6 +57,28 @@ async def send_email_alerts(
         organization_id=current_user.organization_id,
     )
     return {"emails_sent": sent}
+
+
+@router.post(path="/cron/send-emails", status_code=200)
+async def cron_send_emails(
+    request: Request,
+    email_service: EmailAlertServiceDep,
+) -> dict:
+    """Cron endpoint: sends daily email alerts for all organizations.
+
+    Protected by X-Cron-Secret header instead of JWT. Called exclusively by the
+    Vercel cron job via the Next.js proxy route /api/cron/send-emails.
+    """
+    cron_secret = settings.CRON_SECRET
+    if not cron_secret:
+        raise HTTPException(status_code=503, detail="Cron no configurado en este servidor")
+
+    provided = request.headers.get("X-Cron-Secret")
+    if not provided or provided != cron_secret:
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    result = await email_service.send_daily_alerts_cron()
+    return result
 
 
 @router.get(path="/rules", response_model=list[NotificationRuleResponse])
