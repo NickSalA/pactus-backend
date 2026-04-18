@@ -11,7 +11,7 @@ from ...domain import LLMInitializationError
 
 
 def get_llm() -> AzureChatOpenAI:
-    """Build the chatbot LLM using OpenAI GPT."""
+    """Build the chatbot LLM using Azure OpenAI GPT."""
     try:
         return AzureChatOpenAI(
             api_version="2024-12-01-preview",
