@@ -2,6 +2,34 @@
 
 <!-- version list -->
 
+## v0.38.0 (2026-04-18)
+
+### Bug Fixes
+
+- Change get llm docstring
+  ([`499fd86`](https://github.com/NickSalA/ContractAI-Backend/commit/499fd86fd56b8590d082391d6f7f03308354e4f8))
+
+- Enhance chatbot capabilities for services
+  ([`6a977c6`](https://github.com/NickSalA/ContractAI-Backend/commit/6a977c6dd82634d0bf54e96790b94f064316a12f))
+
+- Enhance extraction for services
+  ([`c365b6c`](https://github.com/NickSalA/ContractAI-Backend/commit/c365b6c5c26ba61c7978f1673491be5a51389436))
+
+### Features
+
+- Add cron endpoint for daily email alerts and implement notification send log
+  ([`54f2a81`](https://github.com/NickSalA/ContractAI-Backend/commit/54f2a81a562916572049c3441ad3cf3ded9bed1f))
+
+- Enhance signature block handling and add tests for placeholder removal
+  ([`7773786`](https://github.com/NickSalA/ContractAI-Backend/commit/77737862aa0c21bca3188e59270721861d34fad9))
+
+- Include NotificationSendLog in module exports
+  ([`54f2a81`](https://github.com/NickSalA/ContractAI-Backend/commit/54f2a81a562916572049c3441ad3cf3ded9bed1f))
+
+- Update CRON_SECRET to use secret management for enhanced security
+  ([`54f2a81`](https://github.com/NickSalA/ContractAI-Backend/commit/54f2a81a562916572049c3441ad3cf3ded9bed1f))
+
+
 ## v0.37.0 (2026-04-17)
 
 ### Features
