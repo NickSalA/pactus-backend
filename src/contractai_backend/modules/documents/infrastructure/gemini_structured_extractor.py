@@ -126,6 +126,7 @@ class GeminiDocumentStructuredExtractor(DocumentStructuredExtractor):
             "For LABOR, form_data.value and form_data.currency must match labor_monthly_value and labor_monthly_currency. If monthly pay is not explicit, set both to null.\n"
             "For service_items, you MUST use only service_id values from the provided organization catalog.\n"
             "Include a service item only when the mapping to a catalog service is clear AND the contract explicitly provides value, currency, start_date and end_date for that specific service.\n"
+            "service_items must not contain duplicated service_id values. If the same catalog service appears more than once or the mapping is ambiguous, omit that service entirely.\n"
             "If any service field is missing or ambiguous, omit that item entirely.\n"
             "If no service item is fully supported by the document, return service_items as [].\n"
             "Schema:\n"

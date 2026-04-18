@@ -244,12 +244,24 @@ class DocumentCommandService:
                 )
             )
 
+        service_id_counts: dict[int, int] = {}
+        for item in candidates:
+            service_id_counts[item.service_id] = service_id_counts.get(item.service_id, 0) + 1
+
+        duplicated_service_ids = {service_id for service_id, count in service_id_counts.items() if count > 1}
+        if duplicated_service_ids:
+            logger.debug(
+                "Discarding duplicated extracted service_ids for document import: {}",
+                sorted(duplicated_service_ids),
+            )
+            candidates = [item for item in candidates if item.service_id not in duplicated_service_ids]
+
         if not candidates:
             return []
 
         existing_services = await self.service_repo.get_services_by_ids(
             organization_id=organization_id,
-            service_ids=[item.service_id for item in candidates],
+            service_ids=sorted({item.service_id for item in candidates}),
         )
         existing_ids = {service.id for service in existing_services if service.id is not None}
         scoped_candidates = [item for item in candidates if item.service_id in existing_ids]
