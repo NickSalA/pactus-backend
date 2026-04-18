@@ -254,6 +254,7 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "- If REFERENCE_CONTEXT is present, preserve the original contract structure as faithfully as possible. Replace variable values with placeholders, but do not freely rewrite or summarize clauses.\n"  # noqa: E501
             "- If REFERENCE_OUTLINE is present, preserve every item in clause_sequence when available, and otherwise preserve the order of structure_sequence. Do not omit structural markers that appear in the reference.\n"  # noqa: E501
             "- Preserve section titles and the closing section when they appear in the reference.\n"
+            "- Do not include signature blocks, underscore signature lines, signer labels, or representative placeholders at the end of body_md. Signature rendering is handled by the backend.\n"
             "- When the reference mode is full_clean, stay as close as possible to the original wording and only abstract variable data into placeholders.\n"  # noqa: E501
             "- GENERATION_MODE controls how strictly the result must follow the reference.\n"
             "- If GENERATION_MODE is strict, do not add new legal clauses that are absent from the reference just to make the template operational.\n"

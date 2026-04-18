@@ -58,6 +58,33 @@ class TestRenderedContractFormatter:
         assert result.count('class="signature-meta"') == 2
         assert "GESTION S.A.C." in result
 
+    def test_removes_legacy_signature_block_with_placeholder_lines_before_appending_generated_one(self):
+        formatter = RenderedContractFormatter()
+
+        result = formatter.format(
+            (
+                "En fe de lo cual, las partes firman el presente contrato.\n\n"
+                "_________________________\n"
+                "LA EMPRESA\n"
+                "{{ representante_nombre }}\n\n"
+                "_________________________\n"
+                "EL GERENTE\n"
+                "{{ gerente_representante_nombre }}"
+            ),
+            document_type=DocumentType.COMPANY,
+            payload={
+                "empleador_razon_social": "ACME S.A.C.",
+                "representante_nombre": "Juan Perez",
+                "gerente_razon_social": "GESTION S.A.C.",
+                "gerente_representante_nombre": "Maria Garcia",
+            },
+        )
+
+        assert result.count('data-generated-signatures="true"') == 1
+        assert "_________________________" not in result
+        assert "{{ representante_nombre }}" not in result
+        assert "{{ gerente_representante_nombre }}" not in result
+
     def test_formats_labor_signature_block_with_worker_label(self):
         formatter = RenderedContractFormatter()
 

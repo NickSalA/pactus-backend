@@ -34,6 +34,9 @@ def test_conversation_prompt_includes_tool_routing_rules() -> None:
 
     assert "currently_active=true" in prompt
     assert "start_date <= today <= end_date" in prompt
+    assert "contracts with a specific service" in prompt
+    assert "service_name or service_id" in prompt
+    assert "which services are attached to a contract" in prompt
     assert "document_ids" in prompt
     assert "### Ranking de clientes" in prompt
     assert 'If the user asks for a contract "with" or "signed by" a person name' in prompt

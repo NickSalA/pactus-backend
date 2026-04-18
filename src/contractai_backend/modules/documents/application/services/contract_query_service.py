@@ -195,6 +195,8 @@ class ContractQueryService:
             "filters_applied": {
                 "client": scoped_query.client,
                 "contract_name": scoped_query.contract_name,
+                "service_name": scoped_query.service_name,
+                "service_id": scoped_query.service_id,
                 "min_value": scoped_query.min_value,
                 "max_value": scoped_query.max_value,
                 "currency": scoped_query.currency,

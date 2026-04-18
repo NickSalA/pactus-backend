@@ -16,7 +16,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from ....core.infrastructure.base import PostgresBaseRepository
 from ..application.dto import ContractQueryDTO
 from ..application.repositories import DocumentCommandRepository, DocumentQueryRepository
-from ..domain import DocumentServiceTable, DocumentTable
+from ..domain import DocumentServiceTable, DocumentTable, ServiceTable
 from ..domain.value_objs import DocumentState
 from ..domain.exceptions import DocumentDatabaseError, DocumentDatabaseUnavailableError
 from ....shared.infrastructure.sqlmodel_utils import RelationalHelpersMixin
@@ -214,6 +214,30 @@ class SQLModelDocumentRepository(
             asc(client_expression),
         )
 
+    def _build_service_document_ids_subquery(self, organization_id: int, filters: ContractQueryDTO):
+        normalized_service_name = self._normalize_text_filter(filters.service_name)
+        if filters.service_id is None and normalized_service_name is None:
+            return None
+
+        statement = select(col(DocumentServiceTable.document_id)).distinct()
+
+        if filters.service_id is not None:
+            statement = statement.where(col(DocumentServiceTable.service_id) == filters.service_id)
+
+        if normalized_service_name is not None:
+            statement = statement.join(ServiceTable, col(ServiceTable.id) == col(DocumentServiceTable.service_id)).where(
+                col(ServiceTable.organization_id) == organization_id,
+                col(ServiceTable.name).ilike(f"%{normalized_service_name}%"),
+            )
+
+        return statement
+
+    def _apply_service_filters(self, statement, organization_id: int, filters: ContractQueryDTO):
+        service_document_ids = self._build_service_document_ids_subquery(organization_id=organization_id, filters=filters)
+        if service_document_ids is None:
+            return statement
+        return statement.where(col(DocumentTable.id).in_(service_document_ids))
+
     def _apply_contract_filters(
         self,
         statement,
@@ -231,6 +255,8 @@ class SQLModelDocumentRepository(
             normalized_value = self._normalize_text_filter(raw_value)
             if normalized_value:
                 statement = statement.where(col(field).ilike(f"%{normalized_value}%"))
+
+        statement = self._apply_service_filters(statement=statement, organization_id=organization_id, filters=filters)
 
         contract_value = self._build_contract_value_expression()
         if filters.min_value is not None:
@@ -352,6 +378,38 @@ class SQLModelDocumentRepository(
             for service_item in result.all():
                 grouped_services[service_item.document_id].append(service_item)
             return dict(grouped_services)
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
+            raise DocumentDatabaseUnavailableError() from e
+        except SQLAlchemyError as e:
+            raise DocumentDatabaseError() from e
+
+    async def get_services_by_ids(self, organization_id: int, service_ids: Sequence[int]) -> Sequence[ServiceTable]:
+        """Obtiene servicios activos por identificador para compatibilidad interna."""
+        if not service_ids:
+            return []
+
+        try:
+            query = select(ServiceTable).where(
+                col(ServiceTable.organization_id) == organization_id,
+                col(ServiceTable.id).in_(service_ids),
+                col(ServiceTable.is_active).is_(True),
+            )
+            result = await self.session.exec(statement=query)
+            return result.all()
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
+            raise DocumentDatabaseUnavailableError() from e
+        except SQLAlchemyError as e:
+            raise DocumentDatabaseError() from e
+
+    async def get_services(self, organization_id: int, *, include_inactive: bool = False) -> Sequence[ServiceTable]:
+        """Lista el catálogo de servicios para compatibilidad interna del módulo."""
+        try:
+            query = select(ServiceTable).where(col(ServiceTable.organization_id) == organization_id)
+            if not include_inactive:
+                query = query.where(col(ServiceTable.is_active).is_(True))
+            query = query.order_by(col(ServiceTable.name), col(ServiceTable.id))
+            result = await self.session.exec(statement=query)
+            return result.all()
         except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:
