@@ -17,6 +17,8 @@ class ContractQueryDTO(BaseModel):
     operation: str
     client: str | None = None
     contract_name: str | None = None
+    service_name: str | None = None
+    service_id: int | None = None
     min_value: float | None = None
     max_value: float | None = None
     currency: CurrencyType | None = None
@@ -39,7 +41,7 @@ class ContractQueryDTO(BaseModel):
             raise ValueError("La operacion debe ser 'count', 'list' o 'ranking'.")
         return normalized
 
-    @field_validator("client", "contract_name")
+    @field_validator("client", "contract_name", "service_name")
     @classmethod
     def validate_optional_text(cls, value: str | None) -> str | None:
         """Valida que los campos de texto opcionales no sean solo espacios en blanco."""
@@ -48,6 +50,16 @@ class ContractQueryDTO(BaseModel):
 
         cleaned = value.strip()
         return cleaned or None
+
+    @field_validator("service_id")
+    @classmethod
+    def validate_service_id(cls, value: int | None) -> int | None:
+        """Valida que el servicio sea un identificador positivo cuando está presente."""
+        if value is None:
+            return None
+        if value <= 0:
+            raise ValueError("service_id invalido")
+        return value
 
     @field_validator("currency", mode="before")
     @classmethod

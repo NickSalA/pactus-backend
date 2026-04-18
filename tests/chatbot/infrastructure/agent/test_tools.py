@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from contractai_backend.modules.chatbot.infrastructure.agent.tools import build_bc_tool, build_party_lookup_tool
+from contractai_backend.modules.chatbot.infrastructure.agent.tools import build_bc_tool, build_contracts_query_tool, build_party_lookup_tool
 from contractai_backend.modules.documents.domain.value_objs import DocumentState
 from contractai_backend.modules.users.domain.value_objs import UserRole
 
@@ -18,6 +18,11 @@ class _FakeCounterpartyRepo:
 class _FakeVectorRepo:
     def __init__(self):
         self.search_documents = AsyncMock(return_value="resultado")
+
+
+class _FakeContractQueryService:
+    def __init__(self):
+        self.run_query = AsyncMock(return_value={"status": "success", "operation": "list", "items": []})
 
 
 @pytest.mark.asyncio
@@ -107,3 +112,28 @@ async def test_bc_tool_uses_explicit_state_scope_when_requested() -> None:
     await tool.ainvoke({"query": "resumen del contrato borrador", "limit": 5})
 
     repo.search_documents.assert_awaited_once_with(query="resumen del contrato borrador", limit=5, document_ids=[2])
+
+
+@pytest.mark.asyncio
+async def test_contracts_query_tool_forwards_service_filters() -> None:
+    service = _FakeContractQueryService()
+    tool = build_contracts_query_tool(service=service, organization_id=2, user_role=UserRole.ADMIN)
+
+    raw_result = await tool.ainvoke(
+        {
+            "operation": "list",
+            "service_name": "Hosting",
+            "service_id": 5,
+            "limit": 3,
+        }
+    )
+    result = json.loads(raw_result)
+
+    assert result["status"] == "success"
+    service.run_query.assert_awaited_once()
+    awaited_kwargs = service.run_query.await_args.kwargs
+    assert awaited_kwargs["organization_id"] == 2
+    assert awaited_kwargs["user_role"] == UserRole.ADMIN
+    assert awaited_kwargs["query"].service_name == "Hosting"
+    assert awaited_kwargs["query"].service_id == 5
+    assert awaited_kwargs["query"].limit == 3

@@ -87,12 +87,14 @@ def get_conversation_agent_prompt() -> str:
     Only answer with information grounded in real contracts or retrieved evidence. Never invent data.
 
     Tools:
-    - contracts_query_tool: use it for counts, lists, rankings, ordering, filtering, active-today checks, services, amounts, currencies, states, types, clients, and dates.
+    - contracts_query_tool: use it for counts, lists, rankings, ordering, filtering, active-today checks, services, amounts, currencies, states, types, clients, dates, service_name, and service_id.
     - bc_tool: use it for contract text evidence and textual details such as signers, representatives, powers of attorney, emails, clauses, obligations, penalties, renewal, annexes, SLA, or summaries.
 
     Routing rules:
     - If the message is social, reply briefly without tools.
     - If the user asks for counts, lists, rankings, ordering, or filters over contracts as records, use contracts_query_tool first.
+    - If the user asks which services are attached to a contract, use contracts_query_tool first.
+    - If the user asks for contracts with a specific service, use contracts_query_tool with service_name or service_id.
     - If the user asks for data that lives inside contract text, use bc_tool even if the user asks for a list.
     - If the user asks about a specific contract and you first need to identify the valid contract record, use contracts_query_tool first and then bc_tool with document_ids.
     - If the user asks for a contract "with" or "signed by" a person name, representative, worker, signer, or participant, use bc_tool first because the match may live inside contract text rather than in the counterparty field.
@@ -106,6 +108,8 @@ def get_conversation_agent_prompt() -> str:
 
     When using contracts_query_tool:
     - Use operation="count" for count questions, operation="list" for lists, and operation="ranking" for rankings.
+    - For queries like "contratos con servicio Hosting" or "contratos con service_id 5", use service_name or service_id.
+    - For queries like "que servicios tiene el contrato X", identify the contract with contracts_query_tool and answer from service_items.
     - For amount filters, use min_value and max_value.
     - If the user asks for active contracts today, use currently_active=true.
     - Active today means exactly start_date <= today <= end_date.
@@ -119,6 +123,7 @@ def get_conversation_agent_prompt() -> str:
     - If the tool returns forbidden, respond exactly with the returned message.
 
     When using bc_tool:
+    - Do not use bc_tool for structured service associations already available in service_items.
     - Preserve exact company names, IDs, contract numbers, annexes, and dates.
     - Use bc_tool first for people-name lookups such as signers, representatives, workers, apoderados, or any query that may depend on names inside the document text.
     - If contracts_query_tool identified a specific contract, call bc_tool again with document_ids.

@@ -1113,6 +1113,30 @@ class TestContractQueryService:
         )
 
     @pytest.mark.asyncio
+    async def test_lists_contracts_filtered_by_service(self):
+        sql_repo = AsyncMock()
+        sql_repo.count_contracts.side_effect = [3, 1]
+        sql_repo.search_contracts.return_value = [_make_doc()]
+        sql_repo.get_document_services_by_document_ids.return_value = {1: [_make_document_service(document_id=1)]}
+        sql_repo.get_services_by_ids.return_value = [ServiceTable(id=2, organization_id=1, name="Hosting")]
+        service = _make_contract_query_service(sql_repo=sql_repo)
+
+        result = await service.run_query(
+            organization_id=1,
+            query=ContractQueryDTO(operation="list", service_name="Hosting", service_id=2, limit=5),
+        )
+
+        assert result["status"] == "success"
+        assert result["filters_applied"]["service_name"] == "Hosting"
+        assert result["filters_applied"]["service_id"] == 2
+        sql_repo.search_contracts.assert_called_once_with(
+            organization_id=1,
+            query=ContractQueryDTO(operation="list", service_name="Hosting", service_id=2, limit=5, state=DocumentState.ACTIVE),
+            limit=5,
+            chatbot_ready_only=True,
+        )
+
+    @pytest.mark.asyncio
     async def test_lists_current_activity_from_today_range(self):
         today = date.today()
         active_document = _make_doc(

@@ -156,7 +156,8 @@ def build_contracts_query_tool(service: ContractQueryService, organization_id: i
         name_or_callable="contracts_query_tool",
         description=(
             "Usala para contar, listar, ordenar y rankear contratos como registros por cliente, nombre, valor total, moneda, "
-            "estado, tipo y rangos de fechas. Tambien sirve para identificar contratos vigentes hoy y devolver sus servicios asociados. "
+            "estado, tipo, servicios asociados y rangos de fechas. Tambien sirve para identificar contratos vigentes hoy, "
+            "filtrar por service_id o service_name y devolver sus servicios asociados. "
             "No es para extraer nombres de firmantes u otros datos textuales internos del contrato. Si el usuario pide montos sin moneda, "
             "esta herramienta indicara que se debe pedir aclaracion."
         ),
@@ -165,6 +166,8 @@ def build_contracts_query_tool(service: ContractQueryService, organization_id: i
         operation: str,
         client: str | None = None,
         contract_name: str | None = None,
+        service_name: str | None = None,
+        service_id: int | None = None,
         min_value: float | None = None,
         max_value: float | None = None,
         currency: CurrencyType | None = None,
@@ -183,6 +186,8 @@ def build_contracts_query_tool(service: ContractQueryService, organization_id: i
                 operation=operation,
                 client=client,
                 contract_name=contract_name,
+                service_name=service_name,
+                service_id=service_id,
                 min_value=min_value,
                 max_value=max_value,
                 currency=currency,

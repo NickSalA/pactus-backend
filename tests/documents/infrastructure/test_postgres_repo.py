@@ -68,6 +68,21 @@ class TestSearchContracts:
         session.exec.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_applies_service_name_filter_without_duplicate_join_rows(self):
+        repo, session = _make_repo()
+        result_mock = MagicMock()
+        result_mock.all.return_value = []
+        session.exec.return_value = result_mock
+
+        await repo.search_contracts(organization_id=1, query=ContractQueryDTO(operation="list", service_name="Hosting"))
+
+        statement = session.exec.await_args.kwargs["statement"]
+        compiled = statement.compile()
+        assert "documents_services" in str(statement)
+        assert "services" in str(statement)
+        assert any(value == "%hosting%" for value in compiled.params.values())
+
+    @pytest.mark.asyncio
     async def test_operational_error_raises_unavailable(self):
         repo, session = _make_repo()
         session.exec.side_effect = OperationalError("conn", {}, Exception())
@@ -95,6 +110,20 @@ class TestCountContracts:
         result = await repo.count_contracts(organization_id=1, query=ContractQueryDTO(operation="count"))
 
         assert result == 1
+
+    @pytest.mark.asyncio
+    async def test_applies_service_id_filter(self):
+        repo, session = _make_repo()
+        result_mock = MagicMock()
+        result_mock.one.return_value = 1
+        session.exec.return_value = result_mock
+
+        await repo.count_contracts(organization_id=1, query=ContractQueryDTO(operation="count", service_id=2))
+
+        statement = session.exec.await_args.kwargs["statement"]
+        compiled = statement.compile()
+        assert "documents_services" in str(statement)
+        assert any(value == 2 for value in compiled.params.values())
 
 
 class TestRankContractsByClient:
@@ -130,6 +159,26 @@ class TestRankContractsByClient:
             {"client": "Cliente B", "currency": "PEN", "total_value": 300.0, "contracts_count": 1},
         ]
         session.exec.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_applies_service_filters_to_ranking_query(self):
+        repo, session = _make_repo()
+        result_mock = MagicMock()
+        result_mock.all.return_value = []
+        session.exec.return_value = result_mock
+
+        await repo.rank_contracts_by_client(
+            organization_id=1,
+            query=ContractQueryDTO(operation="ranking", service_name="Hosting", service_id=2),
+            limit=10,
+        )
+
+        statement = session.exec.await_args.kwargs["statement"]
+        compiled = statement.compile()
+        assert "documents_services" in str(statement)
+        assert "services" in str(statement)
+        assert any(value == 2 for value in compiled.params.values())
+        assert any(value == "%hosting%" for value in compiled.params.values())
 
     @pytest.mark.asyncio
     async def test_operational_error_raises_unavailable(self):
