@@ -466,6 +466,53 @@ class TestGenerateDraftFromPrompt:
         assert "page_2_image_1_v2.jpg" not in draft.content.body_md
 
     @pytest.mark.asyncio
+    async def test_generate_draft_from_prompt_removes_trailing_signature_block_placeholders(self):
+        template_format_repo = AsyncMock()
+        template_format_repo.get_by_document_type_and_code.return_value = _make_format()
+        organization_repo = AsyncMock()
+        organization_repo.get_organization_data.return_value = {}
+        draft_generator = AsyncMock()
+        draft_generator.generate.return_value = TemplateDraftResponse(
+            name="Plantilla Empresa",
+            description=None,
+            content=TemplateContent(
+                body_md=(
+                    "# Contrato\n"
+                    "{{ cliente_nombre }}\n\n"
+                    "_________________________\n"
+                    "LA EMPRESA\n"
+                    "{{ representante_nombre }}\n\n"
+                    "_________________________\n"
+                    "EL GERENTE\n"
+                    "{{ gerente_representante_nombre }}"
+                ),
+                fields=[
+                    TemplateField(key="cliente_nombre", label="Cliente", required=True),
+                    TemplateField(key="representante_nombre", label="Representante Legal", required=True),
+                    TemplateField(key="gerente_representante_nombre", label="Representante del Gerente", required=True),
+                ],
+            ),
+            warnings=[],
+            source={},
+        )
+        service = _make_authoring_service(
+            template_format_repo=template_format_repo,
+            organization_repo=organization_repo,
+            draft_generator=draft_generator,
+        )
+
+        draft, document_type = await service.generate_draft_from_prompt(
+            request=GenerateTemplateDraftRequest(format_code="base_company"),
+            organization_id=1,
+            user_role=UserRole.MANAGER,
+        )
+
+        assert document_type == DocumentType.COMPANY
+        assert draft.content.body_md == "# Contrato\n{{ cliente_nombre }}"
+        assert [field.key for field in draft.content.fields] == ["cliente_nombre"]
+        assert draft.content.operational_fields == []
+
+    @pytest.mark.asyncio
     async def test_generate_draft_from_prompt_infers_time_fields_from_reference_markers(self):
         template_format_repo = AsyncMock()
         template_format_repo.get_by_document_type_and_code.return_value = _make_format(document_type=DocumentType.LABOR)

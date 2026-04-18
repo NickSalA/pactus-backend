@@ -21,16 +21,42 @@ class RenderedContractFormatter:
     SIGNATURE_BLOCK_MARKER = 'data-generated-signatures="true"'
     UNDERSCORE_LINE_PATTERN = re.compile(r"^_{8,}\s*$")
     CLOSING_LINE_PATTERN = re.compile(r"^(?:en fe de lo cual|en se[nñ]al de conformidad|para constancia|firman|suscriben)\b", re.IGNORECASE)
+    SIGNATURE_TITLE_PATTERN = re.compile(
+        r"^(?:la empresa|el gerente|la contratista|la contraparte|el empleador|el trabajador)$",
+        re.IGNORECASE,
+    )
+    SIGNATURE_PLACEHOLDER_PATTERN = re.compile(r"^{{\s*(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*}}$")
+    SIGNATURE_PLACEHOLDER_KEYS = frozenset(
+        {
+            "representante_nombre",
+            "representante_nombre_empresa",
+            "representante_nombre_empleador",
+            "gerente_representante_nombre",
+            "contratista_representante_nombre",
+            "representante_nombre_contratista",
+            "representante_nombre_gerente",
+            "contratista_nombre_representante",
+            "gerente_nombre_representante",
+            "trabajador_nombre",
+            "empleador_razon_social",
+            "gerente_razon_social",
+            "contratista_razon_social",
+        }
+    )
 
     def format(self, markdown: str, *, document_type: DocumentType, payload: dict[str, Any]) -> str:
         """Formats rendered markdown for output-specific presentation."""
-        normalized_markdown = markdown.rstrip()
-        normalized_markdown = self._strip_generated_signature_block(normalized_markdown)
-        normalized_markdown = self._strip_legacy_signature_block(normalized_markdown)
+        normalized_markdown = self.strip_signature_blocks(markdown)
         signature_block = self._build_signature_block(document_type=document_type, payload=payload)
         if not signature_block:
             return normalized_markdown
         return f"{normalized_markdown}\n\n{signature_block}" if normalized_markdown else signature_block
+
+    def strip_signature_blocks(self, markdown: str) -> str:
+        """Removes generated or legacy signature sections from markdown."""
+        normalized_markdown = markdown.rstrip()
+        normalized_markdown = self._strip_generated_signature_block(normalized_markdown)
+        return self._strip_legacy_signature_block(normalized_markdown)
 
     def _strip_generated_signature_block(self, markdown: str) -> str:
         """Avoids duplicating a previously formatted signature block."""
@@ -73,6 +99,10 @@ class RenderedContractFormatter:
             return True
         if self.UNDERSCORE_LINE_PATTERN.match(stripped):
             return True
+        if self.SIGNATURE_TITLE_PATTERN.fullmatch(stripped):
+            return True
+        if self._is_signature_placeholder_line(stripped):
+            return True
         if self.CLOSING_LINE_PATTERN.match(stripped):
             return False
         alpha_count = sum(1 for char in stripped if char.isalpha())
@@ -84,6 +114,13 @@ class RenderedContractFormatter:
         if stripped.endswith(".") or stripped.endswith(":"):
             return False
         return uppercase_ratio >= 0.45 or stripped.replace(" ", "").isalnum()
+
+    def _is_signature_placeholder_line(self, stripped_line: str) -> bool:
+        """Detects placeholder-only lines commonly used inside legacy signature blocks."""
+        match = self.SIGNATURE_PLACEHOLDER_PATTERN.fullmatch(stripped_line)
+        if match is None:
+            return False
+        return match.group("key") in self.SIGNATURE_PLACEHOLDER_KEYS
 
     def _build_signature_block(self, *, document_type: DocumentType, payload: dict[str, Any]) -> str:
         """Builds a standardized HTML signature block."""
