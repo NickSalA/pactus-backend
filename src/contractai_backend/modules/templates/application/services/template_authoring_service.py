@@ -512,7 +512,12 @@ class TemplateAuthoringService:
         generation_mode: TemplateGenerationMode,
     ) -> tuple[TemplateContent, list[str]]:
         """Synchronizes generated content and applies draft post-processing modes."""
-        synced_content = self.content_synchronizer.sync(content)
+        normalized_content = content
+        stripped_body_md = self.rendered_contract_formatter.strip_signature_blocks(content.body_md)
+        if stripped_body_md != content.body_md:
+            normalized_content = content.model_copy(update={"body_md": stripped_body_md})
+
+        synced_content = self.content_synchronizer.sync(normalized_content)
         warnings: list[str] = []
 
         if document_type == DocumentType.COMPANY:
