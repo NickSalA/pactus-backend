@@ -2,6 +2,75 @@
 
 <!-- version list -->
 
+## v0.1.0 (2026-05-03)
+
+- Initial Release
+
+## v0.38.0 (2026-04-18)
+
+### Bug Fixes
+
+- Change get llm docstring
+  ([`499fd86`](https://github.com/NickSalA/ContractAI-Backend/commit/499fd86fd56b8590d082391d6f7f03308354e4f8))
+
+- Enhance chatbot capabilities for services
+  ([`6a977c6`](https://github.com/NickSalA/ContractAI-Backend/commit/6a977c6dd82634d0bf54e96790b94f064316a12f))
+
+- Enhance extraction for services
+  ([`c365b6c`](https://github.com/NickSalA/ContractAI-Backend/commit/c365b6c5c26ba61c7978f1673491be5a51389436))
+
+### Features
+
+- Add cron endpoint for daily email alerts and implement notification send log
+  ([`54f2a81`](https://github.com/NickSalA/ContractAI-Backend/commit/54f2a81a562916572049c3441ad3cf3ded9bed1f))
+
+- Enhance signature block handling and add tests for placeholder removal
+  ([`7773786`](https://github.com/NickSalA/ContractAI-Backend/commit/77737862aa0c21bca3188e59270721861d34fad9))
+
+- Include NotificationSendLog in module exports
+  ([`54f2a81`](https://github.com/NickSalA/ContractAI-Backend/commit/54f2a81a562916572049c3441ad3cf3ded9bed1f))
+
+- Update CRON_SECRET to use secret management for enhanced security
+  ([`54f2a81`](https://github.com/NickSalA/ContractAI-Backend/commit/54f2a81a562916572049c3441ad3cf3ded9bed1f))
+
+
+## v0.37.0 (2026-04-17)
+
+### Features
+
+- Add cron endpoint for daily email alerts and implement notification send log
+  ([`b730736`](https://github.com/NickSalA/ContractAI-Backend/commit/b730736c4300a9a469c02e0c8b8c48cb886d3601))
+
+- Include NotificationSendLog in module exports
+  ([`b730736`](https://github.com/NickSalA/ContractAI-Backend/commit/b730736c4300a9a469c02e0c8b8c48cb886d3601))
+
+- Update CRON_SECRET to use secret management for enhanced security
+  ([`b730736`](https://github.com/NickSalA/ContractAI-Backend/commit/b730736c4300a9a469c02e0c8b8c48cb886d3601))
+
+
+## v0.36.0 (2026-04-17)
+
+### Features
+
+- Update GEMINI_API_KEY and remove hardcoded AZURE_OPENAI_API_KEY
+  ([`17ef9e9`](https://github.com/NickSalA/ContractAI-Backend/commit/17ef9e99c51dd99c0184dc17074c606b2eb39b2d))
+
+
+## v0.35.0 (2026-04-17)
+
+### Features
+
+- Enhance template synchronization and validation logic with new field normalization and alias
+  handling
+  ([`dbb9e2e`](https://github.com/NickSalA/ContractAI-Backend/commit/dbb9e2eaa1d0fc2f1e49c04f1037294a9b8b1114))
+
+- Refactor template authoring service and add signature time payload helper
+  ([`51d7a49`](https://github.com/NickSalA/ContractAI-Backend/commit/51d7a49886883f5d98b63f678310e84e61890c5f))
+
+
+## v0.34.0 (2026-04-16)
+
+
 ## v0.33.5 (2026-04-16)
 
 ### Bug Fixes
