@@ -23,6 +23,7 @@ class AreaChartPoint(BaseModel):
 class AreaChartSeries(BaseModel):
     """One chart series."""
 
+    currency: str
     name: str
     data: list[AreaChartPoint]
 

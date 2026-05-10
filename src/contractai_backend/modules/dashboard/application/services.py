@@ -4,8 +4,9 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime, time, timedelta
 from math import ceil
 
-from ...documents.domain.value_objs import DocumentType
+from ...documents.domain.value_objs import DocumentType, CurrencyType
 from ...users.domain.entities import UserTable
+from ..domain.value_objs import TopRankingSortBy
 from ..api.schemas import (
     AlertCategory,
     AlertColor,
@@ -108,7 +109,7 @@ class DashboardService:
             dates=cls._format_date_range(start_date=contract.start_date, end_date=contract.end_date),
         )
 
-    async def get_area_chart(self, current_user: UserTable, document_type: DocumentType) -> AreaChartResponse:
+    async def get_area_chart(self, current_user: UserTable, document_type: DocumentType, currency: CurrencyType | None = None) -> AreaChartResponse:
         """Builds historical and future secured-contract amounts for one dashboard scope."""
         ensure_dashboard_access(current_user=current_user, document_type=document_type)
         await self.repository.sync_contract_states(organization_id=current_user.organization_id)
@@ -120,6 +121,7 @@ class DashboardService:
         monthly_amounts = await self.repository.get_monthly_amounts(
             organization_id=current_user.organization_id,
             document_type=document_type,
+            currency=currency,
             start_month=start_month,
             months=total_months,
         )
@@ -132,15 +134,19 @@ class DashboardService:
             )
             for item in monthly_amounts
         ]
+
         title, subtitle, series_name = self._resolve_chart_copy(document_type=document_type)
         max_value = max((point.y for point in points), default=0)
+
+        series = [AreaChartSeries(currency=currency or "ALL", name=series_name, data=points)]
+
         return AreaChartResponse(
             props=AreaChartProps(
                 title=title,
                 subtitle=subtitle,
                 y_axis=AreaChartYAxis(labels=self._build_y_axis_labels(max_value=max_value)),
                 threshold_date=datetime.combine(current_month, time.min, tzinfo=UTC),
-                series=[AreaChartSeries(name=series_name, data=points)],
+                series=series,
             )
         )
 
@@ -214,16 +220,50 @@ class DashboardService:
         )
         return [self._serialize_recent_contract(contract) for contract in contracts]
 
-    async def get_top_companies(self, current_user: UserTable) -> Sequence[TopCompanyResponse]:
+    async def get_top_companies(
+        self,
+        current_user: UserTable,
+        currency: CurrencyType | None = None,
+        sort_by: TopRankingSortBy = TopRankingSortBy.VOLUME,
+    ) -> Sequence[TopCompanyResponse]:
         """Returns the top company counterparties for managers."""
         ensure_dashboard_access(current_user=current_user, document_type=DocumentType.COMPANY)
         await self.repository.sync_contract_states(organization_id=current_user.organization_id)
-        rows = await self.repository.list_top_companies(organization_id=current_user.organization_id, limit=TOP_RANKING_LIMIT)
-        return [TopCompanyResponse(name=row.name, contracts=row.contracts, amount=round(row.amount, 2)) for row in rows]
+        rows = await self.repository.list_top_companies(
+            organization_id=current_user.organization_id,
+            limit=TOP_RANKING_LIMIT,
+            currency=currency,
+            sort_by=sort_by,
+        )
+        return [
+            TopCompanyResponse(
+                name=row.name,
+                contracts=row.contracts,
+                amount=round(row.amount, 2),
+            )
+            for row in rows
+        ]
 
-    async def get_top_services(self, current_user: UserTable) -> Sequence[TopServiceResponse]:
+    async def get_top_services(
+        self,
+        current_user: UserTable,
+        currency: CurrencyType | None = None,
+        sort_by: TopRankingSortBy = TopRankingSortBy.VOLUME,
+    ) -> Sequence[TopServiceResponse]:
         """Returns the top services for company contracts and managers."""
         ensure_dashboard_access(current_user=current_user, document_type=DocumentType.COMPANY)
         await self.repository.sync_contract_states(organization_id=current_user.organization_id)
-        rows = await self.repository.list_top_services(organization_id=current_user.organization_id, limit=TOP_RANKING_LIMIT)
-        return [TopServiceResponse(name=row.name, quantity=row.quantity, amount=round(row.amount, 2)) for row in rows]
+        rows = await self.repository.list_top_services(
+            organization_id=current_user.organization_id,
+            limit=TOP_RANKING_LIMIT,
+            currency=currency,
+            sort_by=sort_by,
+        )
+        return [
+            TopServiceResponse(
+                name=row.name,
+                quantity=row.quantity,
+                amount=round(row.amount, 2),
+            )
+            for row in rows
+        ]

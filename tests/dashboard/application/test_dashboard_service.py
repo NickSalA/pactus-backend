@@ -8,6 +8,7 @@ import pytest
 from contractai_backend.core.exceptions.base import ForbiddenError
 from contractai_backend.modules.dashboard.application.repositories import DashboardContractSummary, DashboardMonthlyAmount
 from contractai_backend.modules.dashboard.application.services import ALERT_PREVIEW_LIMIT, RECENT_CONTRACTS_LIMIT, TOP_RANKING_LIMIT, DashboardService
+from contractai_backend.modules.dashboard.domain.value_objs import TopRankingSortBy
 from contractai_backend.modules.documents.domain.value_objs import DocumentType
 from contractai_backend.modules.users.domain.entities import UserTable
 from contractai_backend.modules.users.domain.value_objs import UserRole
@@ -26,7 +27,7 @@ class TestDashboardAccess:
     async def test_manager_can_access_company_dashboard(self):
         repo = AsyncMock()
         repo.sync_contract_states.return_value = 0
-        repo.get_monthly_amounts.return_value = [DashboardMonthlyAmount(month=date.today().replace(day=1), amount=1000)]
+        repo.get_monthly_amounts.return_value = [DashboardMonthlyAmount(month=date.today().replace(day=1), amount=1000.0)]
         service = _make_service(repo)
 
         response = await service.get_area_chart(current_user=_make_user(UserRole.MANAGER), document_type=DocumentType.COMPANY)
@@ -37,7 +38,7 @@ class TestDashboardAccess:
     async def test_hr_can_access_labor_dashboard(self):
         repo = AsyncMock()
         repo.sync_contract_states.return_value = 0
-        repo.get_monthly_amounts.return_value = [DashboardMonthlyAmount(month=date.today().replace(day=1), amount=1000)]
+        repo.get_monthly_amounts.return_value = [DashboardMonthlyAmount(month=date.today().replace(day=1), amount=1000.0)]
         service = _make_service(repo)
 
         response = await service.get_area_chart(current_user=_make_user(UserRole.HR), document_type=DocumentType.LABOR)
@@ -83,7 +84,12 @@ class TestDashboardLimits:
 
         await service.get_top_companies(current_user=_make_user(UserRole.MANAGER))
 
-        repo.list_top_companies.assert_awaited_once_with(organization_id=10, limit=TOP_RANKING_LIMIT)
+        repo.list_top_companies.assert_awaited_once_with(
+            organization_id=10,
+            limit=TOP_RANKING_LIMIT,
+            currency=None,
+            sort_by=TopRankingSortBy.VOLUME,
+        )
 
     @pytest.mark.asyncio
     async def test_alert_center_uses_preview_limit_three(self):

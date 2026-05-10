@@ -12,7 +12,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from ....core.exceptions.base import InternalServerError, ServiceUnavailableError
 from ....shared.infrastructure.sqlmodel_utils import RelationalHelpersMixin
 from ...documents.domain import DocumentServiceTable, DocumentTable, ServiceTable
-from ...documents.domain.value_objs import DocumentState, DocumentType
+from ...documents.domain.value_objs import DocumentState, DocumentType, CurrencyType
+from ..domain.value_objs import TopRankingSortBy
 from ..application.repositories import (
     DashboardClientRanking,
     DashboardContractSummary,
@@ -122,6 +123,7 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
         self,
         organization_id: int,
         document_type: DocumentType,
+        currency: CurrencyType | None,
         start_month: date,
         months: int,
     ) -> Sequence[DashboardMonthlyAmount]:
@@ -131,15 +133,21 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
             current_month = start_month
             for _ in range(months):
                 next_month = self._month_end(current_month)
+
+                filters = [
+                    *self._base_contract_filters(organization_id=organization_id, document_type=document_type),
+                    col(DocumentServiceTable.value) > 0,
+                    col(DocumentServiceTable.start_date) < next_month,
+                    col(DocumentServiceTable.end_date) >= current_month,
+                ]
+
+                if currency:
+                    filters.append(col(DocumentServiceTable.currency) == currency)
+
                 statement = (
                     select(func.coalesce(func.sum(col(DocumentServiceTable.value)), 0.0))
                     .join(DocumentTable, col(DocumentTable.id) == col(DocumentServiceTable.document_id))
-                    .where(
-                        *self._base_contract_filters(organization_id=organization_id, document_type=document_type),
-                        col(DocumentServiceTable.value) > 0,
-                        col(DocumentServiceTable.start_date) < next_month,
-                        col(DocumentServiceTable.end_date) >= current_month,
-                    )
+                    .where(*filters)
                 )
                 result = await self.session.exec(statement=statement)
                 results.append(DashboardMonthlyAmount(month=current_month, amount=float(result.one() or 0.0)))
@@ -258,9 +266,19 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
         except SQLAlchemyError as e:
             raise InternalServerError("Error al listar contratos recientes") from e
 
-    async def list_top_companies(self, organization_id: int, limit: int) -> Sequence[DashboardClientRanking]:
+    async def list_top_companies(
+        self,
+        organization_id: int,
+        limit: int,
+        currency: CurrencyType | None = None,
+        sort_by: TopRankingSortBy = TopRankingSortBy.VOLUME,
+    ) -> Sequence[DashboardClientRanking]:
         """Lists company counterparties ranked by contract count and amount."""
         try:
+            filters = list(self._base_contract_filters(organization_id=organization_id, document_type=DocumentType.COMPANY))
+            if currency:
+                filters.append(col(DocumentServiceTable.currency) == currency)
+
             statement = (
                 select(
                     col(DocumentTable.client).label("name"),
@@ -268,11 +286,17 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
                     func.coalesce(func.sum(col(DocumentServiceTable.value)), 0.0).label("amount"),
                 )
                 .outerjoin(DocumentServiceTable, col(DocumentServiceTable.document_id) == col(DocumentTable.id))
-                .where(*self._base_contract_filters(organization_id=organization_id, document_type=DocumentType.COMPANY))
+                .where(*filters)
                 .group_by(col(DocumentTable.client))
-                .order_by(desc("contracts"), desc("amount"), col(DocumentTable.client))
-                .limit(limit)
             )
+
+            if sort_by == TopRankingSortBy.VALUE:
+                statement = statement.order_by(desc("amount"), desc("contracts"), col(DocumentTable.client))
+            else:
+                statement = statement.order_by(desc("contracts"), desc("amount"), col(DocumentTable.client))
+
+            statement = statement.limit(limit)
+
             result = await self.session.exec(statement=statement)
             rankings = []
             for row in result.all():
@@ -290,9 +314,22 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
         except SQLAlchemyError as e:
             raise InternalServerError("Error al listar empresas principales") from e
 
-    async def list_top_services(self, organization_id: int, limit: int) -> Sequence[DashboardServiceRanking]:
+    async def list_top_services(
+        self,
+        organization_id: int,
+        limit: int,
+        currency: CurrencyType | None = None,
+        sort_by: TopRankingSortBy = TopRankingSortBy.VOLUME,
+    ) -> Sequence[DashboardServiceRanking]:
         """Lists services ranked by associated company contracts and amount."""
         try:
+            filters = [
+                *self._base_contract_filters(organization_id=organization_id, document_type=DocumentType.COMPANY),
+                col(ServiceTable.organization_id) == organization_id,
+            ]
+            if currency:
+                filters.append(col(DocumentServiceTable.currency) == currency)
+
             statement = (
                 select(
                     col(ServiceTable.name).label("name"),
@@ -301,14 +338,17 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
                 )
                 .join(DocumentServiceTable, col(DocumentServiceTable.service_id) == col(ServiceTable.id))
                 .join(DocumentTable, col(DocumentTable.id) == col(DocumentServiceTable.document_id))
-                .where(
-                    *self._base_contract_filters(organization_id=organization_id, document_type=DocumentType.COMPANY),
-                    col(ServiceTable.organization_id) == organization_id,
-                )
+                .where(*filters)
                 .group_by(col(ServiceTable.name))
-                .order_by(desc("quantity"), desc("amount"), col(ServiceTable.name))
-                .limit(limit)
             )
+
+            if sort_by == TopRankingSortBy.VALUE:
+                statement = statement.order_by(desc("amount"), desc("quantity"), col(ServiceTable.name))
+            else:
+                statement = statement.order_by(desc("quantity"), desc("amount"), col(ServiceTable.name))
+
+            statement = statement.limit(limit)
+
             result = await self.session.exec(statement=statement)
             rankings = []
             for row in result.all():

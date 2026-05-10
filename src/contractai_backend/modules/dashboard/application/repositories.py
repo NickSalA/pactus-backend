@@ -5,7 +5,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
-from ...documents.domain.value_objs import DocumentState, DocumentType
+from ...documents.domain.value_objs import DocumentState, DocumentType, CurrencyType
+from ..domain.value_objs import TopRankingSortBy
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,7 @@ class DashboardRepository(ABC):
         self,
         organization_id: int,
         document_type: DocumentType,
+        currency: CurrencyType | None,
         start_month: date,
         months: int,
     ) -> Sequence[DashboardMonthlyAmount]:
@@ -125,11 +127,23 @@ class DashboardRepository(ABC):
         pass
 
     @abstractmethod
-    async def list_top_companies(self, organization_id: int, limit: int) -> Sequence[DashboardClientRanking]:
+    async def list_top_companies(
+        self,
+        organization_id: int,
+        limit: int,
+        currency: CurrencyType | None = None,
+        sort_by: TopRankingSortBy = TopRankingSortBy.VOLUME,
+    ) -> Sequence[DashboardClientRanking]:
         """Lists top company counterparties by contracts and amount."""
         pass
 
     @abstractmethod
-    async def list_top_services(self, organization_id: int, limit: int) -> Sequence[DashboardServiceRanking]:
+    async def list_top_services(
+        self,
+        organization_id: int,
+        limit: int,
+        currency: CurrencyType | None = None,
+        sort_by: TopRankingSortBy = TopRankingSortBy.VOLUME,
+    ) -> Sequence[DashboardServiceRanking]:
         """Lists top services associated with company contracts."""
         pass

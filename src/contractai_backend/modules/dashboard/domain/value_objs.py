@@ -8,3 +8,10 @@ class DashboardContractScope(StrEnum):
 
     COMPANY = "company"
     LABOR = "labor"
+
+
+class TopRankingSortBy(StrEnum):
+    """Sorting criteria for top rankings."""
+
+    VOLUME = "volume"
+    VALUE = "value"
