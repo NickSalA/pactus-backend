@@ -15,8 +15,8 @@ class DocumentQueryRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_all(self, filters: dict[str, Any] | None = None) -> Sequence[DocumentTable]:
-        """Lists documents matching optional filters."""
+    async def get_all(self, filters: dict[str, Any] | None = None, limit: int | None = None, offset: int | None = None) -> Sequence[DocumentTable]:
+        """Lists documents matching optional filters with optional pagination."""
         pass
 
     @abstractmethod
