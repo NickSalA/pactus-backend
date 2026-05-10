@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Sequence
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Form, Query, Response, UploadFile, status
 from pydantic import ValidationError
@@ -74,12 +74,16 @@ async def create_document(
 async def list_documents(
     service: Annotated[DocumentQueryService, Depends(get_document_query_service)],
     current_user: CurrentUserDep,
+    limit: Optional[int] = Query(default=None, ge=1, description="Maximum number of documents to return"),
+    offset: Optional[int] = Query(default=None, ge=0, description="Number of documents to skip"),
 ) -> Sequence[DocumentResponse]:
-    """Endpoint to list documents with optional filters."""
+    """Endpoint to list documents with optional filters and pagination."""
     user_role = getattr(current_user, "role", None)
     documents: Sequence[DocumentResponse] = await service.get_documents(
         organization_id=current_user.organization_id,
         user_role=user_role,
+        limit=limit,
+        offset=offset,
     )
     return documents
 

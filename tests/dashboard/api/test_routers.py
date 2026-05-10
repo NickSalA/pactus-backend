@@ -43,7 +43,7 @@ def _area_chart_response() -> AreaChartResponse:
             subtitle="Historico vs. contratos asegurados a futuro",
             y_axis=AreaChartYAxis(labels=[0, 1000, 2000, 3000, 4000]),
             threshold_date=datetime(2026, 5, 1, tzinfo=UTC),
-            series=[AreaChartSeries(name="Ingresos", data=[])],
+            series=[AreaChartSeries(currency="PEN", name="Ingresos", data=[])],
         )
     )
 
@@ -92,8 +92,8 @@ class TestDashboardRouter:
     @pytest.mark.asyncio
     async def test_top_rankings_return_200(self):
         service = AsyncMock()
-        service.get_top_companies.return_value = [TopCompanyResponse(name="TechCorp SA", contracts=5, amount=120000)]
-        service.get_top_services.return_value = [TopServiceResponse(name="Cloud Support", quantity=5, amount=60000)]
+        service.get_top_companies.return_value = [TopCompanyResponse(name="TechCorp SA", contracts=5, amount=120000.0)]
+        service.get_top_services.return_value = [TopServiceResponse(name="Cloud Support", quantity=5, amount=60000.0)]
         app = _make_app(service)
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

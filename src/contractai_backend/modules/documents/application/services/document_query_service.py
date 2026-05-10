@@ -23,12 +23,18 @@ class DocumentQueryService:
             return True
         return can_read_document_type(user_role=user_role, document_type=DocumentType(document.type))
 
-    async def get_documents(self, organization_id: int, user_role: UserRole | None = None) -> Sequence[DocumentResponse]:
-        """Lists documents for the given organization."""
+    async def get_documents(
+        self,
+        organization_id: int,
+        user_role: UserRole | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> Sequence[DocumentResponse]:
+        """Lists documents for the given organization with optional pagination."""
         await self.sql_repo.sync_contract_states(organization_id=organization_id)
         documents = [
             document
-            for document in await self.sql_repo.get_all(filters={"organization_id": organization_id})
+            for document in await self.sql_repo.get_all(filters={"organization_id": organization_id}, limit=limit, offset=offset)
             if self._can_read_document(document=document, user_role=user_role)
         ]
         document_ids = [document.id for document in documents if document.id is not None]

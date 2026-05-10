@@ -935,7 +935,7 @@ class TestGetDocuments:
         result = await service.get_documents(organization_id=1)
 
         assert [document.id for document in result] == [1, 2]
-        sql_repo.get_all.assert_called_once_with(filters={"organization_id": 1})
+        sql_repo.get_all.assert_called_once_with(filters={"organization_id": 1}, limit=None, offset=None)
         sql_repo.get_document_services_by_document_ids.assert_called_once_with(document_ids=[1, 2])
 
     @pytest.mark.asyncio

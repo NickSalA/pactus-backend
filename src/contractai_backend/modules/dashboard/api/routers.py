@@ -1,12 +1,13 @@
 """HTTP endpoints for dashboard analytics."""
 
 from collections.abc import Sequence
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from ....shared.api.dependencies.security import CurrentUserDep
-from ...documents.domain.value_objs import DocumentType
+from ...documents.domain.value_objs import DocumentType, CurrencyType
+from ..domain.value_objs import TopRankingSortBy
 from ..application.services import DashboardService
 from .dependencies import get_dashboard_service
 from .schemas import AlertCategory, AreaChartResponse, RecentContractResponse, TopCompanyResponse, TopServiceResponse
@@ -17,15 +18,23 @@ DashboardServiceDep = Annotated[DashboardService, Depends(get_dashboard_service)
 
 
 @router.get(path="/area_chart/company", response_model=AreaChartResponse)
-async def get_company_area_chart(service: DashboardServiceDep, current_user: CurrentUserDep) -> AreaChartResponse:
+async def get_company_area_chart(
+    service: DashboardServiceDep,
+    current_user: CurrentUserDep,
+    currency: Optional[CurrencyType] = Query(None, description="Filter chart points by a specific currency"),
+) -> AreaChartResponse:
     """Returns the company contracts area chart for managers."""
-    return await service.get_area_chart(current_user=current_user, document_type=DocumentType.COMPANY)
+    return await service.get_area_chart(current_user=current_user, document_type=DocumentType.COMPANY, currency=currency)
 
 
 @router.get(path="/area_chart/labor", response_model=AreaChartResponse)
-async def get_labor_area_chart(service: DashboardServiceDep, current_user: CurrentUserDep) -> AreaChartResponse:
+async def get_labor_area_chart(
+    service: DashboardServiceDep,
+    current_user: CurrentUserDep,
+    currency: Optional[CurrencyType] = Query(None, description="Filter chart points by a specific currency"),
+) -> AreaChartResponse:
     """Returns the labor contracts area chart for HR users."""
-    return await service.get_area_chart(current_user=current_user, document_type=DocumentType.LABOR)
+    return await service.get_area_chart(current_user=current_user, document_type=DocumentType.LABOR, currency=currency)
 
 
 @router.get(path="/alert_center/company", response_model=list[AlertCategory])
@@ -53,12 +62,22 @@ async def get_labor_recent_contracts(service: DashboardServiceDep, current_user:
 
 
 @router.get(path="/top_companies", response_model=Sequence[TopCompanyResponse])
-async def get_top_companies(service: DashboardServiceDep, current_user: CurrentUserDep) -> Sequence[TopCompanyResponse]:
+async def get_top_companies(
+    service: DashboardServiceDep,
+    current_user: CurrentUserDep,
+    currency: Optional[CurrencyType] = Query(None, description="Filter ranking by a specific currency"),
+    sort_by: TopRankingSortBy = Query(TopRankingSortBy.VOLUME, description="Sort criteria (volume or value)"),
+) -> Sequence[TopCompanyResponse]:
     """Returns top company counterparties for managers."""
-    return await service.get_top_companies(current_user=current_user)
+    return await service.get_top_companies(current_user=current_user, currency=currency, sort_by=sort_by)
 
 
 @router.get(path="/top_services", response_model=Sequence[TopServiceResponse])
-async def get_top_services(service: DashboardServiceDep, current_user: CurrentUserDep) -> Sequence[TopServiceResponse]:
+async def get_top_services(
+    service: DashboardServiceDep,
+    current_user: CurrentUserDep,
+    currency: Optional[CurrencyType] = Query(None, description="Filter ranking by a specific currency"),
+    sort_by: TopRankingSortBy = Query(TopRankingSortBy.VOLUME, description="Sort criteria (volume or value)"),
+) -> Sequence[TopServiceResponse]:
     """Returns top company services for managers."""
-    return await service.get_top_services(current_user=current_user)
+    return await service.get_top_services(current_user=current_user, currency=currency, sort_by=sort_by)
