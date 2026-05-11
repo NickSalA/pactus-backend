@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 from contractai_backend.modules.documents.domain.exceptions import DocumentStorageError, DocumentStorageUnavailableError
+from contractai_backend.modules.documents.domain.value_objs import DocumentType
 from contractai_backend.modules.documents.infrastructure.supabase_storage import SupabaseStorageRepository
 
 
@@ -68,13 +69,13 @@ class TestSanitizeFilename:
 class TestBuildPath:
     def test_builds_path_with_filename(self):
         repo = _make_repo()
-        path = repo._build_path(document_id=1, filename="contrato.pdf")
-        assert path == "documents/1/contrato.pdf"
+        path = repo._build_path(document_id=1, organization_id=10, document_type=DocumentType.COMPANY, filename="contrato.pdf")
+        assert path == "orgs/10/company/docs/1/contrato.pdf"
 
     def test_builds_path_without_filename(self):
         repo = _make_repo()
-        path = repo._build_path(document_id=5)
-        assert path == "documents/5/document.pdf"
+        path = repo._build_path(document_id=5, organization_id=20, document_type=None)
+        assert path == "orgs/20/untyped/docs/5/document.pdf"
 
 
 # ---------------------------------------------------------------------------
@@ -87,8 +88,8 @@ class TestUploadFile:
         repo = _make_repo()
         repo.client.post = AsyncMock(return_value=_mock_response(201))
 
-        path = await repo.upload_file(1, b"content", "file.pdf", "application/pdf")
-        assert path == "documents/1/file.pdf"
+        path = await repo.upload_file(1, 10, DocumentType.LABOR, b"content", "file.pdf", "application/pdf")
+        assert path == "orgs/10/labor/docs/1/file.pdf"
 
     @pytest.mark.asyncio
     async def test_upload_http_error_raises_storage_error(self):
@@ -96,7 +97,7 @@ class TestUploadFile:
         repo.client.post = AsyncMock(return_value=_mock_response(500))
 
         with pytest.raises(DocumentStorageError):
-            await repo.upload_file(1, b"content", "file.pdf", "application/pdf")
+            await repo.upload_file(1, 10, DocumentType.LABOR, b"content", "file.pdf", "application/pdf")
 
     @pytest.mark.asyncio
     async def test_upload_timeout_raises_unavailable(self):
@@ -104,7 +105,7 @@ class TestUploadFile:
         repo.client.post = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
 
         with pytest.raises(DocumentStorageUnavailableError):
-            await repo.upload_file(1, b"content", "file.pdf", "application/pdf")
+            await repo.upload_file(1, 10, DocumentType.LABOR, b"content", "file.pdf", "application/pdf")
 
     @pytest.mark.asyncio
     async def test_upload_request_error_raises_unavailable(self):
@@ -112,7 +113,7 @@ class TestUploadFile:
         repo.client.post = AsyncMock(side_effect=httpx.RequestError("conn error"))
 
         with pytest.raises(DocumentStorageUnavailableError):
-            await repo.upload_file(1, b"content", "file.pdf", "application/pdf")
+            await repo.upload_file(1, 10, DocumentType.LABOR, b"content", "file.pdf", "application/pdf")
 
 
 # ---------------------------------------------------------------------------
