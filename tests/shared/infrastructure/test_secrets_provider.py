@@ -5,17 +5,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 from azure.core.exceptions import AzureError, ClientAuthenticationError, ResourceNotFoundError
 
-from contractai_backend.shared.infrastructure.secrets_provider import AzureKeyVaultSecretsProvider
+from contractai_backend.shared.infrastructure.azure_provider import AzureKeyVaultProvider
 
 
-def _make_provider(client: MagicMock | None = None) -> tuple[AzureKeyVaultSecretsProvider, MagicMock]:
+def _make_provider(client: MagicMock | None = None) -> tuple[AzureKeyVaultProvider, MagicMock]:
     mock_client = client or MagicMock()
-
-    with (
-        patch("contractai_backend.shared.infrastructure.secrets_provider.DefaultAzureCredential", return_value=MagicMock()),
-        patch("contractai_backend.shared.infrastructure.secrets_provider.SecretClient", return_value=mock_client),
-    ):
-        provider = AzureKeyVaultSecretsProvider("https://test.vault.azure.net")
+    provider = AzureKeyVaultProvider("https://test.vault.azure.net")
+    provider._client = mock_client
 
     return provider, mock_client
 
@@ -34,7 +30,7 @@ class TestGetSecret:
         provider, client = _make_provider()
         client.get_secret.side_effect = ResourceNotFoundError("missing secret")
 
-        with pytest.raises(ValueError, match="no existe"):
+        with pytest.raises(ValueError, match="no encontrado"):
             provider.get_secret("DATABASE_PASSWORD")
 
     def test_raises_runtime_error_on_authentication_failure(self):
