@@ -3,9 +3,6 @@
 from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .application.secret import SecretsRegistry, get_secret
-from .infrastructure.azure_provider import AzureKeyVaultProvider
-
 
 class Settings(BaseSettings):
     """Configuration settings for the application."""
@@ -27,7 +24,7 @@ class Settings(BaseSettings):
 
     GEMINI_MODEL_NAME: str = Field(default="gemini-2.5-flash")
     GEMINI_MINI_MODEL_NAME: str = Field(default="gemini-2.5-flash-lite")
-    GEMINI_API_KEY: str = Field(default_factory=lambda: get_secret("GEMINI-API-KEY"))
+    GEMINI_API_KEY: str = Field(default=...)
     # MODEL_SECOND_API_KEY: str = Field(default="your-second-model-api-key")
     MODEL_TEMPERATURE: float = Field(default=0.7)
 
@@ -36,26 +33,26 @@ class Settings(BaseSettings):
     AZURE_OPENAI_DEPLOYMENT: str = Field(default="your-agent-model")
     OPENAI_CHAT_MODEL_NAME: str = Field(default="gpt-4.1-mini")
     OPENAI_EMBEDDING_MODEL_NAME: str = Field(default="text-embedding-3-small")
-    OPENAI_API_KEY: str = Field(default_factory=lambda: get_secret("OPENAI-API-KEY"))
-    AZURE_OPENAI_API_KEY: str = Field(default_factory=lambda: get_secret("AZURE-OPENAI-API-KEY"))
+    OPENAI_API_KEY: str = Field(default=...)
+    AZURE_OPENAI_API_KEY: str = Field(default=...)
     # BETTER_STACK_TOKEN: str = Field(default=...)
     # BETTER_STACK_HOST: str = Field(default=...)
 
-    QDRANT_API_KEY: str = Field(default_factory=lambda: get_secret("QDRANT-API-KEY"))
+    QDRANT_API_KEY: str = Field(default=...)
     QDRANT_URL: str = Field(default=...)
     INDEX_NAME: str = Field(default="contracts_index")
     DRIVE_INDEX_NAME: str = Field(default="drive_contracts_index")
 
-    LLAMA_PARSE_API_KEY: str = Field(default_factory=lambda: get_secret("LLAMA-PARSE-API-KEY"))
+    LLAMA_PARSE_API_KEY: str = Field(default=...)
 
     ALLOWED_FILE_TYPES: list[str] = Field(default=["application/pdf", "text/plain"])
     MAX_FILE_SIZE: int = Field(default=5)
     MAX_NUM_PAGES: int = Field(default=10)
 
     DATABASE_NAME: str | None = Field(default="postgres")
-    DATABASE_PASSWORD: str | None = Field(default_factory=lambda: get_secret("DATABASE-PASSWORD"))
-    DATABASE_USER: str | None = Field(default_factory=lambda: get_secret("DATABASE-USER"))
-    DATABASE_HOST: str | None = Field(default_factory=lambda: get_secret("DATABASE-HOST"))
+    DATABASE_PASSWORD: str | None = Field(default=None)
+    DATABASE_USER: str | None = Field(default=None)
+    DATABASE_HOST: str | None = Field(default=None)
     DATABASE_PORT: int | None = Field(default=5432)
     DATABASE_POOL_SIZE: int = Field(default=5)
     DATABASE_MAX_OVERFLOW: int = Field(default=5)
@@ -65,17 +62,17 @@ class Settings(BaseSettings):
     CHECKPOINTER_POOL_MAX_SIZE: int = Field(default=2)
 
     SUPABASE_URL: str = Field(default=...)
-    SUPABASE_SECRET_KEY: str = Field(default_factory=lambda: get_secret("SUPABASE-SECRET-KEY"))
+    SUPABASE_SECRET_KEY: str = Field(default=...)
     SUPABASE_STORAGE_BUCKET: str = Field(default="contracts")
 
     GOOGLE_CLIENT_ID: str = Field(default=...)
-    GOOGLE_CLIENT_SECRET: str = Field(default_factory=lambda: get_secret("GOOGLE-CLIENT-SECRET"))
+    GOOGLE_CLIENT_SECRET: str = Field(default=...)
     GOOGLE_REDIRECT_URI: str = Field(default=...)
 
     GMAIL_SENDER: str | None = Field(default=None)
     GMAIL_APP_PASSWORD: str | None = Field(default=None)
 
-    CRON_SECRET: str | None = Field(default_factory=lambda: get_secret("CRON-SECRET"))
+    CRON_SECRET: str | None = Field(default=None)
 
     @property
     def DATABASE_URL(self) -> str:  # noqa: N802
@@ -93,8 +90,6 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
-
-SecretsRegistry.set_provider(AzureKeyVaultProvider(vault_url="https://contractai.vault.azure.net/"))
 
 try:
     settings = Settings()
