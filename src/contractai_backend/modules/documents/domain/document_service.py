@@ -1,11 +1,11 @@
-"""Document-service link entity and related domain rules."""
+"""Company contract-service link entity and related domain rules."""
 
 from collections.abc import Sequence
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Protocol
 
 from pydantic import ValidationInfo, field_validator
-from sqlalchemy import Column, Date, Float, Integer, Text
+from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import ENUM
 from sqlmodel import Field
 
@@ -47,20 +47,30 @@ def validate_service_periods(
             )
 
 
-class DocumentServiceTable(BaseTable, table=True):
-    """Represents a service attached to a document."""
+class CompanyContractServiceTable(BaseTable, table=True):
+    """Represents a service attached to a company contract."""
 
-    __tablename__: str = "documents_services"
+    __tablename__: str = "company_contract_services"
 
-    document_id: int = Field(sa_column=Column("document_id", Integer, nullable=False, index=True))
+    company_contract_id: int = Field(
+        sa_column=Column("company_contract_id", Integer, ForeignKey("company_contracts.id", ondelete="CASCADE"), nullable=False, index=True)
+    )
     service_id: int = Field(sa_column=Column("service_id", Integer, nullable=False, index=True))
     description: str | None = Field(default=None, sa_column=Column("description", Text, nullable=True))
     value: float = Field(sa_column=Column("value", Float, nullable=False))
     currency: CurrencyType = Field(sa_column=Column("currency", ENUM(CurrencyType, name="currency_type"), nullable=False))
     start_date: date = Field(sa_column=Column("start_date", Date, nullable=False))
     end_date: date = Field(sa_column=Column("end_date", Date, nullable=False))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column("created_at", DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column("updated_at", DateTime(timezone=True), nullable=False),
+    )
 
-    @field_validator("document_id", "service_id")
+    @field_validator("company_contract_id", "service_id")
     @classmethod
     def validate_positive_ids(cls, value: int) -> int:
         """Requires positive identifiers."""
@@ -84,3 +94,6 @@ class DocumentServiceTable(BaseTable, table=True):
         if start_date and end_date < start_date:
             raise ValueError("End date cannot be earlier than start date.")
         return end_date
+
+
+DocumentServiceTable = CompanyContractServiceTable

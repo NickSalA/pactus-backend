@@ -40,17 +40,84 @@ class DocumentServiceItemResponse(DocumentServiceItemBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CompanyContractBase(BaseModel):
+    """Company-specific contract data."""
+
+    ruc: str | None = Field(default=None, description="RUC of the company counterparty")
+    client: str | None = Field(default=None, description="Company counterparty name")
+
+    @field_validator("ruc", "client")
+    @classmethod
+    def validate_optional_text_fields(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Field cannot be empty.")
+        return cleaned
+
+
+class CompanyContractRequest(CompanyContractBase):
+    """Request schema for company-specific contract data."""
+
+
+class CompanyContractResponse(CompanyContractBase):
+    """Response schema for company-specific contract data."""
+
+    id: int = Field(..., description="Unique identifier of the company contract row")
+    document_id: int = Field(..., description="Related document identifier")
+    created_at: datetime = Field(..., description="Company contract creation timestamp")
+    updated_at: datetime = Field(..., description="Last company contract update timestamp")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LaborContractBase(BaseModel):
+    """Labor-specific contract data."""
+
+    worker_name: str | None = None
+    worker_document_number: str | None = None
+    position: str | None = None
+    salary_value: float | None = Field(default=None, ge=0)
+    salary_currency: CurrencyType | None = None
+    salary_periodicity: str | None = None
+    contract_modality: str | None = None
+
+    @field_validator("worker_name", "worker_document_number", "position", "salary_periodicity", "contract_modality")
+    @classmethod
+    def validate_optional_text_fields(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Field cannot be empty.")
+        return cleaned
+
+
+class LaborContractRequest(LaborContractBase):
+    """Request schema for labor-specific contract data."""
+
+
+class LaborContractResponse(LaborContractBase):
+    """Response schema for labor-specific contract data."""
+
+    id: int = Field(..., description="Unique identifier of the labor contract row")
+    document_id: int = Field(..., description="Related document identifier")
+    created_at: datetime = Field(..., description="Labor contract creation timestamp")
+    updated_at: datetime = Field(..., description="Last labor contract update timestamp")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class DocumentBase(BaseModel):
     """Base schema for document-related requests and responses."""
 
-    name: str = Field(..., description="Name of the document")
-    client: str = Field(..., description="Client associated with the document")
-    type: DocumentType = Field(..., description="Type of the document")
+    type: str = Field(..., description="Document source/template type")
     start_date: date = Field(..., description="Start date of the document period")
     end_date: date = Field(..., description="End date of the document period")
     form_data: dict[str, Any] = Field(..., description="Structured JSON payload stored in the form_data column")
 
-    @field_validator("name", "client")
+    @field_validator("type")
     @classmethod
     def validate_text_fields(cls, value: str) -> str:
         cleaned = value.strip()
@@ -62,14 +129,18 @@ class DocumentBase(BaseModel):
 class DocumentDraftBase(BaseModel):
     """Nullable contract metadata accepted during upload/import autofill flows."""
 
-    name: str | None = Field(default=None, description="Name of the document")
-    client: str | None = Field(default=None, description="Client associated with the document")
-    type: DocumentType | None = Field(default=None, description="Type of the document")
+    type: str | None = Field(default=None, description="Document source/template type")
+    contract_type: DocumentType | None = Field(default=None, description="Functional contract class used for routing and permissions")
+    name: str | None = Field(default=None, description="Legacy document name accepted during transition")
+    client: str | None = Field(default=None, description="Legacy counterparty accepted during transition")
     start_date: date | None = Field(default=None, description="Start date of the document period")
     end_date: date | None = Field(default=None, description="End date of the document period")
     form_data: dict[str, Any] = Field(default_factory=dict, description="Structured JSON payload stored in the form_data column")
 
-    @field_validator("name", "client")
+    company_contract: CompanyContractRequest | None = None
+    labor_contract: LaborContractRequest | None = None
+
+    @field_validator("type", "name", "client")
     @classmethod
     def validate_optional_text_fields(cls, value: str | None) -> str | None:
         if value is None:
@@ -106,7 +177,7 @@ class CreateDocumentDraftRequest(DocumentDraftBase):
     folder_id: int | None = Field(default=None, gt=0, description="Optional folder assigned to the document")
     service_items: list[DocumentServiceItemRequest] = Field(
         default_factory=list,
-        description="Services associated to the document through documents_services",
+        description="Services associated to the company contract",
     )
 
     @field_validator("service_items")
@@ -121,9 +192,7 @@ class CreateDocumentDraftRequest(DocumentDraftBase):
 class CreateDocumentRequest(CreateDocumentDraftRequest):
     """Request schema for creating a new document."""
 
-    name: str = Field(..., description="Name of the document")
-    client: str = Field(..., description="Client associated with the document")
-    type: DocumentType = Field(..., description="Type of the document")
+    type: str = Field(..., description="Document source/template type")
     start_date: date = Field(..., description="Start date of the document period")
     end_date: date = Field(..., description="End date of the document period")
     form_data: dict[str, Any] = Field(..., description="Structured JSON payload stored in the form_data column")
@@ -132,17 +201,20 @@ class CreateDocumentRequest(CreateDocumentDraftRequest):
 class UpdateDocumentRequest(BaseModel):
     """Request schema for updating an existing document."""
 
+    type: str | None = None
+    contract_type: DocumentType | None = None
     name: str | None = None
     client: str | None = None
-    type: DocumentType | None = None
     start_date: date | None = None
     end_date: date | None = None
     form_data: dict[str, Any] | None = None
     state: DocumentState | None = None
     folder_id: int | None = Field(default=None, gt=0)
     service_items: list[DocumentServiceItemRequest] | None = None
+    company_contract: CompanyContractRequest | None = None
+    labor_contract: LaborContractRequest | None = None
 
-    @field_validator("name", "client")
+    @field_validator("type", "name", "client")
     @classmethod
     def validate_optional_text_fields(cls, value: str | None) -> str | None:
         if value is None:
@@ -178,9 +250,7 @@ class DocumentResponse(BaseModel):
     """Response schema for document data."""
 
     id: int = Field(..., description="Unique identifier of the document")
-    name: str | None = Field(default=None, description="Name of the document")
-    client: str | None = Field(default=None, description="Client associated with the document")
-    type: DocumentType | None = Field(default=None, description="Type of the document")
+    type: str | None = Field(default=None, description="Document source/template type")
     start_date: date | None = Field(default=None, description="Start date of the document period")
     end_date: date | None = Field(default=None, description="End date of the document period")
     form_data: dict[str, Any] = Field(default_factory=dict, description="Structured JSON payload stored in the form_data column")
@@ -192,6 +262,8 @@ class DocumentResponse(BaseModel):
         default_factory=list,
         description="Services associated to this document",
     )
+    company_contract: CompanyContractResponse | None = None
+    labor_contract: LaborContractResponse | None = None
     created_at: datetime = Field(..., description="Document creation timestamp")
     updated_at: datetime = Field(..., description="Last document update timestamp")
 
