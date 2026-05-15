@@ -12,9 +12,8 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from contractai_backend.core.exceptions.base import InternalServerError, ServiceUnavailableError
-from contractai_backend.modules.documents.domain.access_policy import can_read_document_type
 from contractai_backend.modules.documents.domain import DocumentTable
-from contractai_backend.modules.documents.domain.value_objs import DocumentState, DocumentType
+from contractai_backend.modules.documents.domain.value_objs import DocumentState
 from contractai_backend.modules.notifications.domain import NotificationRuleTable, NotificationType
 from contractai_backend.modules.notifications.domain.entities import NotificationSendLog
 from contractai_backend.modules.notifications.infrastructure.gmail_service import GmailService
@@ -71,7 +70,7 @@ class EmailAlertService:
         if not user.is_active or not user.receives_notifications:
             return []
 
-        return [event for event in events if can_read_document_type(user.role, DocumentType(event.document.type))]
+        return events
 
     async def sync_document_states(self, organization_id: int) -> int:
         """Updates persisted contract states using the DB synchronization function."""
@@ -281,8 +280,6 @@ class EmailAlertService:
             result = await self.session.exec(
                 select(DocumentTable).where(
                     DocumentTable.organization_id == organization_id,
-                    col(DocumentTable.name).is_not(None),
-                    col(DocumentTable.client).is_not(None),
                     col(DocumentTable.state).in_([DocumentState.ACTIVE, DocumentState.EXPIRING_SOON]),
                     DocumentTable.end_date >= today,
                 )
@@ -323,9 +320,9 @@ class EmailAlertService:
                 border_bottom = "" if is_last else f"border-bottom:1px solid {border_color};"
                 items_html += f"""
                 <div style=\"padding:14px 18px;background:{bg_color};{border_bottom}\">
-                  <p style=\"margin:0 0 3px;color:{text_color};font-size:14px;font-weight:600;\">{html.escape(doc.name)}</p>
+                  <p style=\"margin:0 0 3px;color:{text_color};font-size:14px;font-weight:600;\">{html.escape(doc.file_name or 'Contrato sin archivo')}</p>
                   <p style=\"margin:0;color:{subtext_color};font-size:13px;\">
-                    Cliente: {html.escape(doc.client)}&nbsp;&nbsp;·&nbsp;&nbsp;Vence: {doc.end_date.strftime("%d/%m/%Y")}
+                    Tipo: {html.escape(doc.type or 'sin tipo')}&nbsp;&nbsp;·&nbsp;&nbsp;Vence: {doc.end_date.strftime("%d/%m/%Y")}
                   </p>
                 </div>"""
 

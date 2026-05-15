@@ -36,8 +36,8 @@ async def list_notifications(
             id=f"contract-{event.document.id}-{event.days_remaining}",
             document_id=event.document.id,
             type=event.notification_type,
-            title=f"Contrato por vencer en {event.days_remaining} días: {event.document.name}",
-            description=f"El contrato con {event.document.client} vence el {event.document.end_date.strftime('%d/%m/%Y')}.",
+            title=f"Contrato por vencer en {event.days_remaining} días: {event.document.file_name or 'Contrato sin archivo'}",
+            description=f"El contrato vence el {event.document.end_date.strftime('%d/%m/%Y')}.",
             days_remaining=event.days_remaining,
         )
         for event in events

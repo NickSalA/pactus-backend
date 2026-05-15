@@ -54,7 +54,13 @@ async def get_llm_provider(
     document_filters = {"organization_id": current_user.organization_id}
     documents = await contract_repo.get_all(filters=document_filters)
     if readable_document_types is not None:
-        documents = [document for document in documents if document.type is not None and DocumentType(document.type) in readable_document_types]
+        document_ids = [document.id for document in documents if document.id is not None]
+        document_kinds = await contract_repo.get_contract_kinds_by_document_ids(document_ids=document_ids)
+        documents = [
+            document
+            for document in documents
+            if document.id is not None and document_kinds.get(document.id) is not None and DocumentType(document_kinds[document.id]) in readable_document_types
+        ]
 
     default_document_ids = {
         document.id for document in documents if document.id is not None and ContractQueryService.is_chatbot_visible_contract(document=document)
