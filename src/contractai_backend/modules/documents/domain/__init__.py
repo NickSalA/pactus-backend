@@ -1,5 +1,7 @@
 from .document import DocumentTable
-from .document_service import DocumentServiceTable, validate_service_currency_alignment, validate_service_periods
+from .company_contract import CompanyContractTable
+from .document_service import CompanyContractServiceTable, DocumentServiceTable, validate_service_currency_alignment, validate_service_periods
+from .labor_contract import LaborContractTable
 from .value_objs import CurrencyType, DocumentState, DocumentType
 from ...catalog.domain.entities import ServiceTable
 
@@ -9,10 +11,13 @@ from ...catalog.domain.entities import ServiceTable
 
 __all__ = [
     "CurrencyType",
+    "CompanyContractServiceTable",
+    "CompanyContractTable",
     "DocumentServiceTable",
     "DocumentState",
     "DocumentTable",
     "DocumentType",
+    "LaborContractTable",
     "ServiceTable",
     "validate_service_currency_alignment",
     "validate_service_periods",

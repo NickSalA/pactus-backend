@@ -8,7 +8,7 @@ from sqlmodel import col, func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....shared.infrastructure.sqlmodel_utils import RelationalHelpersMixin
-from ...documents.domain import DocumentServiceTable, DocumentTable
+from ...documents.domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable
 from ..application.repositories import ServiceRepository
 from ..domain.entities import ServiceTable
 from ..domain.exceptions import ServiceDatabaseError, ServiceDatabaseUnavailableError
@@ -100,13 +100,14 @@ class SQLModelServiceRepository(RelationalHelpersMixin, ServiceRepository):
             return {}
         try:
             query = (
-                select(DocumentServiceTable.service_id, func.count(func.distinct(DocumentServiceTable.document_id)))
-                .join(DocumentTable, col(DocumentTable.id) == col(DocumentServiceTable.document_id))
+                select(CompanyContractServiceTable.service_id, func.count(func.distinct(CompanyContractTable.document_id)))
+                .join(CompanyContractTable, col(CompanyContractTable.id) == col(CompanyContractServiceTable.company_contract_id))
+                .join(DocumentTable, col(DocumentTable.id) == col(CompanyContractTable.document_id))
                 .where(
                     col(DocumentTable.organization_id) == organization_id,
-                    col(DocumentServiceTable.service_id).in_(service_ids),
+                    col(CompanyContractServiceTable.service_id).in_(service_ids),
                 )
-                .group_by(col(DocumentServiceTable.service_id))
+                .group_by(col(CompanyContractServiceTable.service_id))
             )
             result = await self.session.exec(statement=query)
             return {int(service_id): int(total or 0) for service_id, total in result.all()}

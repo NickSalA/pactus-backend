@@ -69,6 +69,7 @@ class TemplateService:
         )
 
         org_data = await self.organization_repo.get_organization_data(organization_id=organization_id)
+        template_format = await self.template_format_repo.get_by_id(template.template_format_id) if template.template_format_id is not None else None
         time_auto = build_signature_time_payload(now)
         master_dict: dict[str, Any | int | str] = {**form_data, **org_data, **time_auto}
         if template_content is not None:
@@ -88,7 +89,8 @@ class TemplateService:
             "template_id": template_id,
             "name": f"{template.name} - {cliente_nombre}",
             "client": cliente_nombre,
-            "type": template.document_type,
+            "type": template_format.format_code if template_format is not None else template.document_type.value.lower(),
+            "contract_type": template.document_type,
             "state": "PENDING_SIGNATURE",
             "content": pdf_bytes,
             "start_date": start_date,

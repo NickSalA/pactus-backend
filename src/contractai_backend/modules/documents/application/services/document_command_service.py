@@ -10,15 +10,17 @@ from .....core.exceptions.base import ForbiddenError
 from ....folders.application.repositories import FolderRepository
 from ....users.domain.value_objs import UserRole
 from ...api.schemas import (
+    CompanyContractRequest,
     CreateDocumentDraftRequest,
     CreateDocumentRequest,
     DocumentResponse,
     DocumentServiceItemRequest,
     FileRequest,
+    LaborContractRequest,
     UpdateDocumentRequest,
 )
 from ..dto import ExtractedDocumentData
-from ...domain import DocumentTable, validate_service_currency_alignment, validate_service_periods
+from ...domain import CompanyContractTable, DocumentTable, LaborContractTable, validate_service_currency_alignment, validate_service_periods
 from ...domain.access_policy import can_manage_folder, can_read_document_type, can_write_document_type
 from ...domain.value_objs import DocumentState, DocumentType
 from ...domain.exceptions import (
@@ -109,11 +111,17 @@ class DocumentCommandService:
             raise ForbiddenError("No tiene permisos para gestionar este tipo de contrato")
 
     @staticmethod
-    def _can_read_document(document: DocumentTable, user_role: UserRole | None) -> bool:
+    def _can_read_document_kind(document_kind: DocumentType | None, user_role: UserRole | None) -> bool:
         """Returns whether the role can read the given document."""
-        if document.type is None:
+        if document_kind is None:
             return True
-        return can_read_document_type(user_role=user_role, document_type=DocumentType(document.type))
+        return can_read_document_type(user_role=user_role, document_type=document_kind)
+
+    async def _get_document_kind(self, document_id: int | None) -> DocumentType | None:
+        if document_id is None:
+            return None
+        kind = (await self.query_repo.get_contract_kinds_by_document_ids(document_ids=[document_id])).get(document_id)
+        return DocumentType(kind) if kind is not None else None
 
     async def _get_document_entity(self, id: int, organization_id: int) -> DocumentTable | None:
         """Loads a document only if it belongs to the org."""
@@ -125,6 +133,171 @@ class DocumentCommandService:
     @staticmethod
     def _serialize_optional_enum(value: Any) -> Any:
         return value.value if hasattr(value, "value") else value
+
+    @staticmethod
+    def _normalize_source_type(value: Any, form_data: dict[str, Any] | None = None) -> str:
+        if isinstance(value, DocumentType):
+            return "manual_upload"
+        if isinstance(value, str):
+            cleaned = value.strip()
+            if cleaned and cleaned.upper() not in {DocumentType.COMPANY.value, DocumentType.LABOR.value}:
+                return cleaned
+
+        source = (form_data or {}).get("source")
+        if isinstance(source, dict) and source.get("provider"):
+            return str(source["provider"]).strip() or "manual_upload"
+        return "manual_upload"
+
+    @staticmethod
+    def _coerce_legacy_document_type(value: Any) -> DocumentType | None:
+        if value is None:
+            return None
+        if isinstance(value, DocumentType):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().upper()
+            if normalized in {DocumentType.COMPANY.value, DocumentType.LABOR.value}:
+                return DocumentType(normalized)
+        return None
+
+    @classmethod
+    def _resolve_contract_kind(
+        cls,
+        *,
+        requested_contract_type: DocumentType | None,
+        requested_type: Any,
+        extracted_data: ExtractedDocumentData,
+        user_role: UserRole | None,
+    ) -> DocumentType | None:
+        legacy_type = cls._coerce_legacy_document_type(requested_type)
+        if requested_contract_type is not None:
+            return requested_contract_type
+        if legacy_type is not None:
+            return legacy_type
+        if extracted_data.type is not None:
+            return extracted_data.type
+        if user_role == UserRole.HR:
+            return DocumentType.LABOR
+        if user_role == UserRole.MANAGER:
+            return DocumentType.COMPANY
+        return None
+
+    @staticmethod
+    def _first_text_value(*values: Any) -> str | None:
+        for value in values:
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return None
+
+    @staticmethod
+    def _first_float_value(*values: Any) -> float | None:
+        for value in values:
+            if value is None or value == "":
+                continue
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    @classmethod
+    def _build_company_contract_entity(
+        cls,
+        *,
+        document_id: int,
+        data: CreateDocumentRequest | CreateDocumentDraftRequest | UpdateDocumentRequest,
+        extracted_data: ExtractedDocumentData | None,
+        form_data: dict[str, Any],
+    ) -> CompanyContractTable:
+        company_contract: CompanyContractRequest | None = getattr(data, "company_contract", None)
+        return CompanyContractTable(
+            document_id=document_id,
+            ruc=cls._first_text_value(
+                getattr(company_contract, "ruc", None),
+                form_data.get("gerente_ruc"),
+                form_data.get("contratista_ruc"),
+                form_data.get("proveedor_ruc"),
+                form_data.get("otra_parte_ruc"),
+                form_data.get("ruc_gerente"),
+                form_data.get("cliente_ruc"),
+            ),
+            client=cls._first_text_value(
+                getattr(company_contract, "client", None),
+                getattr(data, "client", None),
+                extracted_data.client if extracted_data is not None else None,
+            ),
+            updated_at=datetime.now(UTC),
+        )
+
+    @classmethod
+    def _build_labor_contract_entity(
+        cls,
+        *,
+        document_id: int,
+        data: CreateDocumentRequest | CreateDocumentDraftRequest | UpdateDocumentRequest,
+        extracted_data: ExtractedDocumentData | None,
+        form_data: dict[str, Any],
+    ) -> LaborContractTable:
+        labor_contract: LaborContractRequest | None = getattr(data, "labor_contract", None)
+        salary_currency = getattr(labor_contract, "salary_currency", None) or cls._coerce_currency(form_data.get("currency"))
+        return LaborContractTable(
+            document_id=document_id,
+            worker_name=cls._first_text_value(
+                getattr(labor_contract, "worker_name", None),
+                getattr(data, "client", None),
+                extracted_data.worker_name if extracted_data is not None else None,
+                form_data.get("trabajador_nombre"),
+                form_data.get("nombre_trabajador"),
+                form_data.get("trabajador_nombre_completo"),
+                form_data.get("empleado_nombre_completo"),
+            ),
+            worker_document_number=cls._first_text_value(
+                getattr(labor_contract, "worker_document_number", None),
+                form_data.get("trabajador_dni"),
+                form_data.get("dni_trabajador"),
+                form_data.get("numero_documento_trabajador"),
+                form_data.get("empleado_dni"),
+            ),
+            position=cls._first_text_value(
+                getattr(labor_contract, "position", None),
+                form_data.get("position"),
+                form_data.get("puesto_trabajo"),
+                form_data.get("cargo"),
+                form_data.get("cargo_ocupar"),
+            ),
+            salary_value=cls._first_float_value(
+                getattr(labor_contract, "salary_value", None),
+                form_data.get("value"),
+                form_data.get("monto_remuneracion"),
+                form_data.get("remuneracion_mensual_monto"),
+                form_data.get("remuneracion_bruta"),
+            ),
+            salary_currency=salary_currency,
+            salary_periodicity=cls._first_text_value(
+                getattr(labor_contract, "salary_periodicity", None),
+                form_data.get("periodicidad_remuneracion"),
+                form_data.get("frecuencia_pago"),
+                form_data.get("periodicidad_pago"),
+            ),
+            contract_modality=cls._first_text_value(
+                getattr(labor_contract, "contract_modality", None),
+                form_data.get("modalidad_contrato"),
+                form_data.get("modalidad_contrato_tipo"),
+                form_data.get("forma_contratacion"),
+            ),
+            updated_at=datetime.now(UTC),
+        )
+
+    @staticmethod
+    def _coerce_currency(value: Any):
+        if value is None or value == "":
+            return None
+        try:
+            from ...domain import CurrencyType
+
+            return CurrencyType(str(value).strip().upper())
+        except ValueError:
+            return None
 
     @classmethod
     def _build_labor_contract_name(cls, worker_name: str | None) -> str:
@@ -294,9 +467,16 @@ class DocumentCommandService:
         data: CreateDocumentRequest | CreateDocumentDraftRequest,
         organization_id: int,
         extracted_data: ExtractedDocumentData,
-    ) -> tuple[DocumentTable, list[DocumentServiceItemRequest], dict[str, Any]]:
+        user_role: UserRole | None,
+    ) -> tuple[DocumentTable, list[DocumentServiceItemRequest], dict[str, Any], DocumentType | None]:
         is_draft_request = self._is_draft_request(data)
-        resolved_type = data.type if data.type is not None else extracted_data.type
+        resolved_type = self._resolve_contract_kind(
+            requested_contract_type=data.contract_type,
+            requested_type=data.type,
+            extracted_data=extracted_data,
+            user_role=user_role,
+        )
+        resolved_source_type = self._normalize_source_type(data.type, data.form_data)
         resolved_client = (
             data.client if data.client is not None else self._resolve_extracted_client(extracted_data=extracted_data, resolved_type=resolved_type)
         )
@@ -318,6 +498,8 @@ class DocumentCommandService:
         )
 
         manual_service_items = list(data.service_items)
+        if manual_service_items and resolved_type != DocumentType.COMPANY:
+            raise DocumentValidationError(message="Solo los contratos company pueden registrar servicios.")
         if manual_service_items:
             if resolved_start_date is None or resolved_end_date is None:
                 raise DocumentValidationError(message="Las fechas del contrato son obligatorias cuando se registran servicios.")
@@ -338,12 +520,14 @@ class DocumentCommandService:
                 service_items=resolved_service_items,
             )
         else:
-            resolved_service_items = await self._resolve_extracted_service_items(
-                organization_id=organization_id,
-                extracted_data=extracted_data,
-                document_start_date=resolved_start_date,
-                document_end_date=resolved_end_date,
-            )
+            resolved_service_items = []
+            if resolved_type == DocumentType.COMPANY:
+                resolved_service_items = await self._resolve_extracted_service_items(
+                    organization_id=organization_id,
+                    extracted_data=extracted_data,
+                    document_start_date=resolved_start_date,
+                    document_end_date=resolved_end_date,
+                )
             if resolved_service_items and (normalized_form_data.get("value") is None or normalized_form_data.get("currency") is None):
                 summarized_form_data = self.policy.normalize_form_data(
                     base_form_data=normalized_form_data,
@@ -363,7 +547,7 @@ class DocumentCommandService:
                 "name": resolved_name,
                 "organization_id": organization_id,
                 "client": resolved_client,
-                "type": resolved_type,
+                "type": resolved_source_type,
                 "start_date": resolved_start_date,
                 "end_date": resolved_end_date,
                 "form_data": normalized_form_data,
@@ -371,7 +555,7 @@ class DocumentCommandService:
                 "folder_id": data.folder_id,
             }
         )
-        return validated_document, resolved_service_items, normalized_form_data
+        return validated_document, resolved_service_items, normalized_form_data, resolved_type
 
     async def create_document(
         self,
@@ -393,14 +577,16 @@ class DocumentCommandService:
             organization_id=organization_id,
         )
 
-        new_document, resolved_service_items, normalized_form_data = await self._prepare_create_data(
+        new_document, resolved_service_items, normalized_form_data, resolved_contract_kind = await self._prepare_create_data(
             data=data,
             organization_id=organization_id,
             extracted_data=extracted_data,
+            user_role=user_role,
         )
 
-        if new_document.type is not None:
-            self._ensure_write_access(document_type=DocumentType(new_document.type), user_role=user_role)
+        if resolved_contract_kind is None:
+            raise DocumentValidationError(message="Debe indicar si el contrato es company o labor.")
+        self._ensure_write_access(document_type=resolved_contract_kind, user_role=user_role)
         await self._validate_folder_access(
             organization_id=organization_id,
             folder_id=new_document.folder_id,
@@ -414,7 +600,32 @@ class DocumentCommandService:
             raise DocumentTransactionError(operation="create", details="Failed to save document in SQL, no ID returned")
 
         document_id = saved_document.id
-        service_entities = self.policy.build_document_service_entities(document_id=document_id, service_items=resolved_service_items)
+        saved_company_contract = None
+        if resolved_contract_kind == DocumentType.COMPANY:
+            saved_company_contract = await self.command_repo.upsert_company_contract(
+                self._build_company_contract_entity(
+                    document_id=document_id,
+                    data=data,
+                    extracted_data=extracted_data,
+                    form_data=normalized_form_data,
+                )
+            )
+        elif resolved_contract_kind == DocumentType.LABOR:
+            await self.command_repo.upsert_labor_contract(
+                self._build_labor_contract_entity(
+                    document_id=document_id,
+                    data=data,
+                    extracted_data=extracted_data,
+                    form_data=normalized_form_data,
+                )
+            )
+
+        company_contract_id = saved_company_contract.id if saved_company_contract is not None else None
+        service_entities = (
+            self.policy.build_document_service_entities(company_contract_id=company_contract_id, service_items=resolved_service_items)
+            if company_contract_id is not None
+            else []
+        )
 
         storage_path = None
         vectors_added = False
@@ -425,7 +636,7 @@ class DocumentCommandService:
             storage_path = await self.storage_repo.upload_file(
                 document_id=document_id,
                 organization_id=saved_document.organization_id,
-                document_type=saved_document.type,
+                document_type=resolved_contract_kind,
                 file=file_data.content,
                 filename=file_data.filename,
                 content_type=file_data.content_type,
@@ -476,8 +687,9 @@ class DocumentCommandService:
         document = await self._get_document_entity(id=id, organization_id=organization_id)
         if not document:
             raise DocumentNotFoundError(document_id=id)
-        if document.type is not None:
-            self._ensure_write_access(document_type=DocumentType(document.type), user_role=user_role)
+        document_kind = await self._get_document_kind(document.id)
+        if document_kind is not None:
+            self._ensure_write_access(document_type=document_kind, user_role=user_role)
 
         try:
             for vector_index_name in self._resolve_vector_index_names(primary_index_name=index_name):
@@ -522,6 +734,7 @@ class DocumentCommandService:
         final_start_date = update_data.get("start_date", document.start_date)
         final_end_date = update_data.get("end_date", document.end_date)
         final_form_data = update_data.get("form_data", document.form_data)
+        final_type = self._normalize_source_type(update_data.get("type", document.type), final_form_data)
 
         if service_items_provided:
             validate_service_periods(
@@ -538,9 +751,7 @@ class DocumentCommandService:
             {
                 "id": document.id,
                 "organization_id": document.organization_id,
-                "name": update_data.get("name", document.name),
-                "client": update_data.get("client", document.client),
-                "type": update_data.get("type", document.type),
+                "type": final_type,
                 "start_date": final_start_date,
                 "end_date": final_end_date,
                 "form_data": final_form_data,
@@ -562,8 +773,6 @@ class DocumentCommandService:
     @staticmethod
     def _apply_document_updates(document: DocumentTable, validated_document: DocumentTable) -> None:
         """Copies validated fields into the loaded document entity."""
-        document.name = validated_document.name
-        document.client = validated_document.client
         document.type = validated_document.type
         document.start_date = validated_document.start_date
         document.end_date = validated_document.end_date
@@ -581,8 +790,15 @@ class DocumentCommandService:
         if not payload.service_items_provided or document_id is None:
             return
 
+        company_contract = await self.query_repo.get_company_contract_by_document_id(document_id=document_id)
+        if company_contract is None or company_contract.id is None:
+            if payload.requested_service_items:
+                raise DocumentValidationError(message="Solo los contratos company pueden registrar servicios.")
+            await self.command_repo.replace_document_services(doc_id=document_id, service_items=[])
+            return
+
         service_entities = self.policy.build_document_service_entities(
-            document_id=document_id,
+            company_contract_id=company_contract.id,
             service_items=payload.requested_service_items,
         )
         await self.command_repo.replace_document_services(doc_id=document_id, service_items=service_entities)
@@ -604,6 +820,27 @@ class DocumentCommandService:
                 updated_document = refreshed_document
 
         return await self.response_assembler.build(document=updated_document)
+
+    async def _upsert_contract_details_if_needed(
+        self,
+        *,
+        document: DocumentTable,
+        data: UpdateDocumentRequest,
+        document_kind: DocumentType | None,
+    ) -> None:
+        if document.id is None:
+            return
+        form_data = document.form_data or {}
+        if document_kind == DocumentType.COMPANY and (data.company_contract is not None or data.client is not None or data.form_data is not None):
+            await self.command_repo.upsert_company_contract(
+                self._build_company_contract_entity(document_id=document.id, data=data, extracted_data=None, form_data=form_data)
+            )
+        if document_kind == DocumentType.LABOR and (
+            data.labor_contract is not None or data.client is not None or data.form_data is not None
+        ):
+            await self.command_repo.upsert_labor_contract(
+                self._build_labor_contract_entity(document_id=document.id, data=data, extracted_data=None, form_data=form_data)
+            )
 
     async def _extract_updated_chunks(
         self,
@@ -630,6 +867,7 @@ class DocumentCommandService:
         file_data: FileRequest,
         organization_id: int,
         index_name: str,
+        document_kind: DocumentType | None,
     ) -> DocumentResponse:
         """Persists an update when the file content changes."""
         parsed_document = await self._extract_updated_chunks(
@@ -645,7 +883,7 @@ class DocumentCommandService:
             new_storage_path = await self.storage_repo.upload_file(
                 document_id=id,
                 organization_id=document.organization_id,
-                document_type=document.type,
+                document_type=document_kind,
                 file=file_data.content,
                 filename=file_data.filename,
                 content_type=file_data.content_type,
@@ -698,9 +936,11 @@ class DocumentCommandService:
         document = await self._get_document_entity(id=id, organization_id=organization_id)
         if not document:
             raise DocumentNotFoundError(document_id=id)
-        self._ensure_write_access(document_type=DocumentType(document.type), user_role=user_role)
-        if data.type is not None:
-            self._ensure_write_access(document_type=DocumentType(data.type), user_role=user_role)
+        document_kind = await self._get_document_kind(document.id)
+        if document_kind is not None:
+            self._ensure_write_access(document_type=document_kind, user_role=user_role)
+        if data.contract_type is not None:
+            self._ensure_write_access(document_type=data.contract_type, user_role=user_role)
 
         payload = await self._prepare_document_update(
             document=document,
@@ -709,6 +949,7 @@ class DocumentCommandService:
             user_role=user_role,
         )
         self._apply_document_updates(document=document, validated_document=payload.validated_document)
+        await self._upsert_contract_details_if_needed(document=document, data=data, document_kind=document_kind)
 
         if file_data is None:
             return await self._update_document_without_file(
@@ -724,6 +965,7 @@ class DocumentCommandService:
             file_data=file_data,
             organization_id=organization_id,
             index_name=index_name,
+            document_kind=document_kind,
         )
 
     async def get_document_signed_url(
@@ -737,7 +979,8 @@ class DocumentCommandService:
         document = await self._get_document_entity(id=id, organization_id=organization_id)
         if not document:
             raise DocumentNotFoundError(document_id=id)
-        if not self._can_read_document(document=document, user_role=user_role):
+        document_kind = await self._get_document_kind(document.id)
+        if not self._can_read_document_kind(document_kind=document_kind, user_role=user_role):
             raise DocumentNotFoundError(document_id=id)
         if document.file_path is None:
             raise DocumentFileMissingError(document_id=id)

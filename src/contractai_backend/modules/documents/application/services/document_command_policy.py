@@ -7,7 +7,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from .....core.application.validation import format_pydantic_validation_error
 from ...api.schemas import DocumentServiceItemRequest
-from ...domain import DocumentServiceTable, DocumentTable
+from ...domain import CompanyContractServiceTable, DocumentTable
 from ...domain.exceptions import DocumentValidationError
 from ....catalog.application.repositories import ServiceRepository
 
@@ -29,13 +29,13 @@ class DocumentCommandPolicy:
 
     @staticmethod
     def build_document_service_entities(
-        document_id: int,
+        company_contract_id: int,
         service_items: Sequence[DocumentServiceItemRequest],
-    ) -> list[DocumentServiceTable]:
+    ) -> list[CompanyContractServiceTable]:
         """Maps request items into document-service entities."""
         return [
-            DocumentServiceTable(
-                document_id=document_id,
+            CompanyContractServiceTable(
+                company_contract_id=company_contract_id,
                 service_id=item.service_id,
                 description=item.description,
                 value=item.value,

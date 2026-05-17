@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from datetime import date
 
-from sqlalchemy import desc, func, text
+from sqlalchemy import desc, func, literal, text
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col, select
@@ -11,7 +11,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....core.exceptions.base import InternalServerError, ServiceUnavailableError
 from ....shared.infrastructure.sqlmodel_utils import RelationalHelpersMixin
-from ...documents.domain import DocumentServiceTable, DocumentTable, ServiceTable
+from ...documents.domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable, LaborContractTable, ServiceTable
 from ...documents.domain.value_objs import DocumentState, DocumentType, CurrencyType
 from ..domain.value_objs import TopRankingSortBy
 from ..application.repositories import (
@@ -68,42 +68,57 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
         )
 
     @staticmethod
-    def _base_contract_filters(organization_id: int, document_type: DocumentType):
+    def _base_contract_filters(organization_id: int):
         return (
             col(DocumentTable.organization_id) == organization_id,
-            col(DocumentTable.type) == document_type,
             col(DocumentTable.state).in_(ACTIVE_DASHBOARD_STATES),
-            col(DocumentTable.name).is_not(None),
-            col(DocumentTable.client).is_not(None),
         )
 
-    def _contract_summary_select(self):
+    def _contract_summary_select(self, document_type: DocumentType):
+        if document_type == DocumentType.COMPANY:
+            return (
+                select(
+                    col(DocumentTable.id).label("id"),
+                    col(CompanyContractTable.client).label("title"),
+                    col(CompanyContractTable.client).label("name"),
+                    col(DocumentTable.start_date).label("start_date"),
+                    col(DocumentTable.end_date).label("end_date"),
+                    col(DocumentTable.state).label("state"),
+                    func.min(col(CompanyContractServiceTable.description)).label("detail"),
+                    col(DocumentTable.created_at).label("created_at"),
+                    col(DocumentTable.updated_at).label("updated_at"),
+                    func.coalesce(func.sum(col(CompanyContractServiceTable.value)), 0.0).label("amount"),
+                    func.array_remove(func.array_agg(func.distinct(col(ServiceTable.name))), None).label("service_names"),
+                )
+                .join(CompanyContractTable, col(CompanyContractTable.document_id) == col(DocumentTable.id))
+                .outerjoin(CompanyContractServiceTable, col(CompanyContractServiceTable.company_contract_id) == col(CompanyContractTable.id))
+                .outerjoin(ServiceTable, col(ServiceTable.id) == col(CompanyContractServiceTable.service_id))
+                .group_by(
+                    col(DocumentTable.id),
+                    col(CompanyContractTable.client),
+                    col(DocumentTable.start_date),
+                    col(DocumentTable.end_date),
+                    col(DocumentTable.state),
+                    col(DocumentTable.created_at),
+                    col(DocumentTable.updated_at),
+                )
+            )
+
         return (
             select(
                 col(DocumentTable.id).label("id"),
-                col(DocumentTable.name).label("title"),
-                col(DocumentTable.client).label("name"),
+                col(LaborContractTable.worker_name).label("title"),
+                col(LaborContractTable.worker_name).label("name"),
                 col(DocumentTable.start_date).label("start_date"),
                 col(DocumentTable.end_date).label("end_date"),
                 col(DocumentTable.state).label("state"),
-                func.min(col(DocumentServiceTable.description)).label("detail"),
+                col(LaborContractTable.position).label("detail"),
                 col(DocumentTable.created_at).label("created_at"),
                 col(DocumentTable.updated_at).label("updated_at"),
-                func.coalesce(func.sum(col(DocumentServiceTable.value)), 0.0).label("amount"),
-                func.array_remove(func.array_agg(func.distinct(col(ServiceTable.name))), None).label("service_names"),
+                func.coalesce(col(LaborContractTable.salary_value), 0.0).label("amount"),
+                literal(None).label("service_names"),
             )
-            .outerjoin(DocumentServiceTable, col(DocumentServiceTable.document_id) == col(DocumentTable.id))
-            .outerjoin(ServiceTable, col(ServiceTable.id) == col(DocumentServiceTable.service_id))
-            .group_by(
-                col(DocumentTable.id),
-                col(DocumentTable.name),
-                col(DocumentTable.client),
-                col(DocumentTable.start_date),
-                col(DocumentTable.end_date),
-                col(DocumentTable.state),
-                col(DocumentTable.created_at),
-                col(DocumentTable.updated_at),
-            )
+            .join(LaborContractTable, col(LaborContractTable.document_id) == col(DocumentTable.id))
         )
 
     async def sync_contract_states(self, organization_id: int) -> int:
@@ -134,21 +149,37 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
             for _ in range(months):
                 next_month = self._month_end(current_month)
 
-                filters = [
-                    *self._base_contract_filters(organization_id=organization_id, document_type=document_type),
-                    col(DocumentServiceTable.value) > 0,
-                    col(DocumentServiceTable.start_date) < next_month,
-                    col(DocumentServiceTable.end_date) >= current_month,
-                ]
+                if document_type == DocumentType.COMPANY:
+                    filters = [
+                        *self._base_contract_filters(organization_id=organization_id),
+                        col(CompanyContractServiceTable.value) > 0,
+                        col(CompanyContractServiceTable.start_date) < next_month,
+                        col(CompanyContractServiceTable.end_date) >= current_month,
+                    ]
+                    if currency:
+                        filters.append(col(CompanyContractServiceTable.currency) == currency)
 
-                if currency:
-                    filters.append(col(DocumentServiceTable.currency) == currency)
+                    statement = (
+                        select(func.coalesce(func.sum(col(CompanyContractServiceTable.value)), 0.0))
+                        .join(CompanyContractTable, col(CompanyContractTable.document_id) == col(DocumentTable.id))
+                        .join(CompanyContractServiceTable, col(CompanyContractServiceTable.company_contract_id) == col(CompanyContractTable.id))
+                        .where(*filters)
+                    )
+                else:
+                    filters = [
+                        *self._base_contract_filters(organization_id=organization_id),
+                        col(LaborContractTable.salary_value) > 0,
+                        col(DocumentTable.start_date) < next_month,
+                        col(DocumentTable.end_date) >= current_month,
+                    ]
+                    if currency:
+                        filters.append(col(LaborContractTable.salary_currency) == currency)
 
-                statement = (
-                    select(func.coalesce(func.sum(col(DocumentServiceTable.value)), 0.0))
-                    .join(DocumentTable, col(DocumentTable.id) == col(DocumentServiceTable.document_id))
-                    .where(*filters)
-                )
+                    statement = (
+                        select(func.coalesce(func.sum(col(LaborContractTable.salary_value)), 0.0))
+                        .join(LaborContractTable, col(LaborContractTable.document_id) == col(DocumentTable.id))
+                        .where(*filters)
+                    )
                 result = await self.session.exec(statement=statement)
                 results.append(DashboardMonthlyAmount(month=current_month, amount=float(result.one() or 0.0)))
                 current_month = next_month
@@ -167,8 +198,13 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
     ) -> int:
         """Counts contracts due in a date range."""
         try:
-            statement = select(func.count(col(DocumentTable.id))).where(
-                *self._base_contract_filters(organization_id=organization_id, document_type=document_type),
+            statement = select(func.count(col(DocumentTable.id)))
+            if document_type == DocumentType.COMPANY:
+                statement = statement.join(CompanyContractTable, col(CompanyContractTable.document_id) == col(DocumentTable.id))
+            else:
+                statement = statement.join(LaborContractTable, col(LaborContractTable.document_id) == col(DocumentTable.id))
+            statement = statement.where(
+                *self._base_contract_filters(organization_id=organization_id),
                 col(DocumentTable.end_date) >= start_date,
                 col(DocumentTable.end_date) <= end_date,
             )
@@ -190,9 +226,9 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
         """Lists contracts due in a date range."""
         try:
             statement = (
-                self._contract_summary_select()
+                self._contract_summary_select(document_type=document_type)
                 .where(
-                    *self._base_contract_filters(organization_id=organization_id, document_type=document_type),
+                    *self._base_contract_filters(organization_id=organization_id),
                     col(DocumentTable.end_date) >= start_date,
                     col(DocumentTable.end_date) <= end_date,
                 )
@@ -209,8 +245,13 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
     async def count_long_term_contracts(self, organization_id: int, document_type: DocumentType, after_date: date) -> int:
         """Counts active contracts outside the alert window."""
         try:
-            statement = select(func.count(col(DocumentTable.id))).where(
-                *self._base_contract_filters(organization_id=organization_id, document_type=document_type),
+            statement = select(func.count(col(DocumentTable.id)))
+            if document_type == DocumentType.COMPANY:
+                statement = statement.join(CompanyContractTable, col(CompanyContractTable.document_id) == col(DocumentTable.id))
+            else:
+                statement = statement.join(LaborContractTable, col(LaborContractTable.document_id) == col(DocumentTable.id))
+            statement = statement.where(
+                *self._base_contract_filters(organization_id=organization_id),
                 col(DocumentTable.end_date) > after_date,
             )
             result = await self.session.exec(statement=statement)
@@ -230,9 +271,9 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
         """Lists active contracts outside the alert window."""
         try:
             statement = (
-                self._contract_summary_select()
+                self._contract_summary_select(document_type=document_type)
                 .where(
-                    *self._base_contract_filters(organization_id=organization_id, document_type=document_type),
+                    *self._base_contract_filters(organization_id=organization_id),
                     col(DocumentTable.end_date) > after_date,
                 )
                 .order_by(desc(col(DocumentTable.end_date)), col(DocumentTable.id))
@@ -254,8 +295,8 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
         """Lists recently updated contracts."""
         try:
             statement = (
-                self._contract_summary_select()
-                .where(*self._base_contract_filters(organization_id=organization_id, document_type=document_type))
+                self._contract_summary_select(document_type=document_type)
+                .where(*self._base_contract_filters(organization_id=organization_id))
                 .order_by(desc(col(DocumentTable.updated_at)), desc(col(DocumentTable.created_at)), col(DocumentTable.id))
                 .limit(limit)
             )
@@ -275,25 +316,26 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
     ) -> Sequence[DashboardClientRanking]:
         """Lists company counterparties ranked by contract count and amount."""
         try:
-            filters = list(self._base_contract_filters(organization_id=organization_id, document_type=DocumentType.COMPANY))
+            filters = list(self._base_contract_filters(organization_id=organization_id))
             if currency:
-                filters.append(col(DocumentServiceTable.currency) == currency)
+                filters.append(col(CompanyContractServiceTable.currency) == currency)
 
             statement = (
                 select(
-                    col(DocumentTable.client).label("name"),
+                    col(CompanyContractTable.client).label("name"),
                     func.count(func.distinct(col(DocumentTable.id))).label("contracts"),
-                    func.coalesce(func.sum(col(DocumentServiceTable.value)), 0.0).label("amount"),
+                    func.coalesce(func.sum(col(CompanyContractServiceTable.value)), 0.0).label("amount"),
                 )
-                .outerjoin(DocumentServiceTable, col(DocumentServiceTable.document_id) == col(DocumentTable.id))
+                .join(CompanyContractTable, col(CompanyContractTable.document_id) == col(DocumentTable.id))
+                .outerjoin(CompanyContractServiceTable, col(CompanyContractServiceTable.company_contract_id) == col(CompanyContractTable.id))
                 .where(*filters)
-                .group_by(col(DocumentTable.client))
+                .group_by(col(CompanyContractTable.client))
             )
 
             if sort_by == TopRankingSortBy.VALUE:
-                statement = statement.order_by(desc("amount"), desc("contracts"), col(DocumentTable.client))
+                statement = statement.order_by(desc("amount"), desc("contracts"), col(CompanyContractTable.client))
             else:
-                statement = statement.order_by(desc("contracts"), desc("amount"), col(DocumentTable.client))
+                statement = statement.order_by(desc("contracts"), desc("amount"), col(CompanyContractTable.client))
 
             statement = statement.limit(limit)
 
@@ -324,20 +366,21 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
         """Lists services ranked by associated company contracts and amount."""
         try:
             filters = [
-                *self._base_contract_filters(organization_id=organization_id, document_type=DocumentType.COMPANY),
+                *self._base_contract_filters(organization_id=organization_id),
                 col(ServiceTable.organization_id) == organization_id,
             ]
             if currency:
-                filters.append(col(DocumentServiceTable.currency) == currency)
+                filters.append(col(CompanyContractServiceTable.currency) == currency)
 
             statement = (
                 select(
                     col(ServiceTable.name).label("name"),
                     func.count(func.distinct(col(DocumentTable.id))).label("quantity"),
-                    func.coalesce(func.sum(col(DocumentServiceTable.value)), 0.0).label("amount"),
+                    func.coalesce(func.sum(col(CompanyContractServiceTable.value)), 0.0).label("amount"),
                 )
-                .join(DocumentServiceTable, col(DocumentServiceTable.service_id) == col(ServiceTable.id))
-                .join(DocumentTable, col(DocumentTable.id) == col(DocumentServiceTable.document_id))
+                .join(CompanyContractServiceTable, col(CompanyContractServiceTable.service_id) == col(ServiceTable.id))
+                .join(CompanyContractTable, col(CompanyContractTable.id) == col(CompanyContractServiceTable.company_contract_id))
+                .join(DocumentTable, col(DocumentTable.id) == col(CompanyContractTable.document_id))
                 .where(*filters)
                 .group_by(col(ServiceTable.name))
             )

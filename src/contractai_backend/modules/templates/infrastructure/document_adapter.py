@@ -17,6 +17,7 @@ class DocumentModuleAdapter(IDocumentModuleAdapter):
             name=document_payload["name"],
             client=document_payload["client"],
             type=document_payload["type"],
+            contract_type=document_payload.get("contract_type"),
             start_date=document_payload["start_date"],
             end_date=document_payload["end_date"],
             form_data=document_payload["form_data"],

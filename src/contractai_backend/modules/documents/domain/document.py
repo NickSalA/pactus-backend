@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlmodel import Field
 
 from ....core.domain.base import BaseTable
-from .value_objs import DocumentState, DocumentType
+from .value_objs import DocumentState
 
 
 class DocumentTable(BaseTable, table=True):
@@ -18,9 +18,7 @@ class DocumentTable(BaseTable, table=True):
     __tablename__: str = "documents"
 
     organization_id: int = Field(sa_column=Column("organization_id", Integer, nullable=False, index=True))
-    name: str | None = Field(default=None, sa_column=Column("name", String(255), nullable=True))
-    client: str | None = Field(default=None, sa_column=Column("client", String(255), nullable=True))
-    type: DocumentType | None = Field(default=None, sa_column=Column("type", ENUM(DocumentType, name="document_type"), nullable=True))
+    type: str | None = Field(default=None, sa_column=Column("type", String(255), nullable=True, index=True))
     start_date: date | None = Field(default=None, sa_column=Column("start_date", Date, nullable=True))
     end_date: date | None = Field(default=None, sa_column=Column("end_date", Date, nullable=True))
     form_data: dict[str, Any] | None = Field(default_factory=dict, sa_column=Column("form_data", JSONB, nullable=True))
@@ -43,10 +41,10 @@ class DocumentTable(BaseTable, table=True):
         sa_column=Column("updated_at", DateTime(timezone=True), nullable=False),
     )
 
-    @field_validator("name", "client")
+    @field_validator("type")
     @classmethod
-    def validate_required_text(cls, value: str | None) -> str | None:
-        """Rejects blank text values while allowing nulls."""
+    def validate_type(cls, value: str | None) -> str | None:
+        """Rejects blank type values while allowing nulls during draft imports."""
         if value is None:
             return None
         cleaned = value.strip()
