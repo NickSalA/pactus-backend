@@ -167,6 +167,7 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
 
                     statement = (
                         select(func.coalesce(func.sum(col(CompanyContractServiceTable.value)), 0.0))
+                        .select_from(DocumentTable)
                         .join(CompanyContractTable, col(CompanyContractTable.document_id) == col(DocumentTable.id))
                         .join(CompanyContractServiceTable, col(CompanyContractServiceTable.company_contract_id) == col(CompanyContractTable.id))
                         .where(*filters)
@@ -183,6 +184,7 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
 
                     statement = (
                         select(func.coalesce(func.sum(col(LaborContractTable.salary_value)), 0.0))
+                        .select_from(DocumentTable)
                         .join(LaborContractTable, col(LaborContractTable.document_id) == col(DocumentTable.id))
                         .where(*filters)
                     )

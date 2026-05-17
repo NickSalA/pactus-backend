@@ -20,7 +20,7 @@ async def list_folders(
 ) -> Sequence[FolderResponse]:
     """Endpoint to list folders visible to the current user."""
     folders = await service.list_folders(current_user=current_user)
-    return [FolderResponse.model_validate(folder) for folder in folders]
+    return [FolderResponse.model_validate(folder, from_attributes=True) for folder in folders]
 
 
 @router.post(path="/", response_model=FolderResponse, status_code=status.HTTP_201_CREATED)
@@ -31,7 +31,7 @@ async def create_folder(
 ) -> FolderResponse:
     """Endpoint to create a folder in the current role scope."""
     folder = await service.create_folder(current_user=current_user, data=payload)
-    return FolderResponse.model_validate(folder)
+    return FolderResponse.model_validate(folder, from_attributes=True)
 
 
 @router.patch(path="/{folder_id}", response_model=FolderResponse)
@@ -43,7 +43,7 @@ async def update_folder(
 ) -> FolderResponse:
     """Endpoint to update a folder."""
     folder = await service.update_folder(current_user=current_user, folder_id=folder_id, data=payload)
-    return FolderResponse.model_validate(folder)
+    return FolderResponse.model_validate(folder, from_attributes=True)
 
 
 @router.delete(path="/{folder_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
