@@ -84,7 +84,7 @@ async def list_template_formats(
             user_role=current_user.role,
             requested_document_type=document_type,
         )
-        return [TemplateFormatResponse.model_validate(item) for item in formats]
+        return [TemplateFormatResponse.model_validate(item, from_attributes=True) for item in formats]
     except AppError:
         raise
     except Exception as e:
@@ -116,14 +116,14 @@ async def generate_template_draft(
                 organization_id=current_user.organization_id,
                 user_role=current_user.role,
             )
-            return PersistedTemplateDraftResponse.model_validate(draft)
+            return PersistedTemplateDraftResponse.model_validate(draft, from_attributes=True)
 
         draft = await template_service.generate_and_save_draft_from_prompt(
             request=request_obj,
             organization_id=current_user.organization_id,
             user_role=current_user.role,
         )
-        return PersistedTemplateDraftResponse.model_validate(draft)
+        return PersistedTemplateDraftResponse.model_validate(draft, from_attributes=True)
     except HTTPException:
         raise
     except ValueError as e:
@@ -147,7 +147,7 @@ async def preview_template(
             organization_id=current_user.organization_id,
             user_role=current_user.role,
         )
-        return PreviewTemplateResponse.model_validate(preview)
+        return PreviewTemplateResponse.model_validate(preview, from_attributes=True)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except AppError:
@@ -171,7 +171,7 @@ async def get_template(
         )
         if template is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plantilla no encontrada")
-        return TemplateResponse.model_validate(template)
+        return TemplateResponse.model_validate(template, from_attributes=True)
     except HTTPException:
         raise
     except AppError:
@@ -193,7 +193,7 @@ async def create_template(
             organization_id=current_user.organization_id,
             user_role=current_user.role,
         )
-        return TemplateResponse.model_validate(template)
+        return TemplateResponse.model_validate(template, from_attributes=True)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except AppError:
@@ -217,7 +217,7 @@ async def update_template(
             organization_id=current_user.organization_id,
             user_role=current_user.role,
         )
-        return TemplateResponse.model_validate(template)
+        return TemplateResponse.model_validate(template, from_attributes=True)
     except ValueError as e:
         detail = str(e)
         status_code = status.HTTP_404_NOT_FOUND if detail == "Plantilla no encontrada" else status.HTTP_400_BAD_REQUEST
@@ -241,7 +241,7 @@ async def publish_template(
             organization_id=current_user.organization_id,
             user_role=current_user.role,
         )
-        return TemplateResponse.model_validate(template)
+        return TemplateResponse.model_validate(template, from_attributes=True)
     except ValueError as e:
         detail = str(e)
         status_code = status.HTTP_404_NOT_FOUND if detail == "Plantilla no encontrada" else status.HTTP_400_BAD_REQUEST
@@ -265,7 +265,7 @@ async def archive_template(
             organization_id=current_user.organization_id,
             user_role=current_user.role,
         )
-        return TemplateResponse.model_validate(template)
+        return TemplateResponse.model_validate(template, from_attributes=True)
     except ValueError as e:
         detail = str(e)
         status_code = status.HTTP_404_NOT_FOUND if detail == "Plantilla no encontrada" else status.HTTP_400_BAD_REQUEST
@@ -293,7 +293,7 @@ async def list_templates(
             format_code=format_code,
             state=state,
         )
-        return [TemplateResponse.model_validate(template) for template in templates]
+        return [TemplateResponse.model_validate(template, from_attributes=True) for template in templates]
     except AppError:
         raise
     except Exception as e:
