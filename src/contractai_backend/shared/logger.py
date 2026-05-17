@@ -3,6 +3,7 @@
 import inspect
 import logging
 import sys
+from typing import Any, cast
 
 from loguru import logger
 
@@ -11,7 +12,7 @@ from contractai_backend.shared.config import settings
 try:
     from logtail import LogtailHandler
 except ImportError:
-    LogtailHandler = None
+    LogtailHandler: Any = None
 
 
 class InterceptHandler(logging.Handler):
@@ -55,11 +56,11 @@ def setup() -> None:
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
-    handlers = [
+    handlers: list[dict[str, Any]] = [
         {
             "sink": sys.stderr,
             "level": settings.LOG_LEVEL,
-            "format": "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",  # noqa: E501
+            "format": "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
             "diagnose": False,
             "backtrace": False,
         }
@@ -91,4 +92,4 @@ def setup() -> None:
     #         }
     #     )
 
-    logger.configure(handlers=handlers) # pyright: ignore[reportArgumentType]
+    logger.configure(handlers=cast(Any, handlers))

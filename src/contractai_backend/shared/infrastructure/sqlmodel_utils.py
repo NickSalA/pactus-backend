@@ -1,7 +1,9 @@
 """Shared utilities for SQLModel-based repositories."""
 
+from typing import Any, cast
+
 from loguru import logger
-from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -33,14 +35,16 @@ class RelationalHelpersMixin:
     @staticmethod
     def _read_scalar_result(value: object) -> int:
         if hasattr(value, "_mapping"):
-            mapping = value._mapping
+            mapping = cast(Any, value)._mapping
             if mapping:
                 return int(next(iter(mapping.values())) or 0)
 
         if isinstance(value, tuple):
-            return int((value[0] if value else 0) or 0)
+            first_value: Any = value[0] if value else 0
+            return int(first_value or 0)
 
-        return int(value or 0)
+        scalar_value: Any = value
+        return int(scalar_value or 0)
 
     async def _handle_db_error(self, e: Exception, label: str, operation: str):
         """Standard logging and rollback for DB errors."""

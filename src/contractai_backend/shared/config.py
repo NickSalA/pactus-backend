@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     DATABASE_MAX_OVERFLOW: int = Field(default=5)
     DATABASE_POOL_TIMEOUT: int = Field(default=15)
     DATABASE_POOL_RECYCLE: int = Field(default=1800)
+    DATABASE_SSL_VERIFY: bool = Field(default=True)
     CHECKPOINTER_POOL_MIN_SIZE: int = Field(default=1)
     CHECKPOINTER_POOL_MAX_SIZE: int = Field(default=2)
 
