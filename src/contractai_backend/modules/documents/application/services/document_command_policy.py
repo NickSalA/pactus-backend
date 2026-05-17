@@ -6,10 +6,10 @@ from typing import Any
 from pydantic import ValidationError as PydanticValidationError
 
 from .....core.application.validation import format_pydantic_validation_error
-from ...api.schemas import DocumentServiceItemRequest
+from ....catalog.application.repositories import ServiceRepository
 from ...domain import CompanyContractServiceTable, DocumentTable
 from ...domain.exceptions import DocumentValidationError
-from ....catalog.application.repositories import ServiceRepository
+from ..dto import DocumentServiceItemRequest
 
 
 class DocumentCommandPolicy:

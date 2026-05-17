@@ -1,25 +1,30 @@
 """PostgreSQL implementation of document query and command repositories."""
 
+import re
+import unicodedata
 from collections import defaultdict
 from collections.abc import Sequence
 from datetime import date
 from difflib import SequenceMatcher
-import re
-import unicodedata
+from typing import Any
+from typing import cast as type_cast
 
 from loguru import logger
 from sqlalchemy import Float, asc, case, cast, desc, func, or_, text
-from sqlalchemy.exc import OperationalError, SQLAlchemyError, TimeoutError as SQLAlchemyTimeoutError
+from sqlalchemy import select as sa_select
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col, delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....core.infrastructure.base import PostgresBaseRepository
+from ....shared.infrastructure.sqlmodel_utils import RelationalHelpersMixin
+from ...catalog.domain.entities import ServiceTable
 from ..application.dto import ContractQueryDTO
 from ..application.repositories import DocumentCommandRepository, DocumentQueryRepository
-from ..domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable, LaborContractTable, ServiceTable
-from ..domain.value_objs import DocumentState, DocumentType
+from ..domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable, LaborContractTable
 from ..domain.exceptions import DocumentDatabaseError, DocumentDatabaseUnavailableError
-from ....shared.infrastructure.sqlmodel_utils import RelationalHelpersMixin
+from ..domain.value_objs import DocumentType
 
 
 class SQLModelDocumentRepository(
@@ -39,11 +44,13 @@ class SQLModelDocumentRepository(
 
     @staticmethod
     def _build_contract_value_expression():
-        return cast(DocumentTable.form_data["value"].astext, Float)
+        form_data = type_cast(Any, DocumentTable.form_data)
+        return cast(form_data["value"].astext, Float)
 
     @staticmethod
     def _build_contract_currency_expression():
-        return func.upper(DocumentTable.form_data["currency"].astext)
+        form_data = type_cast(Any, DocumentTable.form_data)
+        return func.upper(form_data["currency"].astext)
 
     @staticmethod
     def _build_party_expression():
@@ -107,13 +114,14 @@ class SQLModelDocumentRepository(
 
     @staticmethod
     def _apply_chatbot_ready_contract_filters(statement):
+        form_data = type_cast(Any, DocumentTable.form_data)
         return (
             statement.where(SQLModelDocumentRepository._build_party_expression().is_not(None))
             .where(SQLModelDocumentRepository._build_document_kind_expression().is_not(None))
             .where(col(DocumentTable.start_date).is_not(None))
             .where(col(DocumentTable.end_date).is_not(None))
-            .where(DocumentTable.form_data["value"].astext.is_not(None))
-            .where(DocumentTable.form_data["currency"].astext.is_not(None))
+            .where(form_data["value"].astext.is_not(None))
+            .where(form_data["currency"].astext.is_not(None))
         )
 
     @staticmethod
@@ -292,7 +300,7 @@ class SQLModelDocumentRepository(
             statement = statement.where(contract_value <= filters.max_value)
 
         if filters.currency:
-            statement = statement.where(func.upper(DocumentTable.form_data["currency"].astext) == filters.currency)
+            statement = statement.where(self._build_contract_currency_expression() == filters.currency)
 
         if filters.state is not None:
             statement = statement.where(col(DocumentTable.state) == filters.state)
@@ -337,7 +345,7 @@ class SQLModelDocumentRepository(
 
         try:
             statement = self._join_contract_detail_tables(
-                select(
+                sa_select(
                     col(DocumentTable.id).label("document_id"),
                     self._build_contract_title_expression().label("name"),
                     self._build_party_expression().label("client"),
@@ -600,7 +608,7 @@ class SQLModelDocumentRepository(
         """Sincroniza estados documentales persistidos según reglas de notificación."""
         try:
             result = await self.session.exec(
-                text("select public.sync_document_states(:organization_id)"),
+                type_cast(Any, text("select public.sync_document_states(:organization_id)")),
                 params={"organization_id": organization_id},
             )
             return self._read_scalar_result(result.one())

@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from langchain_openai import AzureChatOpenAI
+from pydantic import SecretStr
 
 from ....modules.catalog.domain.entities import ServiceTable
 from ....shared.config import settings
@@ -18,7 +19,7 @@ class GeminiDocumentStructuredExtractor(DocumentStructuredExtractor):
     def __init__(self):
         self.llm = AzureChatOpenAI(
             model=settings.OPENAI_CHAT_MODEL_NAME,
-            api_key=settings.AZURE_OPENAI_API_KEY,
+            api_key=SecretStr(settings.AZURE_OPENAI_API_KEY),
             azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
             azure_deployment=settings.AZURE_OPENAI_DEPLOYMENT,
             api_version=settings.AZURE_OPENAI_API_VERSION,

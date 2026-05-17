@@ -2,13 +2,12 @@
 
 from collections.abc import Sequence
 
-from ...api.schemas import DocumentResponse
-from ...domain import DocumentTable
+from ....users.domain.value_objs import UserRole
 from ...domain.access_policy import can_read_document_type
 from ...domain.value_objs import DocumentType
+from ..dto import DocumentResponse
 from ..repositories import DocumentQueryRepository
 from .document_response_assembler import DocumentResponseAssembler
-from ....users.domain.value_objs import UserRole
 
 
 class DocumentQueryService:

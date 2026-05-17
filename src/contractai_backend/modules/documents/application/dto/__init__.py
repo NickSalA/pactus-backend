@@ -1,4 +1,47 @@
 from .contract_query_dto import ContractQueryDTO
+from .document_schemas import (
+    CompanyContractBase,
+    CompanyContractRequest,
+    CompanyContractResponse,
+    CreateDocumentDraftRequest,
+    CreateDocumentRequest,
+    DocumentBase,
+    DocumentCatalogServiceResponse,
+    DocumentDraftBase,
+    DocumentFileUrlResponse,
+    DocumentResponse,
+    DocumentServiceItemBase,
+    DocumentServiceItemRequest,
+    DocumentServiceItemResponse,
+    FileRequest,
+    LaborContractBase,
+    LaborContractRequest,
+    LaborContractResponse,
+    UpdateDocumentRequest,
+)
 from .extracted_document_data import ExtractedDocumentData, ExtractedDocumentFormData, ExtractedDocumentServiceItem
 
-__all__ = ["ContractQueryDTO", "ExtractedDocumentData", "ExtractedDocumentFormData", "ExtractedDocumentServiceItem"]
+__all__ = [
+    "CompanyContractBase",
+    "CompanyContractRequest",
+    "CompanyContractResponse",
+    "ContractQueryDTO",
+    "CreateDocumentDraftRequest",
+    "CreateDocumentRequest",
+    "DocumentBase",
+    "DocumentCatalogServiceResponse",
+    "DocumentDraftBase",
+    "DocumentFileUrlResponse",
+    "DocumentResponse",
+    "DocumentServiceItemBase",
+    "DocumentServiceItemRequest",
+    "DocumentServiceItemResponse",
+    "ExtractedDocumentData",
+    "ExtractedDocumentFormData",
+    "ExtractedDocumentServiceItem",
+    "FileRequest",
+    "LaborContractBase",
+    "LaborContractRequest",
+    "LaborContractResponse",
+    "UpdateDocumentRequest",
+]
