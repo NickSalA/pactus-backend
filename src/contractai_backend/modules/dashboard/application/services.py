@@ -4,10 +4,11 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime, time, timedelta
 from math import ceil
 
-from ...documents.domain.value_objs import DocumentType, CurrencyType
+from ...documents.domain.value_objs import CurrencyType, DocumentType
 from ...users.domain.entities import UserTable
+from ..domain.access_policy import ensure_dashboard_access
 from ..domain.value_objs import TopRankingSortBy
-from ..api.schemas import (
+from .dto import (
     AlertCategory,
     AlertColor,
     AlertItem,
@@ -20,7 +21,6 @@ from ..api.schemas import (
     TopCompanyResponse,
     TopServiceResponse,
 )
-from ..domain.access_policy import ensure_dashboard_access
 from .repositories import DashboardContractSummary, DashboardRepository
 
 AREA_CHART_HISTORY_MONTHS = 4
