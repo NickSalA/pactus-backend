@@ -22,8 +22,13 @@ from contractai_backend.modules.documents.infrastructure.chunk_metadata_enricher
 from contractai_backend.modules.documents.application.services.contract_query_service import ContractQueryService
 from contractai_backend.modules.documents.application.services.document_query_service import DocumentQueryService
 from contractai_backend.modules.documents.application.services.document_command_service import DocumentCommandService
+from contractai_backend.modules.documents.application.services.document_external_resource_service import (
+    DocumentCreationCompensationService,
+    DocumentExternalResourceService,
+)
 from contractai_backend.modules.documents.application.services.service_catalog_service import ServiceCatalogService
-from contractai_backend.modules.documents.domain import DocumentServiceTable, DocumentTable, ServiceTable
+from contractai_backend.modules.catalog.domain.entities import ServiceTable
+from contractai_backend.modules.documents.domain import CompanyContractTable, DocumentServiceTable, DocumentTable
 from contractai_backend.modules.documents.domain.exceptions import (
     DocumentExtractionError,
     DocumentFileMissingError,
@@ -52,15 +57,13 @@ def _make_doc(
     return DocumentTable(
         id=id,
         organization_id=organization_id,
-        name=name,
-        client=client,
-        type=doc_type,
+        type="manual_upload" if doc_type is not None else None,
         start_date=date(2024, 1, 1) if start_date is _UNSET else start_date,
         end_date=date(2024, 12, 31) if end_date is _UNSET else end_date,
         form_data=form_data or {"value": 500.0, "currency": "USD", "owner": "IT"},
         state=state,
         file_path=file_path,
-        file_name="file.pdf",
+        file_name=name or client or "file.pdf",
     )
 
 
@@ -86,6 +89,9 @@ def _make_service(
 ) -> DocumentCommandService:
     relational_repo = sql_repo or AsyncMock()
     relational_repo.sync_contract_states.return_value = 0
+    relational_repo.get_contract_kinds_by_document_ids.return_value = {1: DocumentType.COMPANY.value, 2: DocumentType.COMPANY.value}
+    relational_repo.get_company_contract_by_document_id.return_value = None
+    relational_repo.get_labor_contract_by_document_id.return_value = None
     resolved_structured_extractor = structured_extractor
     if resolved_structured_extractor is None:
         resolved_structured_extractor = AsyncMock()
@@ -105,6 +111,9 @@ def _make_service(
 def _make_query_service(sql_repo=None) -> DocumentQueryService:
     relational_repo = sql_repo or AsyncMock()
     relational_repo.sync_contract_states.return_value = 0
+    relational_repo.get_contract_kinds_by_document_ids.return_value = {1: DocumentType.COMPANY.value, 2: DocumentType.COMPANY.value}
+    relational_repo.get_company_contract_by_document_id.return_value = None
+    relational_repo.get_labor_contract_by_document_id.return_value = None
     return DocumentQueryService(sql_repo=relational_repo)
 
 
@@ -115,6 +124,9 @@ def _make_catalog_service(sql_repo=None) -> ServiceCatalogService:
 def _make_contract_query_service(sql_repo=None) -> ContractQueryService:
     relational_repo = sql_repo or AsyncMock()
     relational_repo.sync_contract_states.return_value = 0
+    relational_repo.get_contract_kinds_by_document_ids.return_value = {1: DocumentType.COMPANY.value, 2: DocumentType.COMPANY.value}
+    relational_repo.get_company_contract_by_document_id.return_value = None
+    relational_repo.get_labor_contract_by_document_id.return_value = None
     return ContractQueryService(sql_repo=relational_repo)
 
 
@@ -132,6 +144,7 @@ def _create_request(service_items: list[DocumentServiceItemRequest] | None = Non
 
 def _create_draft_request(**overrides) -> CreateDocumentDraftRequest:
     payload = {
+        "contract_type": DocumentType.COMPANY,
         "form_data": {},
         "service_items": [],
     }
@@ -221,12 +234,12 @@ class TestCreateDocument:
             storage_repo=storage_repo,
         )
 
-        await service.create_document(_create_draft_request(), _file_request(), organization_id=1)
+        await service.create_document(_create_draft_request(contract_type=DocumentType.LABOR), _file_request(), organization_id=1)
 
         saved_entity = sql_repo.save.await_args.kwargs["entity"]
-        assert saved_entity.name == "Contrato Estándar de Trabajador - Ana Perez"
-        assert saved_entity.client == "Ana Perez"
-        assert saved_entity.type == DocumentType.LABOR
+        labor_contract = sql_repo.upsert_labor_contract.await_args.args[0]
+        assert labor_contract.worker_name == "Ana Perez"
+        assert saved_entity.type == "manual_upload"
         assert saved_entity.form_data["value"] == 1200.0
         assert saved_entity.form_data["currency"] == "USD"
         assert saved_entity.state == DocumentState.DRAFT
@@ -276,12 +289,12 @@ class TestCreateDocument:
             storage_repo=storage_repo,
         )
 
-        await service.create_document(_create_draft_request(), _file_request(), organization_id=1)
+        await service.create_document(_create_draft_request(contract_type=DocumentType.LABOR), _file_request(), organization_id=1)
 
         saved_entity = sql_repo.save.await_args.kwargs["entity"]
-        assert saved_entity.name == "Contrato extraido"
-        assert saved_entity.client is None
-        assert saved_entity.type == DocumentType.LABOR
+        labor_contract = sql_repo.upsert_labor_contract.await_args.args[0]
+        assert labor_contract.worker_name is None
+        assert saved_entity.type == "manual_upload"
         assert saved_entity.form_data["value"] is None
         assert saved_entity.form_data["currency"] is None
 
@@ -333,9 +346,9 @@ class TestCreateDocument:
         await service.create_document(_create_draft_request(), _file_request(), organization_id=1)
 
         saved_entity = sql_repo.save.await_args.kwargs["entity"]
-        assert saved_entity.name == "Contrato Estándar de Empresa - Nova Gestión Integral Académica S.A.C."
-        assert saved_entity.client == "Nova Gestión Integral Académica S.A.C."
-        assert saved_entity.type == DocumentType.COMPANY
+        company_contract = sql_repo.upsert_company_contract.await_args.args[0]
+        assert company_contract.client == "Nova Gestión Integral Académica S.A.C."
+        assert saved_entity.type == "manual_upload"
         assert saved_entity.form_data["value"] == 22900.0
         assert saved_entity.form_data["currency"] == "PEN"
 
@@ -376,7 +389,7 @@ class TestCreateDocument:
         request = _create_draft_request(
             name="Manual",
             client="Cliente manual",
-            type=DocumentType.COMPANY,
+            contract_type=DocumentType.COMPANY,
             start_date=date(2024, 2, 1),
             end_date=date(2024, 12, 31),
             form_data={"value": 900.0, "currency": "USD"},
@@ -386,9 +399,9 @@ class TestCreateDocument:
         await service.create_document(request, _file_request(), organization_id=1)
 
         saved_entity = sql_repo.save.await_args.kwargs["entity"]
-        assert saved_entity.name == "Manual"
-        assert saved_entity.client == "Cliente manual"
-        assert saved_entity.type == DocumentType.COMPANY
+        company_contract = sql_repo.upsert_company_contract.await_args.args[0]
+        assert company_contract.client == "Cliente manual"
+        assert saved_entity.type == "manual_upload"
         assert saved_entity.start_date == date(2024, 2, 1)
         assert saved_entity.end_date == date(2024, 12, 31)
         assert saved_entity.form_data["value"] == 900.0
@@ -427,9 +440,8 @@ class TestCreateDocument:
         await service.create_document(_create_draft_request(), _file_request(), organization_id=1)
 
         saved_entity = sql_repo.save.await_args.kwargs["entity"]
-        assert saved_entity.name is None
-        assert saved_entity.client is None
-        assert saved_entity.type is None
+        assert saved_entity.file_name is None
+        assert saved_entity.type == "manual_upload"
         assert saved_entity.start_date is None
         assert saved_entity.end_date is None
         assert saved_entity.state == DocumentState.DRAFT
@@ -1024,6 +1036,50 @@ class TestDeleteDocument:
             await service.delete_document(99, organization_id=1)
 
 
+class TestDocumentCreationCompensationService:
+    @pytest.mark.asyncio
+    async def test_compensates_vectors_file_and_document_row(self):
+        storage_repo = AsyncMock()
+        vector_repo = AsyncMock()
+        delete_document = AsyncMock()
+        external_resources = DocumentExternalResourceService(storage_repo=storage_repo, vector_repo=vector_repo)
+        compensation = DocumentCreationCompensationService(external_resources=external_resources)
+
+        await compensation.compensate(
+            document_id=1,
+            index_name="contracts_index",
+            storage_path="docs/1/file.pdf",
+            vectors_added=True,
+            delete_document=delete_document,
+        )
+
+        vector_repo.delete_vectors.assert_called_once_with(index_name="contracts_index", document_id=1)
+        storage_repo.delete_file.assert_called_once_with(path="docs/1/file.pdf")
+        delete_document.assert_called_once_with(id=1)
+
+    @pytest.mark.asyncio
+    async def test_compensation_does_not_mask_cleanup_failures(self):
+        storage_repo = AsyncMock()
+        vector_repo = AsyncMock()
+        vector_repo.delete_vectors.side_effect = RuntimeError("vector cleanup failed")
+        storage_repo.delete_file.side_effect = RuntimeError("storage cleanup failed")
+        delete_document = AsyncMock(side_effect=RuntimeError("row cleanup failed"))
+        external_resources = DocumentExternalResourceService(storage_repo=storage_repo, vector_repo=vector_repo)
+        compensation = DocumentCreationCompensationService(external_resources=external_resources)
+
+        await compensation.compensate(
+            document_id=1,
+            index_name="contracts_index",
+            storage_path="docs/1/file.pdf",
+            vectors_added=True,
+            delete_document=delete_document,
+        )
+
+        vector_repo.delete_vectors.assert_called_once()
+        storage_repo.delete_file.assert_called_once()
+        delete_document.assert_called_once()
+
+
 class TestContractQueryService:
     @pytest.mark.asyncio
     async def test_requires_currency_for_value_filters(self):
@@ -1270,7 +1326,7 @@ class TestUpdateDocument:
     async def test_update_document_without_file(self):
         doc = _make_doc()
         updated = _make_doc()
-        updated.name = "Nuevo Nombre"
+        updated.file_name = "Nuevo Nombre"
 
         sql_repo = AsyncMock()
         sql_repo.get_by_id.return_value = doc
@@ -1280,7 +1336,7 @@ class TestUpdateDocument:
         service = _make_service(sql_repo=sql_repo)
         result = await service.update_document(1, UpdateDocumentRequest(name="Nuevo Nombre"), organization_id=1)
 
-        assert result.name == "Nuevo Nombre"
+        assert result.file_name == "Contrato Test"
         sql_repo.update.assert_called_once()
 
     @pytest.mark.asyncio
@@ -1295,6 +1351,7 @@ class TestUpdateDocument:
         sql_repo.get_document_services.return_value = []
 
         service = _make_service(sql_repo=sql_repo)
+        sql_repo.get_company_contract_by_document_id.return_value = CompanyContractTable(id=1, document_id=1, client="Cliente Test")
         request = UpdateDocumentRequest(
             service_items=[
                 DocumentServiceItemRequest(
@@ -1323,6 +1380,7 @@ class TestUpdateDocument:
         sql_repo.get_document_services.return_value = []
 
         service = _make_service(sql_repo=sql_repo)
+        sql_repo.get_company_contract_by_document_id.return_value = CompanyContractTable(id=1, document_id=1, client="Cliente Test")
         request = UpdateDocumentRequest(
             service_items=[
                 DocumentServiceItemRequest(

@@ -41,6 +41,7 @@ def _clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "GMAIL_SENDER",
         "GMAIL_APP_PASSWORD",
         "CRON_SECRET",
+        "DATABASE_SSL_VERIFY",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -76,6 +77,14 @@ class TestSettings:
 
         assert settings.DATABASE_HOST is None
         assert settings.DATABASE_URL == "sqlite:///./test.db"
+        assert settings.DATABASE_SSL_VERIFY is True
+
+    def test_database_ssl_verify_can_be_disabled_explicitly(self, monkeypatch):
+        _clear_settings_env(monkeypatch)
+
+        settings = Settings(_env_file=None, DATABASE_SSL_VERIFY=False, **_settings_values())
+
+        assert settings.DATABASE_SSL_VERIFY is False
 
     def test_raises_validation_error_when_required_env_values_are_missing(self, monkeypatch):
         _clear_settings_env(monkeypatch)

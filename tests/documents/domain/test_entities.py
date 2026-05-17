@@ -8,10 +8,10 @@ from pydantic import ValidationError
 from contractai_backend.modules.documents.domain import (
     DocumentServiceTable,
     DocumentTable,
-    ServiceTable,
     validate_service_currency_alignment,
     validate_service_periods,
 )
+from contractai_backend.modules.catalog.domain.entities import ServiceTable
 from contractai_backend.modules.documents.domain.exceptions import DocumentValidationError
 from contractai_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
 
@@ -19,8 +19,6 @@ from contractai_backend.modules.documents.domain.value_objs import CurrencyType,
 def _valid_doc(**overrides) -> dict:
     base = {
         "organization_id": 1,
-        "name": "Contrato Ejemplo",
-        "client": "Acme Corp",
         "type": DocumentType.COMPANY,
         "start_date": date(2024, 1, 1),
         "end_date": date(2024, 12, 31),
@@ -33,16 +31,17 @@ def _valid_doc(**overrides) -> dict:
 class TestDocumentTableValidation:
     def test_creates_valid_document(self):
         doc = DocumentTable.model_validate(_valid_doc())
-        assert doc.name == "Contrato Ejemplo"
+        assert doc.organization_id == 1
+        assert doc.type == DocumentType.COMPANY
         assert doc.state is None
 
     def test_end_date_before_start_date_raises(self):
         with pytest.raises(ValidationError, match="End date cannot be earlier than start date"):
             DocumentTable.model_validate(_valid_doc(start_date=date(2024, 6, 1), end_date=date(2024, 1, 1)))
 
-    def test_blank_name_raises(self):
+    def test_blank_type_raises(self):
         with pytest.raises(ValidationError, match="Field cannot be empty"):
-            DocumentTable.model_validate(_valid_doc(name="   "))
+            DocumentTable.model_validate(_valid_doc(type="   "))
 
     def test_form_data_must_be_json_object(self):
         with pytest.raises(ValidationError, match="Input should be a valid dictionary"):
@@ -70,8 +69,6 @@ class TestDocumentTableValidation:
     def test_nullable_top_level_fields_are_allowed(self):
         doc = DocumentTable.model_validate(
             _valid_doc(
-                name=None,
-                client=None,
                 type=None,
                 start_date=None,
                 end_date=None,
@@ -79,8 +76,6 @@ class TestDocumentTableValidation:
             )
         )
 
-        assert doc.name is None
-        assert doc.client is None
         assert doc.type is None
         assert doc.start_date is None
         assert doc.end_date is None
@@ -91,7 +86,7 @@ class TestDocumentServiceTableValidation:
     def test_creates_valid_document_service(self):
         service_item = DocumentServiceTable.model_validate(
             {
-                "document_id": 1,
+                "company_contract_id": 1,
                 "service_id": 2,
                 "description": "Hosting",
                 "value": 1500.0,
@@ -106,7 +101,7 @@ class TestDocumentServiceTableValidation:
         with pytest.raises(ValidationError, match="Value must be a positive number"):
             DocumentServiceTable.model_validate(
                 {
-                    "document_id": 1,
+                    "company_contract_id": 1,
                     "service_id": 2,
                     "value": -1.0,
                     "currency": CurrencyType.USD,
@@ -119,7 +114,7 @@ class TestDocumentServiceTableValidation:
         with pytest.raises(ValidationError, match="ID must be a positive integer"):
             DocumentServiceTable.model_validate(
                 {
-                    "document_id": 1,
+                    "company_contract_id": 1,
                     "service_id": 0,
                     "value": 10.0,
                     "currency": CurrencyType.EUR,
@@ -132,7 +127,7 @@ class TestDocumentServiceTableValidation:
         with pytest.raises(ValidationError, match="End date cannot be earlier than start date"):
             DocumentServiceTable.model_validate(
                 {
-                    "document_id": 1,
+                    "company_contract_id": 1,
                     "service_id": 2,
                     "value": 10.0,
                     "currency": CurrencyType.EUR,
@@ -176,7 +171,7 @@ class TestDocumentServiceRules:
 
 def _make_service_item(**overrides) -> DocumentServiceTable:
     payload = {
-        "document_id": 1,
+        "company_contract_id": 1,
         "service_id": 2,
         "description": "Hosting",
         "value": 100.0,
