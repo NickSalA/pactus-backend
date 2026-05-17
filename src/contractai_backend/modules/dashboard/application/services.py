@@ -188,7 +188,7 @@ class DashboardService:
         return [
             AlertCategory(
                 label="VENCEN PROXIMOS",
-                color=AlertColor(accent="#232232", bg="#123421"),
+                color=AlertColor(accent="#EF4444", bg="#FEE2E2"),
                 due_to=30,
                 count=critical_count,
                 items=[self._serialize_alert_item(document_type, item, today) for item in critical_items],
