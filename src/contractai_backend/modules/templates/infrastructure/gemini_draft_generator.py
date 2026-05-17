@@ -7,7 +7,7 @@ from typing import Any
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from ....shared.config import settings
-from ..api.schemas import GenerateTemplateDraftRequest, TemplateDraftResponse, TemplateUsage
+from ..application.dto import GenerateTemplateDraftRequest, TemplateDraftResponse, TemplateUsage
 from ..application.repositories.base_draft_generator import ITemplateDraftGenerator
 
 
@@ -237,7 +237,7 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "  empleador_objeto_social, representante_nombre, representante_dni, jurisdiccion,\n"
             "  lugar_firma, autorizacion_entidad, autorizacion_fecha, autorizacion_emitida_por,\n"
             "  empleador_email, empleador_telefono, day_sign, month_sign, year_sign.\n"
-            "- If ORGANIZATION_CONTEXT is present, use it only as drafting context. Do not hardcode those values in body_md when an auto variable exists.\n"  # noqa: E501
+            "- If ORGANIZATION_CONTEXT is present, use it only as drafting context. Do not hardcode those values in body_md when an auto variable exists.\n"
             "- Use only the auto variables that are relevant for the contract. Do not force every available variable into the template.\n"
             "- For employer-side data that already exists as an auto variable, use the canonical auto variable name instead of creating aliases like representante_nombre_empresa or ruc_empresa.\n"
             "- Do not use filters inside placeholders.\n"
@@ -251,11 +251,11 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "- A duration-only field such as duracion_contrato or plazo_contrato is not equivalent to start_date or end_date and must not be mapped as either boundary.\n"
             "- The fields referenced by content.contract_date_mapping must exist either in content.fields or content.operational_fields. Prefer type 'date' for those fields.\n"
             "- If the contract does not expose both dates clearly enough, set content.contract_date_mapping to null and add a warning describing the ambiguity.\n"
-            "- If REFERENCE_CONTEXT is present, preserve the original contract structure as faithfully as possible. Replace variable values with placeholders, but do not freely rewrite or summarize clauses.\n"  # noqa: E501
-            "- If REFERENCE_OUTLINE is present, preserve every item in clause_sequence when available, and otherwise preserve the order of structure_sequence. Do not omit structural markers that appear in the reference.\n"  # noqa: E501
+            "- If REFERENCE_CONTEXT is present, preserve the original contract structure as faithfully as possible. Replace variable values with placeholders, but do not freely rewrite or summarize clauses.\n"
+            "- If REFERENCE_OUTLINE is present, preserve every item in clause_sequence when available, and otherwise preserve the order of structure_sequence. Do not omit structural markers that appear in the reference.\n"
             "- Preserve section titles and the closing section when they appear in the reference.\n"
             "- Do not include signature blocks, underscore signature lines, signer labels, or representative placeholders at the end of body_md. Signature rendering is handled by the backend.\n"
-            "- When the reference mode is full_clean, stay as close as possible to the original wording and only abstract variable data into placeholders.\n"  # noqa: E501
+            "- When the reference mode is full_clean, stay as close as possible to the original wording and only abstract variable data into placeholders.\n"
             "- GENERATION_MODE controls how strictly the result must follow the reference.\n"
             "- If GENERATION_MODE is strict, do not add new legal clauses that are absent from the reference just to make the template operational.\n"
             "- If GENERATION_MODE is adaptive, the reference is guidance, not a literal constraint. You may add a concise vigencia clause to body_md when explicit contract start and end placeholders are needed.\n"

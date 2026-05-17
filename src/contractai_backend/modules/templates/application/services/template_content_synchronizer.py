@@ -2,6 +2,7 @@
 
 import re
 import unicodedata
+from typing import ClassVar
 
 from ...domain.entities import TemplateContent, TemplateContractDateMapping, TemplateField
 from .template_placeholder_validator import (
@@ -22,7 +23,7 @@ class TemplateContentSynchronizer:
     SHORTHAND_DATE_FILTER_PATTERN = re.compile(r"{{\s*(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*\|\s*date\s*\(\s*(?P<quote>['\"])(?P<fmt>.*?)\2\s*\)\s*}}")
     DATE_COMPONENT_FILTER_PATTERN = re.compile(r"{{\s*(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*\|\s*(?P<component>day|month|year)\s*}}")
     IGNORED_BRACKET_MARKERS: frozenset[str] = frozenset({"cierre_documento"})
-    AUTO_VARIABLE_ALIASES: dict[str, str] = {
+    AUTO_VARIABLE_ALIASES: ClassVar[dict[str, str]] = {
         "representante_nombre_empresa": "representante_nombre",
         "representante_nombre_empleador": "representante_nombre",
         "representante_dni_empresa": "representante_dni",
@@ -38,10 +39,10 @@ class TemplateContentSynchronizer:
         "empleador_tipo_sociedad": "empleador_descripcion",
         "tipo_sociedad_empresa": "empleador_descripcion",
     }
-    MANUAL_FIELD_ALIASES: dict[str, str] = {
+    MANUAL_FIELD_ALIASES: ClassVar[dict[str, str]] = {
         "remuneracion_mensual_fija": "remuneracion_mensual",
     }
-    PLACEHOLDER_KEY_ALIASES: dict[str, str] = {
+    PLACEHOLDER_KEY_ALIASES: ClassVar[dict[str, str]] = {
         **AUTO_VARIABLE_ALIASES,
         **MANUAL_FIELD_ALIASES,
     }

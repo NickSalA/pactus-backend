@@ -1,5 +1,6 @@
 """Utilities for validating template placeholders."""
 
+import itertools
 import re
 import unicodedata
 from collections.abc import Sequence
@@ -208,7 +209,7 @@ class TemplatePlaceholderValidator:
             return []
 
         warnings: list[str] = []
-        for previous, current in zip(clauses, clauses[1:], strict=False):
+        for previous, current in itertools.pairwise(clauses):
             previous_label, _, previous_number = previous
             current_label, _, current_number = current
             if current_number <= previous_number:

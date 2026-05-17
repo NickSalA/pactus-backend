@@ -17,6 +17,7 @@ from ..application.services.template_service import TemplateService
 from .dependencies import get_template_authoring_service, get_template_service
 from .schemas import (
     CreateTemplateRequest,
+    DocumentResponse,
     GenerateTemplateDraftRequest,
     PersistedTemplateDraftResponse,
     PreviewTemplateRequest,
@@ -43,13 +44,13 @@ def _parse_draft_request(raw_request: str | None) -> GenerateTemplateDraftReques
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Payload invalido: {e}") from e
 
 
-@router.post(path="/{template_id}/generate", status_code=status.HTTP_201_CREATED)
+@router.post(path="/{template_id}/generate", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def generate_template(
     template_id: int,
     request: dict[str, Any],
     template_service: TemplateServiceDep,
     current_user: CurrentUserDep,
-):
+) -> DocumentResponse:
     """Endpoint para generar un documento a partir de una plantilla."""
     try:
         generated_document = await template_service.generate_contract(
@@ -79,10 +80,11 @@ async def list_template_formats(
 ) -> list[TemplateFormatResponse]:
     """Endpoint para listar los formatos disponibles para el usuario."""
     try:
-        return await template_service.list_available_formats(
+        formats = await template_service.list_available_formats(
             user_role=current_user.role,
             requested_document_type=document_type,
         )
+        return [TemplateFormatResponse.model_validate(item) for item in formats]
     except AppError:
         raise
     except Exception as e:
@@ -107,19 +109,21 @@ async def generate_template_draft(
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Archivo invalido.")
 
             file_content = await file.read()
-            return await template_service.generate_and_save_draft_from_file(
+            draft = await template_service.generate_and_save_draft_from_file(
                 request=request_obj,
                 file_content=file_content,
                 filename=file.filename,
                 organization_id=current_user.organization_id,
                 user_role=current_user.role,
             )
+            return PersistedTemplateDraftResponse.model_validate(draft)
 
-        return await template_service.generate_and_save_draft_from_prompt(
+        draft = await template_service.generate_and_save_draft_from_prompt(
             request=request_obj,
             organization_id=current_user.organization_id,
             user_role=current_user.role,
         )
+        return PersistedTemplateDraftResponse.model_validate(draft)
     except HTTPException:
         raise
     except ValueError as e:
@@ -138,11 +142,12 @@ async def preview_template(
 ) -> PreviewTemplateResponse:
     """Endpoint para previsualizar una plantilla."""
     try:
-        return await template_service.preview_template(
+        preview = await template_service.preview_template(
             request=request,
             organization_id=current_user.organization_id,
             user_role=current_user.role,
         )
+        return PreviewTemplateResponse.model_validate(preview)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except AppError:
@@ -166,7 +171,7 @@ async def get_template(
         )
         if template is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plantilla no encontrada")
-        return template
+        return TemplateResponse.model_validate(template)
     except HTTPException:
         raise
     except AppError:
@@ -183,11 +188,12 @@ async def create_template(
 ) -> TemplateResponse:
     """Endpoint para crear una plantilla."""
     try:
-        return await template_service.create_template(
+        template = await template_service.create_template(
             request=request,
             organization_id=current_user.organization_id,
             user_role=current_user.role,
         )
+        return TemplateResponse.model_validate(template)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except AppError:
@@ -205,12 +211,13 @@ async def update_template(
 ) -> TemplateResponse:
     """Endpoint para actualizar una plantilla en borrador."""
     try:
-        return await template_service.update_template(
+        template = await template_service.update_template(
             template_id=template_id,
             request=request,
             organization_id=current_user.organization_id,
             user_role=current_user.role,
         )
+        return TemplateResponse.model_validate(template)
     except ValueError as e:
         detail = str(e)
         status_code = status.HTTP_404_NOT_FOUND if detail == "Plantilla no encontrada" else status.HTTP_400_BAD_REQUEST
@@ -229,11 +236,12 @@ async def publish_template(
 ) -> TemplateResponse:
     """Endpoint para publicar una plantilla en borrador."""
     try:
-        return await template_service.publish_template(
+        template = await template_service.publish_template(
             template_id=template_id,
             organization_id=current_user.organization_id,
             user_role=current_user.role,
         )
+        return TemplateResponse.model_validate(template)
     except ValueError as e:
         detail = str(e)
         status_code = status.HTTP_404_NOT_FOUND if detail == "Plantilla no encontrada" else status.HTTP_400_BAD_REQUEST
@@ -252,11 +260,12 @@ async def archive_template(
 ) -> TemplateResponse:
     """Endpoint para archivar una plantilla."""
     try:
-        return await template_service.archive_template(
+        template = await template_service.archive_template(
             template_id=template_id,
             organization_id=current_user.organization_id,
             user_role=current_user.role,
         )
+        return TemplateResponse.model_validate(template)
     except ValueError as e:
         detail = str(e)
         status_code = status.HTTP_404_NOT_FOUND if detail == "Plantilla no encontrada" else status.HTTP_400_BAD_REQUEST
@@ -284,7 +293,7 @@ async def list_templates(
             format_code=format_code,
             state=state,
         )
-        return templates
+        return [TemplateResponse.model_validate(template) for template in templates]
     except AppError:
         raise
     except Exception as e:

@@ -10,7 +10,9 @@ from ....documents.application.repositories import DocumentExtractor
 from ....documents.domain import DocumentType
 from ....documents.domain.access_policy import can_write_document_type
 from ....users.domain.value_objs import UserRole
-from ...api.schemas import (
+from ...domain.entities import TemplateContent, TemplateField, TemplateFormatTable, TemplateTable
+from ...domain.value_objs import TemplateGenerationMode, TemplateState
+from ..dto import (
     CreateTemplateRequest,
     GenerateTemplateDraftRequest,
     PersistedTemplateDraftResponse,
@@ -22,8 +24,6 @@ from ...api.schemas import (
     UpdateTemplateRequest,
     build_template_response,
 )
-from ...domain.entities import TemplateContent, TemplateField, TemplateFormatTable, TemplateTable
-from ...domain.value_objs import TemplateGenerationMode, TemplateState
 from ..repositories import IOrganizationRepository, ITemplateFormatRepository, ITemplateRenderer, ITemplateRepository
 from ..repositories.base_draft_generator import ITemplateDraftGenerator
 from .rendered_contract_formatter import RenderedContractFormatter

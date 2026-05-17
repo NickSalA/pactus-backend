@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from ...api.schemas import GenerateTemplateDraftRequest, TemplateDraftResponse
+from ..dto import GenerateTemplateDraftRequest, TemplateDraftResponse
 
 
 class ITemplateDraftGenerator(ABC):

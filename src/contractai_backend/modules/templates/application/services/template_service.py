@@ -8,10 +8,10 @@ from .....core.exceptions.base import ForbiddenError, ValidationError
 from ....documents.domain import DocumentType
 from ....documents.domain.access_policy import can_write_document_type
 from ....users.domain.value_objs import UserRole
-from ...api.schemas import TemplateResponse, build_template_response
 from ...domain.entities import TemplateContent, TemplateFormatTable, TemplateTable
 from ...domain.formats import normalize_format_code
 from ...domain.value_objs import TemplateState
+from ..dto import TemplateResponse, build_template_response
 from ..repositories.base_generate import IDocumentGenerator
 from ..repositories.base_relational import IDocumentModuleAdapter, IOrganizationRepository, ITemplateFormatRepository, ITemplateRepository
 from ..repositories.base_render import ITemplateRenderer
@@ -21,7 +21,7 @@ from .template_runtime_payloads import build_signature_time_payload
 
 
 class TemplateService:
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         template_repo: ITemplateRepository,
         template_format_repo: ITemplateFormatRepository,
@@ -154,7 +154,13 @@ class TemplateService:
                 and format_map[template.template_format_id].format_code == normalized_format_code
             ]
 
-        return [self._build_synced_template_response(template, template_format=format_map.get(template.template_format_id)) for template in templates]
+        return [
+            self._build_synced_template_response(
+                template,
+                template_format=format_map.get(template.template_format_id) if template.template_format_id is not None else None,
+            )
+            for template in templates
+        ]
 
     def _build_synced_template_response(
         self,

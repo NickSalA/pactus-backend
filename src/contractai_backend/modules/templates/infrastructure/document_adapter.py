@@ -1,6 +1,6 @@
 """Adaptador para conectar el módulo de plantillas con el módulo de documentos."""
 
-from ...documents.api.schemas import CreateDocumentRequest, DocumentResponse, FileRequest
+from ...documents.application.dto import CreateDocumentRequest, DocumentResponse, FileRequest
 from ...documents.application.services import DocumentCommandService
 from ...documents.domain import DocumentState
 from ...users.domain.value_objs import UserRole

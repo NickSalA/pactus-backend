@@ -7,8 +7,8 @@ __all__ = [
     "IDocumentGenerator",
     "IDocumentModuleAdapter",
     "IOrganizationRepository",
-    "ITemplateFormatRepository",
     "ITemplateDraftGenerator",
+    "ITemplateFormatRepository",
     "ITemplateRenderer",
     "ITemplateRepository",
 ]
