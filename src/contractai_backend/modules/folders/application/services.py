@@ -6,9 +6,9 @@ from datetime import UTC, datetime
 from ....core.exceptions.base import ConflictError, ForbiddenError, NotFoundError
 from ...users.domain.entities import UserTable
 from ...users.domain.value_objs import UserRole
-from ..api.schemas import FolderCreateRequest, FolderResponse, FolderUpdateRequest
-from ..domain.entities import FolderTable
 from ..domain.access_policy import can_create_folder, can_manage_folder, can_read_folder
+from ..domain.entities import FolderTable
+from .dto import FolderCreateRequest, FolderResponse, FolderUpdateRequest
 from .repositories import FolderRepository
 
 

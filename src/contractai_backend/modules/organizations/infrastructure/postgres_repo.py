@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 
 from sqlalchemy import func
-from sqlmodel import select
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from contractai_backend.core.infrastructure.base import PostgresBaseRepository
@@ -21,6 +21,6 @@ class SQLModelOrganizationRepository(PostgresBaseRepository[OrganizationTable], 
         return result.first()
 
     async def get_active(self) -> Sequence[OrganizationTable]:
-        query = select(self.model).where(self.model.is_active.is_(True)).order_by(self.model.id)
+        query = select(self.model).where(col(self.model.is_active).is_(True)).order_by(col(self.model.id))
         result = await self.session.exec(query)
         return result.all()

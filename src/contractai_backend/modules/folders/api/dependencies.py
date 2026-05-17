@@ -7,6 +7,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....shared.infrastructure.database import get_session
 from ..application.services import FolderService
+from ..composition import build_folder_service
 from ..infrastructure.postgres_repo import SQLModelFolderRepository
 
 
@@ -19,4 +20,4 @@ async def get_folder_service(
     repo: Annotated[SQLModelFolderRepository, Depends(get_folder_repository)]
 ) -> FolderService:
     """Provides an instance of the folder service."""
-    return FolderService(sql_repo=repo)
+    return build_folder_service(repository=repo)
