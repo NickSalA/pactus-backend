@@ -6,10 +6,11 @@ from fastapi import Depends, Request
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from ....modules.catalog.composition import build_default_service_repository
 from ....modules.documents.application.services import ContractQueryService
+from ....modules.documents.composition import build_default_document_repository
 from ....modules.documents.domain.access_policy import get_readable_document_types
-from ....modules.documents.infrastructure import SQLModelDocumentRepository
-from ....modules.catalog.infrastructure.postgres_repo import SQLModelServiceRepository
+from ....modules.documents.domain.value_objs import DocumentState, DocumentType
 from ....modules.users.domain.entities import UserTable
 from ....shared.api.dependencies.security import get_current_user
 from ....shared.config import settings
@@ -24,7 +25,6 @@ from ..infrastructure.agent import (
     build_party_lookup_tool,
     get_llm,
 )
-from ....modules.documents.domain.value_objs import DocumentState, DocumentType
 
 
 async def get_conversation_service(session: Annotated[AsyncSession, Depends(get_session)]) -> ConversationService:
@@ -47,8 +47,8 @@ async def get_llm_provider(
         client=await get_aclient(),
         organization_id=current_user.organization_id,
     )
-    contract_repo = SQLModelDocumentRepository(session=session)
-    service_catalog_repo = SQLModelServiceRepository(session=session)
+    contract_repo = build_default_document_repository(session=session)
+    service_catalog_repo = build_default_service_repository(session=session)
     contract_query_service = ContractQueryService(sql_repo=contract_repo, service_repo=service_catalog_repo)
     readable_document_types = get_readable_document_types(current_user.role)
     document_filters = {"organization_id": current_user.organization_id}
@@ -59,7 +59,9 @@ async def get_llm_provider(
         documents = [
             document
             for document in documents
-            if document.id is not None and document_kinds.get(document.id) is not None and DocumentType(document_kinds[document.id]) in readable_document_types
+            if document.id is not None
+            and document_kinds.get(document.id) is not None
+            and DocumentType(document_kinds[document.id]) in readable_document_types
         ]
 
     default_document_ids = {

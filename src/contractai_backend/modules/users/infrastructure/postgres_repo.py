@@ -1,7 +1,8 @@
 """Módulo de repositorio de usuarios utilizando SQLModel y PostgreSQL."""
 
 from sqlalchemy import func
-from sqlalchemy.exc import OperationalError, SQLAlchemyError, TimeoutError as SQLAlchemyTimeoutError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 

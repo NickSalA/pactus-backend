@@ -2,10 +2,10 @@
 
 import json
 import re
-from collections.abc import Iterable
+import unicodedata
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from typing import Any, Protocol
-import unicodedata
 
 from langchain_core.tools import tool
 from pydantic import ValidationError
@@ -27,7 +27,7 @@ class CounterpartyLookupRepository(Protocol):
         limit: int = 10,
         chatbot_ready_only: bool = False,
         state: str | None = None,
-    ) -> list[dict[str, Any]] | tuple[dict[str, Any], ...]: ...
+    ) -> Sequence[dict[str, Any]]: ...
 
 
 STATE_PATTERNS: tuple[tuple[DocumentState, tuple[str, ...]], ...] = (
@@ -65,10 +65,9 @@ def build_bc_tool(
     repo: VectorRepository,
     user_role: UserRole | None,
     allowed_document_ids: Iterable[int] | None = None,
-    document_ids_by_state: dict[DocumentState, Iterable[int]] | None = None,
+    document_ids_by_state: Mapping[DocumentState, Iterable[int]] | None = None,
 ):
     """Construye una herramienta para el agente, que utiliza el repositorio vectorial para buscar información en la base de conocimientos."""
-
     scoped_document_ids = None if allowed_document_ids is None else frozenset(allowed_document_ids)
     scoped_document_ids_by_state = {document_state: frozenset(document_ids) for document_state, document_ids in (document_ids_by_state or {}).items()}
 
@@ -162,7 +161,7 @@ def build_contracts_query_tool(service: ContractQueryService, organization_id: i
             "esta herramienta indicara que se debe pedir aclaracion."
         ),
     )
-    async def contracts_query_tool(  # noqa: PLR0913
+    async def contracts_query_tool(
         operation: str,
         client: str | None = None,
         contract_name: str | None = None,
