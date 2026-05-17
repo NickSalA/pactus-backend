@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from loguru import logger
+
 from contractai_backend.modules.integrations.application.repositories import ICloudIntegrationProvider, IDocumentIngestionTarget
 from contractai_backend.modules.integrations.domain import (
     CloudFileNotFoundError,
