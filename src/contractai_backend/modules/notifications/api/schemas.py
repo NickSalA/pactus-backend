@@ -1,10 +1,33 @@
 """Schemas de request/response para el módulo de notificaciones."""
 
-from datetime import datetime
-
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel
 
 from contractai_backend.modules.notifications.domain.value_objs import NotificationType
+
+from ..application.dto import (
+    CronSendEmailsResponse as ApplicationCronSendEmailsResponse,
+)
+from ..application.dto import (
+    NotificationRuleCreateRequest as ApplicationNotificationRuleCreateRequest,
+)
+from ..application.dto import (
+    NotificationRuleResponse as ApplicationNotificationRuleResponse,
+)
+from ..application.dto import (
+    NotificationRuleUpdateRequest as ApplicationNotificationRuleUpdateRequest,
+)
+from ..application.dto import (
+    SendEmailAlertsResponse as ApplicationSendEmailAlertsResponse,
+)
+
+__all__ = [
+    "CronSendEmailsResponse",
+    "NotificationResponse",
+    "NotificationRuleCreateRequest",
+    "NotificationRuleResponse",
+    "NotificationRuleUpdateRequest",
+    "SendEmailAlertsResponse",
+]
 
 
 class NotificationResponse(BaseModel):
@@ -22,36 +45,21 @@ class NotificationResponse(BaseModel):
     days_remaining: int
 
 
-class NotificationRuleCreateRequest(BaseModel):
-    """Payload para crear reglas de notificación."""
-
-    document_id: int | None = Field(default=None, gt=0)
-    days_before_due: int = Field(..., gt=0)
-    is_active: bool = True
+class NotificationRuleCreateRequest(ApplicationNotificationRuleCreateRequest):
+    """HTTP request body for creating notification rules."""
 
 
-class NotificationRuleUpdateRequest(BaseModel):
-    """Payload para actualizar reglas de notificación."""
-
-    days_before_due: int | None = Field(default=None, gt=0)
-    is_active: bool | None = None
-
-    @model_validator(mode="after")
-    def validate_non_empty_patch(self) -> "NotificationRuleUpdateRequest":
-        if not self.model_fields_set:
-            raise ValueError("Patch request cannot be empty")
-        return self
+class NotificationRuleUpdateRequest(ApplicationNotificationRuleUpdateRequest):
+    """HTTP request body for updating notification rules."""
 
 
-class NotificationRuleResponse(BaseModel):
-    """Read model for notification rules."""
+class NotificationRuleResponse(ApplicationNotificationRuleResponse):
+    """HTTP response body for notification rules."""
 
-    model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    organization_id: int
-    document_id: int | None = None
-    days_before_due: int
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
+class SendEmailAlertsResponse(ApplicationSendEmailAlertsResponse):
+    """HTTP response body for manual email sends."""
+
+
+class CronSendEmailsResponse(ApplicationCronSendEmailsResponse):
+    """HTTP response body for cron email sends."""

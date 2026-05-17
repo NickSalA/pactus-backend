@@ -5,10 +5,10 @@ from typing import Annotated
 from fastapi import Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from ..application.repositories import NotificationRuleRepository
-from ..application.services import EmailAlertService, NotificationRuleService
-from ..infrastructure import SQLModelNotificationRuleRepository
 from ....shared.infrastructure.database import get_session
+from ..application.repositories import NotificationAlertRepository, NotificationRuleRepository
+from ..application.services import EmailAlertService, NotificationRuleService
+from ..infrastructure import GmailService, SQLModelNotificationAlertRepository, SQLModelNotificationRuleRepository
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
@@ -18,14 +18,20 @@ async def _get_notification_rule_repository(session: SessionDep) -> SQLModelNoti
     return SQLModelNotificationRuleRepository(session=session)
 
 
+async def _get_notification_alert_repository(session: SessionDep) -> SQLModelNotificationAlertRepository:
+    """Builds the SQL repository for notification alert evaluation."""
+    return SQLModelNotificationAlertRepository(session=session)
+
+
 NotificationRuleRepoDep = Annotated[NotificationRuleRepository, Depends(_get_notification_rule_repository)]
+NotificationAlertRepoDep = Annotated[NotificationAlertRepository, Depends(_get_notification_alert_repository)]
 
 
 async def get_email_alert_service(
-    session: SessionDep,
+    alert_repo: NotificationAlertRepoDep,
 ) -> EmailAlertService:
     """Provee el servicio de alertas por correo electrónico."""
-    return EmailAlertService(session=session)
+    return EmailAlertService(alert_repo=alert_repo, email_sender=GmailService())
 
 
 async def get_notification_rule_service(
