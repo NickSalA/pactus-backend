@@ -2,15 +2,15 @@
 
 from collections.abc import Sequence
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
+from ....catalog.application.repositories import ServiceRepository
 from ....users.domain.value_objs import UserRole
 from ...domain import CompanyContractServiceTable, DocumentTable
 from ...domain.access_policy import can_read_document_type, get_readable_document_types
 from ...domain.value_objs import DocumentState, DocumentType
 from ..dto import ContractQueryDTO
 from ..repositories import DocumentQueryRepository
-from ....catalog.application.repositories import ServiceRepository
 
 DEFAULT_LIST_LIMIT = 20
 MAX_LIST_LIMIT = 50
@@ -22,7 +22,7 @@ class ContractQueryService:
 
     def __init__(self, sql_repo: DocumentQueryRepository, service_repo: ServiceRepository | None = None):
         self.sql_repo = sql_repo
-        self.service_repo = service_repo or sql_repo
+        self.service_repo = service_repo or cast(ServiceRepository, sql_repo)
 
     @staticmethod
     def _clamp_limit(limit: int | None) -> int:

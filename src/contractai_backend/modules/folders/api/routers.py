@@ -6,9 +6,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Response, status
 
 from ....shared.api.dependencies.security import CurrentUserDep
+from ..application.services import FolderService
 from .dependencies import get_folder_service
 from .schemas import FolderCreateRequest, FolderResponse, FolderUpdateRequest
-from ..application.services import FolderService
 
 router = APIRouter()
 
@@ -19,7 +19,8 @@ async def list_folders(
     current_user: CurrentUserDep,
 ) -> Sequence[FolderResponse]:
     """Endpoint to list folders visible to the current user."""
-    return await service.list_folders(current_user=current_user)
+    folders = await service.list_folders(current_user=current_user)
+    return [FolderResponse.model_validate(folder, from_attributes=True) for folder in folders]
 
 
 @router.post(path="/", response_model=FolderResponse, status_code=status.HTTP_201_CREATED)
@@ -29,7 +30,8 @@ async def create_folder(
     current_user: CurrentUserDep,
 ) -> FolderResponse:
     """Endpoint to create a folder in the current role scope."""
-    return await service.create_folder(current_user=current_user, data=payload)
+    folder = await service.create_folder(current_user=current_user, data=payload)
+    return FolderResponse.model_validate(folder, from_attributes=True)
 
 
 @router.patch(path="/{folder_id}", response_model=FolderResponse)
@@ -40,7 +42,8 @@ async def update_folder(
     current_user: CurrentUserDep,
 ) -> FolderResponse:
     """Endpoint to update a folder."""
-    return await service.update_folder(current_user=current_user, folder_id=folder_id, data=payload)
+    folder = await service.update_folder(current_user=current_user, folder_id=folder_id, data=payload)
+    return FolderResponse.model_validate(folder, from_attributes=True)
 
 
 @router.delete(path="/{folder_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

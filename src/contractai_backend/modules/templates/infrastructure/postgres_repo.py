@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 
 from sqlalchemy import update
-from sqlmodel import select
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....core.infrastructure.base import PostgresBaseRepository
@@ -40,11 +40,11 @@ class SQLModelTemplateRepository(PostgresBaseRepository[TemplateTable], ITemplat
         await self.session.exec(
             update(self.model)
             .where(
-                self.model.organization_id == db_merged.organization_id,
-                self.model.document_type == db_merged.document_type,
-                self.model.template_format_id == db_merged.template_format_id,
-                self.model.state == TemplateState.PUBLISHED,
-                self.model.id != db_merged.id,
+                col(self.model.organization_id) == db_merged.organization_id,
+                col(self.model.document_type) == db_merged.document_type,
+                col(self.model.template_format_id) == db_merged.template_format_id,
+                col(self.model.state) == TemplateState.PUBLISHED,
+                col(self.model.id) != db_merged.id,
             )
             .values(state=TemplateState.ARCHIVED)
         )
@@ -67,14 +67,14 @@ class SQLModelTemplateFormatRepository(PostgresBaseRepository[TemplateFormatTabl
         query = select(self.model).where(
             self.model.document_type == document_type,
             self.model.format_code == normalized_format_code,
-            self.model.is_active.is_(True),
+            col(self.model.is_active).is_(True),
         )
         result = await self.session.exec(statement=query)
         return result.first()
 
     async def list_active(self, document_type: DocumentType | None = None) -> Sequence[TemplateFormatTable]:
         """Lista formatos activos, opcionalmente filtrados por tipo documental."""
-        query = select(self.model).where(self.model.is_active.is_(True))
+        query = select(self.model).where(col(self.model.is_active).is_(True))
         if document_type is not None:
             query = query.where(self.model.document_type == document_type)
         result = await self.session.exec(statement=query)
@@ -84,6 +84,6 @@ class SQLModelTemplateFormatRepository(PostgresBaseRepository[TemplateFormatTabl
         """Lista formatos por identificadores."""
         if not ids:
             return []
-        query = select(self.model).where(self.model.id.in_(ids))
+        query = select(self.model).where(col(self.model.id).in_(ids))
         result = await self.session.exec(statement=query)
         return result.all()

@@ -16,7 +16,8 @@ from contractai_backend.modules.documents.api.dependencies import (
     get_service_catalog_service,
 )
 from contractai_backend.modules.documents.api.routers import router
-from contractai_backend.modules.documents.domain import DocumentTable, ServiceTable
+from contractai_backend.modules.catalog.domain.entities import ServiceTable
+from contractai_backend.modules.documents.domain import DocumentTable
 from contractai_backend.modules.documents.domain.exceptions import DocumentFileMissingError, DocumentNotFoundError
 from contractai_backend.modules.documents.domain.value_objs import DocumentState, DocumentType
 from contractai_backend.shared.api.dependencies.security import get_current_user
@@ -228,7 +229,7 @@ class TestUpdateDocument:
     @pytest.mark.asyncio
     async def test_update_document_returns_200(self):
         updated = _make_doc()
-        updated.name = "Nombre Actualizado"
+        updated.file_name = "Nombre Actualizado"
 
         mock_document_service = AsyncMock()
         mock_document_service.update_document.return_value = updated
@@ -241,7 +242,7 @@ class TestUpdateDocument:
             )
 
         assert response.status_code == 200
-        assert response.json()["name"] == "Nombre Actualizado"
+        assert response.json()["file_name"] == "Nombre Actualizado"
 
     @pytest.mark.asyncio
     async def test_update_document_not_found_returns_404(self):

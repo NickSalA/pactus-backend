@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Sequence
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Query, Response, UploadFile, status
 from pydantic import ValidationError
@@ -67,25 +67,25 @@ async def create_document(
         organization_id=current_user.organization_id,
         user_role=user_role,
     )
-    return saved_document
+    return DocumentResponse.model_validate(saved_document)
 
 
 @router.get(path="/", response_model=Sequence[DocumentResponse])
 async def list_documents(
     service: Annotated[DocumentQueryService, Depends(get_document_query_service)],
     current_user: CurrentUserDep,
-    limit: Optional[int] = Query(default=None, ge=1, description="Maximum number of documents to return"),
-    offset: Optional[int] = Query(default=None, ge=0, description="Number of documents to skip"),
+    limit: int | None = Query(default=None, ge=1, description="Maximum number of documents to return"),
+    offset: int | None = Query(default=None, ge=0, description="Number of documents to skip"),
 ) -> Sequence[DocumentResponse]:
     """Endpoint to list documents with optional filters and pagination."""
     user_role = getattr(current_user, "role", None)
-    documents: Sequence[DocumentResponse] = await service.get_documents(
+    documents = await service.get_documents(
         organization_id=current_user.organization_id,
         user_role=user_role,
         limit=limit,
         offset=offset,
     )
-    return documents
+    return [DocumentResponse.model_validate(document) for document in documents]
 
 
 @router.get(path="/{document_id}", response_model=DocumentResponse)
@@ -96,14 +96,14 @@ async def get_document(
 ) -> DocumentResponse:
     """Endpoint to retrieve a document by its ID."""
     user_role = getattr(current_user, "role", None)
-    doc: DocumentResponse | None = await service.get_document(
+    doc = await service.get_document(
         id=document_id,
         organization_id=current_user.organization_id,
         user_role=user_role,
     )
     if not doc:
         raise DocumentNotFoundError(document_id=document_id)
-    return doc
+    return DocumentResponse.model_validate(doc)
 
 
 @router.get(path="/{document_id}/file-url", response_model=DocumentFileUrlResponse)
@@ -153,7 +153,7 @@ async def update_document(
         user_role=user_role,
         file_data=file_data,
     )
-    return updated_doc
+    return DocumentResponse.model_validate(updated_doc)
 
 
 @router.delete(path="/{document_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

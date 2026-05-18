@@ -46,3 +46,17 @@ async def test_openapi_schema_is_available(app: FastAPI):
     schema = response.json()
     assert "paths" in schema
     assert "openapi" in schema
+
+
+@pytest.mark.asyncio
+async def test_openapi_includes_refactored_response_contracts(app: FastAPI):
+    """Critical refactored endpoints must expose their intended schemas."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/openapi.json")
+
+    schema = response.json()
+    template_generate = schema["paths"]["/templates/{template_id}/generate"]["post"]
+    notification_cron = schema["paths"]["/notifications/cron/send-emails"]["post"]
+
+    assert template_generate["responses"]["201"]["content"]["application/json"]["schema"]["$ref"].endswith("/DocumentResponse")
+    assert set(notification_cron["responses"]) >= {"200", "401", "422", "503"}

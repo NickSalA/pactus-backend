@@ -50,17 +50,26 @@ class LlamaParseExtractor(DocumentExtractor):
             if not result.markdown or not result.markdown.pages:
                 raise DocumentExtractionError(f"No se pudo extraer contenido de '{filename}' con LlamaParse.")
 
-            return [
-                Document(
-                    text=page.markdown,
-                    metadata={
-                        "filename": filename,
-                        "page_number": i + 1,
-                        "total_pages": len(result.markdown.pages),
-                    },
+            parsed_pages: list[Document] = []
+            for i, page in enumerate(iterable=result.markdown.pages):
+                markdown = getattr(page, "markdown", None)
+                if not isinstance(markdown, str) or not markdown.strip():
+                    continue
+                parsed_pages.append(
+                    Document(
+                        text=markdown,
+                        metadata={
+                            "filename": filename,
+                            "page_number": i + 1,
+                            "total_pages": len(result.markdown.pages),
+                        },
+                    )
                 )
-                for i, page in enumerate(iterable=result.markdown.pages)
-            ]
+
+            if not parsed_pages:
+                raise DocumentExtractionError(f"No se pudo extraer contenido de '{filename}' con LlamaParse.")
+
+            return parsed_pages
 
         except Exception as e:
             raise DocumentExtractionError(f"El servicio fallo al procesar '{filename}': {e!s}") from e

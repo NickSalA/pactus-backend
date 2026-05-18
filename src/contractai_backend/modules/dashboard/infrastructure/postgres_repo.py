@@ -2,8 +2,11 @@
 
 from collections.abc import Sequence
 from datetime import date
+from typing import Any
+from typing import cast as type_cast
 
 from sqlalchemy import desc, func, literal, text
+from sqlalchemy import select as sa_select
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col, select
@@ -11,9 +14,9 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....core.exceptions.base import InternalServerError, ServiceUnavailableError
 from ....shared.infrastructure.sqlmodel_utils import RelationalHelpersMixin
-from ...documents.domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable, LaborContractTable, ServiceTable
-from ...documents.domain.value_objs import DocumentState, DocumentType, CurrencyType
-from ..domain.value_objs import TopRankingSortBy
+from ...catalog.domain.entities import ServiceTable
+from ...documents.domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable, LaborContractTable
+from ...documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
 from ..application.repositories import (
     DashboardClientRanking,
     DashboardContractSummary,
@@ -21,6 +24,7 @@ from ..application.repositories import (
     DashboardRepository,
     DashboardServiceRanking,
 )
+from ..domain.value_objs import TopRankingSortBy
 
 ACTIVE_DASHBOARD_STATES = (DocumentState.ACTIVE, DocumentState.EXPIRING_SOON)
 DECEMBER = 12
@@ -48,6 +52,8 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
             return []
         if isinstance(value, str):
             return [value]
+        if not isinstance(value, Sequence):
+            return []
         return [str(item) for item in value if item]
 
     @classmethod
@@ -77,7 +83,7 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
     def _contract_summary_select(self, document_type: DocumentType):
         if document_type == DocumentType.COMPANY:
             return (
-                select(
+                sa_select(
                     col(DocumentTable.id).label("id"),
                     col(CompanyContractTable.client).label("title"),
                     col(CompanyContractTable.client).label("name"),
@@ -105,7 +111,7 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
             )
 
         return (
-            select(
+            sa_select(
                 col(DocumentTable.id).label("id"),
                 col(LaborContractTable.worker_name).label("title"),
                 col(LaborContractTable.worker_name).label("name"),
@@ -125,7 +131,7 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
         """Synchronizes document states before dashboard reads."""
         try:
             result = await self.session.exec(
-                text("select public.sync_document_states(:organization_id)"),
+                type_cast(Any, text("select public.sync_document_states(:organization_id)")),
                 params={"organization_id": organization_id},
             )
             return self._read_scalar_result(result.one())
@@ -161,6 +167,7 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
 
                     statement = (
                         select(func.coalesce(func.sum(col(CompanyContractServiceTable.value)), 0.0))
+                        .select_from(DocumentTable)
                         .join(CompanyContractTable, col(CompanyContractTable.document_id) == col(DocumentTable.id))
                         .join(CompanyContractServiceTable, col(CompanyContractServiceTable.company_contract_id) == col(CompanyContractTable.id))
                         .where(*filters)
@@ -177,6 +184,7 @@ class SQLModelDashboardRepository(RelationalHelpersMixin, DashboardRepository):
 
                     statement = (
                         select(func.coalesce(func.sum(col(LaborContractTable.salary_value)), 0.0))
+                        .select_from(DocumentTable)
                         .join(LaborContractTable, col(LaborContractTable.document_id) == col(DocumentTable.id))
                         .where(*filters)
                     )

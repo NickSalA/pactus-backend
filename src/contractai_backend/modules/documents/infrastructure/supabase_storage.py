@@ -8,8 +8,8 @@ from httpx import Response
 
 from ....shared.config import settings
 from ..application.repositories import DocumentStorageRepository
-from ..domain.value_objs import DocumentType
 from ..domain.exceptions import DocumentStorageError, DocumentStorageUnavailableError
+from ..domain.value_objs import DocumentType
 
 
 def sanitize_storage_filename(filename: str) -> str:

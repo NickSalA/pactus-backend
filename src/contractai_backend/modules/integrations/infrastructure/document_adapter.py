@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from ...documents.api.schemas import CreateDocumentDraftRequest, FileRequest
+from ...documents.application.dto import CreateDocumentDraftRequest, FileRequest
 from ...documents.application.services import DocumentCommandService
 from ..application.repositories import IDocumentIngestionTarget
 

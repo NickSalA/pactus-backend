@@ -28,7 +28,7 @@ def coerce_content_to_text(content: Any) -> str:
     return str(content)
 
 
-def parse_structured_decision(raw_content: Any, schema: type[T]) -> T:
+def parse_structured_decision[T: BaseModel](raw_content: Any, schema: type[T]) -> T:
     """Parse a JSON decision emitted by a routing agent."""
     text = coerce_content_to_text(raw_content).strip()
     if text.startswith("```"):

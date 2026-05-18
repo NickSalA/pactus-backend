@@ -21,8 +21,8 @@ class LangGraphLLMAdapter(ILLMProvider):
             )
         except Exception as e:
             if "429" in str(e) or "quota" in str(e).lower():
-                raise LLMQuotaExceededError()
-            raise LLMExecutionError(message=f"Error en la malla de LangGraph: {str(e)}")
+                raise LLMQuotaExceededError() from e
+            raise LLMExecutionError(message=f"Error en la malla de LangGraph: {e!s}") from e
 
         last_message = result["messages"][-1]
         raw_content = last_message.content

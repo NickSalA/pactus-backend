@@ -1,5 +1,7 @@
 """Módulo encargado de renderizar las plantillas Markdown utilizando Jinja2."""
 
+
+import contextlib
 from datetime import date, datetime
 from typing import Any
 
@@ -43,12 +45,5 @@ class JinjaRenderer(ITemplateRenderer):
         if not cleaned:
             return None
 
-        try:
+        with contextlib.suppress(ValueError):
             return datetime.fromisoformat(cleaned.replace("Z", "+00:00"))
-        except ValueError:
-            pass
-
-        try:
-            return datetime.combine(date.fromisoformat(cleaned), datetime.min.time())
-        except ValueError:
-            return None

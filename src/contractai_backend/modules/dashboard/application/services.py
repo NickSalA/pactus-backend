@@ -4,10 +4,11 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime, time, timedelta
 from math import ceil
 
-from ...documents.domain.value_objs import DocumentType, CurrencyType
+from ...documents.domain.value_objs import CurrencyType, DocumentType
 from ...users.domain.entities import UserTable
+from ..domain.access_policy import ensure_dashboard_access
 from ..domain.value_objs import TopRankingSortBy
-from ..api.schemas import (
+from .dto import (
     AlertCategory,
     AlertColor,
     AlertItem,
@@ -20,7 +21,6 @@ from ..api.schemas import (
     TopCompanyResponse,
     TopServiceResponse,
 )
-from ..domain.access_policy import ensure_dashboard_access
 from .repositories import DashboardContractSummary, DashboardRepository
 
 AREA_CHART_HISTORY_MONTHS = 4
@@ -188,7 +188,7 @@ class DashboardService:
         return [
             AlertCategory(
                 label="VENCEN PROXIMOS",
-                color=AlertColor(accent="#232232", bg="#123421"),
+                color=AlertColor(accent="#EF4444", bg="#FEE2E2"),
                 due_to=30,
                 count=critical_count,
                 items=[self._serialize_alert_item(document_type, item, today) for item in critical_items],

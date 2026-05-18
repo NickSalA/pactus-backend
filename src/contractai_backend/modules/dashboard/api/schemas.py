@@ -1,96 +1,93 @@
-"""Schemas for dashboard API responses."""
+"""HTTP schemas for dashboard API responses."""
 
-from datetime import datetime
-
-from pydantic import BaseModel, Field
-
-
-class AreaChartYAxis(BaseModel):
-    """Y axis metadata consumed by the frontend chart."""
-
-    format: str = Field(default="currency")
-    labels: list[float]
-
-
-class AreaChartPoint(BaseModel):
-    """One chart point for historical or forecast data."""
-
-    x: str
-    y: float
-    is_forecast: bool = False
-
-
-class AreaChartSeries(BaseModel):
-    """One chart series."""
-
-    currency: str
-    name: str
-    data: list[AreaChartPoint]
-
-
-class AreaChartProps(BaseModel):
-    """Chart props returned as a single payload."""
-
-    title: str
-    subtitle: str
-    y_axis: AreaChartYAxis
-    threshold_date: datetime
-    series: list[AreaChartSeries]
+from ..application.dto import (
+    AlertCategory as ApplicationAlertCategory,
+)
+from ..application.dto import (
+    AlertColor as ApplicationAlertColor,
+)
+from ..application.dto import (
+    AlertItem as ApplicationAlertItem,
+)
+from ..application.dto import (
+    AreaChartPoint as ApplicationAreaChartPoint,
+)
+from ..application.dto import (
+    AreaChartProps as ApplicationAreaChartProps,
+)
+from ..application.dto import (
+    AreaChartResponse as ApplicationAreaChartResponse,
+)
+from ..application.dto import (
+    AreaChartSeries as ApplicationAreaChartSeries,
+)
+from ..application.dto import (
+    AreaChartYAxis as ApplicationAreaChartYAxis,
+)
+from ..application.dto import (
+    RecentContractResponse as ApplicationRecentContractResponse,
+)
+from ..application.dto import (
+    TopCompanyResponse as ApplicationTopCompanyResponse,
+)
+from ..application.dto import (
+    TopServiceResponse as ApplicationTopServiceResponse,
+)
 
 
-class AreaChartResponse(BaseModel):
-    """Response for area chart endpoints."""
-
-    props: AreaChartProps
+class AlertColor(ApplicationAlertColor):
+    """HTTP response schema for alert color tokens."""
 
 
-class AlertColor(BaseModel):
-    """Visual colors for one alert bucket."""
-
-    accent: str
-    bg: str
+class AlertItem(ApplicationAlertItem):
+    """HTTP response schema for one dashboard alert."""
 
 
-class AlertItem(BaseModel):
-    """Contract item displayed under an alert bucket."""
-
-    id: int
-    name: str
-    detail: str | None = None
-    status: str
+class AlertCategory(ApplicationAlertCategory):
+    """HTTP response schema for grouped dashboard alerts."""
 
 
-class AlertCategory(BaseModel):
-    """Alert bucket with count and a small preview list."""
-
-    label: str
-    color: AlertColor
-    due_to: int | None = None
-    count: int
-    items: list[AlertItem]
+class AreaChartPoint(ApplicationAreaChartPoint):
+    """HTTP response schema for one chart point."""
 
 
-class RecentContractResponse(BaseModel):
-    """Recent contract card."""
-
-    id: int
-    title: str
-    services: list[str]
-    name: str
-    dates: str
+class AreaChartYAxis(ApplicationAreaChartYAxis):
+    """HTTP response schema for area chart axis metadata."""
 
 
-class TopCompanyResponse(BaseModel):
-    """Top company ranking row."""
-
-    name: str
-    contracts: int
-    amount: float
+class AreaChartSeries(ApplicationAreaChartSeries):
+    """HTTP response schema for one chart series."""
 
 
-class TopServiceResponse(BaseModel):
-    """Top service ranking row."""
+class AreaChartProps(ApplicationAreaChartProps):
+    """HTTP response schema for area chart props."""
 
-    name: str
-    quantity: int
-    amount: float
+
+class AreaChartResponse(ApplicationAreaChartResponse):
+    """HTTP response schema for area chart data."""
+
+
+class RecentContractResponse(ApplicationRecentContractResponse):
+    """HTTP response schema for recent contracts."""
+
+
+class TopCompanyResponse(ApplicationTopCompanyResponse):
+    """HTTP response schema for top company rows."""
+
+
+class TopServiceResponse(ApplicationTopServiceResponse):
+    """HTTP response schema for top service rows."""
+
+__all__ = [
+    "AlertCategory",
+    "AlertColor",
+    "AlertItem",
+    "AreaChartPoint",
+    "AreaChartProps",
+    "AreaChartResponse",
+    "AreaChartSeries",
+    "AreaChartYAxis",
+    "RecentContractResponse",
+    "TopCompanyResponse",
+    "TopServiceResponse",
+]

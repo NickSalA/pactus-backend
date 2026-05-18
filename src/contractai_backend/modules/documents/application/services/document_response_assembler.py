@@ -2,8 +2,8 @@
 
 from collections.abc import Mapping, Sequence
 
-from ...api.schemas import CompanyContractResponse, DocumentResponse, DocumentServiceItemResponse, LaborContractResponse
 from ...domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable, LaborContractTable
+from ..dto import CompanyContractResponse, DocumentResponse, DocumentServiceItemResponse, LaborContractResponse
 from ..repositories import DocumentQueryRepository
 
 

@@ -4,7 +4,7 @@ from typing import Any
 
 from ....documents.domain.access_policy import get_readable_document_types
 from ...application.repositories.base_llm import ILLMProvider
-from ...domain.entities import ConversationTable, Message
+from ...domain.entities import Message
 from ...domain.exceptions import ConversationNotFoundError
 from .conversation_service import ConversationService
 

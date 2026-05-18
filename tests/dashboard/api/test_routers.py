@@ -10,7 +10,7 @@ from httpx import ASGITransport, AsyncClient
 from contractai_backend.core.exceptions.base import AppError
 from contractai_backend.modules.dashboard.api.dependencies import get_dashboard_service
 from contractai_backend.modules.dashboard.api.routers import router
-from contractai_backend.modules.dashboard.api.schemas import (
+from contractai_backend.modules.dashboard.application.services import (
     AlertCategory,
     AlertColor,
     AreaChartProps,

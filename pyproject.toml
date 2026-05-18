@@ -51,7 +51,21 @@ exclude = ["**/tests/**"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "D", "PL", "B", "W", "ARG", "RUF", "UP", "PTH"]
-ignore = ["D104", "D107", "D101", "D417"]
+ignore = [
+    "B008",   # FastAPI intentionally uses Query/Depends factories in signatures.
+    "D100",   # Module docstrings are not consistently useful in this modular backend.
+    "D101",
+    "D102",   # Public methods often implement protocol/framework hooks with obvious names.
+    "D103",   # Route handlers are documented at OpenAPI level where useful.
+    "D104",
+    "D107",
+    "D417",
+    "E501",   # Legal/LLM prompts and SQL expressions are safer when kept intact.
+    "PLR0911", # Domain branching is clearer than premature indirection in validators/formatters.
+    "PLR0912",
+    "PLR0913", # FastAPI dependency providers and service constructors naturally exceed 5 args.
+    "PLR2004", # Domain thresholds are readable inline when they are local to one rule.
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -95,6 +109,8 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "httpx>=0.27.0",
+    "ruff",
+    "ty"
 ]
 
 [tool.pytest.ini_options]

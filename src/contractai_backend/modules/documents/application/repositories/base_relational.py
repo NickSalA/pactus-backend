@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import Any
 
-from ..dto import ContractQueryDTO
 from ...domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable, LaborContractTable
+from ..dto import ContractQueryDTO
 
 
 class DocumentQueryRepository(ABC):

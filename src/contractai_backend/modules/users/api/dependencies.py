@@ -8,9 +8,10 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....shared.infrastructure.database import get_session
 from ....shared.infrastructure.http import get_http_client
-from ...users.application.repositories.user_repo import IUserRepository
 from ..application.repositories.token_service import IAuthRepository
+from ..application.repositories.user_repo import IUserRepository
 from ..application.services.auth_service import AuthService
+from ..composition import build_default_auth_service
 from ..infrastructure.jwt_service import SupabaseAuthService
 from ..infrastructure.postgres_repo import SQLModelUserRepository
 
@@ -26,7 +27,8 @@ def get_identity_provider(client: Annotated[httpx.AsyncClient, Depends(get_http_
 
 
 def get_auth_application_service(
-    identity_provider: Annotated[IAuthRepository, Depends(get_identity_provider)], user_repo: Annotated[IUserRepository, Depends(get_user_repository)]
+    session: Annotated[AsyncSession, Depends(get_session)],
+    client: Annotated[httpx.AsyncClient, Depends(get_http_client)],
 ) -> AuthService:
     """Inyecta el servicio de aplicación que orquesta la autenticación."""
-    return AuthService(jwt_service=identity_provider, repo=user_repo)
+    return build_default_auth_service(session=session, http_client=client)

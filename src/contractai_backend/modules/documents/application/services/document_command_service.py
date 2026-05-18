@@ -7,22 +7,11 @@ from typing import Any
 from loguru import logger
 
 from .....core.exceptions.base import ForbiddenError
+from ....catalog.application.repositories import ServiceRepository
 from ....folders.application.repositories import FolderRepository
 from ....users.domain.value_objs import UserRole
-from ...api.schemas import (
-    CompanyContractRequest,
-    CreateDocumentDraftRequest,
-    CreateDocumentRequest,
-    DocumentResponse,
-    DocumentServiceItemRequest,
-    FileRequest,
-    LaborContractRequest,
-    UpdateDocumentRequest,
-)
-from ..dto import ExtractedDocumentData
-from ...domain import CompanyContractTable, DocumentTable, LaborContractTable, validate_service_currency_alignment, validate_service_periods
+from ...domain import DocumentTable, validate_service_currency_alignment, validate_service_periods
 from ...domain.access_policy import can_manage_folder, can_read_document_type, can_write_document_type
-from ...domain.value_objs import DocumentState, DocumentType
 from ...domain.exceptions import (
     DocumentExtractionError,
     DocumentFileMissingError,
@@ -31,17 +20,28 @@ from ...domain.exceptions import (
     DocumentValidationError,
     InvalidDocumentFileError,
 )
+from ...domain.value_objs import DocumentState, DocumentType
+from ..dto import (
+    CreateDocumentDraftRequest,
+    CreateDocumentRequest,
+    DocumentResponse,
+    DocumentServiceItemRequest,
+    ExtractedDocumentData,
+    FileRequest,
+    UpdateDocumentRequest,
+)
 from ..repositories import (
     DocumentChunkEnricher,
     DocumentCommandRepository,
     DocumentExtractor,
     DocumentQueryRepository,
-    DocumentStructuredExtractor,
     DocumentStorageRepository,
+    DocumentStructuredExtractor,
     VectorRepository,
 )
-from ....catalog.application.repositories import ServiceRepository
+from .contract_detail_factory import ContractDetailFactory
 from .document_command_policy import DocumentCommandPolicy
+from .document_external_resource_service import DocumentCreationCompensationService, DocumentExternalResourceService
 from .document_response_assembler import DocumentResponseAssembler
 
 
@@ -56,10 +56,8 @@ class DocumentUpdatePayload:
 
 class DocumentCommandService:
     DEFAULT_VECTOR_INDEX_NAMES = ("contracts_index", "drive_contracts_index")
-    LABOR_CONTRACT_NAME_PREFIX = "Contrato Estándar de Trabajador"
-    COMPANY_CONTRACT_NAME_PREFIX = "Contrato Estándar de Empresa"
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         command_repo: DocumentCommandRepository,
         query_repo: DocumentQueryRepository,
@@ -83,6 +81,8 @@ class DocumentCommandService:
         self.chunk_enricher = chunk_enricher
         self.policy = DocumentCommandPolicy(service_repo=service_repo)
         self.response_assembler = DocumentResponseAssembler(sql_repo=query_repo)
+        self.external_resources = DocumentExternalResourceService(storage_repo=storage_repo, vector_repo=vector_repo)
+        self.creation_compensation = DocumentCreationCompensationService(external_resources=self.external_resources)
 
     async def _validate_folder_access(
         self,
@@ -182,137 +182,6 @@ class DocumentCommandService:
             return DocumentType.COMPANY
         return None
 
-    @staticmethod
-    def _first_text_value(*values: Any) -> str | None:
-        for value in values:
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-        return None
-
-    @staticmethod
-    def _first_float_value(*values: Any) -> float | None:
-        for value in values:
-            if value is None or value == "":
-                continue
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                continue
-        return None
-
-    @classmethod
-    def _build_company_contract_entity(
-        cls,
-        *,
-        document_id: int,
-        data: CreateDocumentRequest | CreateDocumentDraftRequest | UpdateDocumentRequest,
-        extracted_data: ExtractedDocumentData | None,
-        form_data: dict[str, Any],
-    ) -> CompanyContractTable:
-        company_contract: CompanyContractRequest | None = getattr(data, "company_contract", None)
-        return CompanyContractTable(
-            document_id=document_id,
-            ruc=cls._first_text_value(
-                getattr(company_contract, "ruc", None),
-                form_data.get("gerente_ruc"),
-                form_data.get("contratista_ruc"),
-                form_data.get("proveedor_ruc"),
-                form_data.get("otra_parte_ruc"),
-                form_data.get("ruc_gerente"),
-                form_data.get("cliente_ruc"),
-            ),
-            client=cls._first_text_value(
-                getattr(company_contract, "client", None),
-                getattr(data, "client", None),
-                extracted_data.client if extracted_data is not None else None,
-            ),
-            updated_at=datetime.now(UTC),
-        )
-
-    @classmethod
-    def _build_labor_contract_entity(
-        cls,
-        *,
-        document_id: int,
-        data: CreateDocumentRequest | CreateDocumentDraftRequest | UpdateDocumentRequest,
-        extracted_data: ExtractedDocumentData | None,
-        form_data: dict[str, Any],
-    ) -> LaborContractTable:
-        labor_contract: LaborContractRequest | None = getattr(data, "labor_contract", None)
-        salary_currency = getattr(labor_contract, "salary_currency", None) or cls._coerce_currency(form_data.get("currency"))
-        return LaborContractTable(
-            document_id=document_id,
-            worker_name=cls._first_text_value(
-                getattr(labor_contract, "worker_name", None),
-                getattr(data, "client", None),
-                extracted_data.worker_name if extracted_data is not None else None,
-                form_data.get("trabajador_nombre"),
-                form_data.get("nombre_trabajador"),
-                form_data.get("trabajador_nombre_completo"),
-                form_data.get("empleado_nombre_completo"),
-            ),
-            worker_document_number=cls._first_text_value(
-                getattr(labor_contract, "worker_document_number", None),
-                form_data.get("trabajador_dni"),
-                form_data.get("dni_trabajador"),
-                form_data.get("numero_documento_trabajador"),
-                form_data.get("empleado_dni"),
-            ),
-            position=cls._first_text_value(
-                getattr(labor_contract, "position", None),
-                form_data.get("position"),
-                form_data.get("puesto_trabajo"),
-                form_data.get("cargo"),
-                form_data.get("cargo_ocupar"),
-            ),
-            salary_value=cls._first_float_value(
-                getattr(labor_contract, "salary_value", None),
-                form_data.get("value"),
-                form_data.get("monto_remuneracion"),
-                form_data.get("remuneracion_mensual_monto"),
-                form_data.get("remuneracion_bruta"),
-            ),
-            salary_currency=salary_currency,
-            salary_periodicity=cls._first_text_value(
-                getattr(labor_contract, "salary_periodicity", None),
-                form_data.get("periodicidad_remuneracion"),
-                form_data.get("frecuencia_pago"),
-                form_data.get("periodicidad_pago"),
-            ),
-            contract_modality=cls._first_text_value(
-                getattr(labor_contract, "contract_modality", None),
-                form_data.get("modalidad_contrato"),
-                form_data.get("modalidad_contrato_tipo"),
-                form_data.get("forma_contratacion"),
-            ),
-            updated_at=datetime.now(UTC),
-        )
-
-    @staticmethod
-    def _coerce_currency(value: Any):
-        if value is None or value == "":
-            return None
-        try:
-            from ...domain import CurrencyType
-
-            return CurrencyType(str(value).strip().upper())
-        except ValueError:
-            return None
-
-    @classmethod
-    def _build_labor_contract_name(cls, worker_name: str | None) -> str:
-        normalized_worker_name = worker_name.strip() if isinstance(worker_name, str) else ""
-        if normalized_worker_name:
-            return f"{cls.LABOR_CONTRACT_NAME_PREFIX} - {normalized_worker_name}"
-        return cls.LABOR_CONTRACT_NAME_PREFIX
-
-    @classmethod
-    def _build_company_contract_name(cls, company_name: str | None) -> str:
-        normalized_company_name = company_name.strip() if isinstance(company_name, str) else ""
-        if normalized_company_name:
-            return f"{cls.COMPANY_CONTRACT_NAME_PREFIX} - {normalized_company_name}"
-        return cls.COMPANY_CONTRACT_NAME_PREFIX
-
     @classmethod
     def _resolve_vector_index_names(cls, primary_index_name: str) -> tuple[str, ...]:
         return tuple(dict.fromkeys((primary_index_name, *cls.DEFAULT_VECTOR_INDEX_NAMES)))
@@ -338,10 +207,10 @@ class DocumentCommandService:
         if resolved_type == DocumentType.LABOR:
             worker_name = extracted_data.worker_name or resolved_client
             if worker_name is not None:
-                return cls._build_labor_contract_name(worker_name=worker_name)
+                return ContractDetailFactory.build_labor_contract_name(worker_name=worker_name)
 
         if resolved_type == DocumentType.COMPANY and resolved_client is not None:
-            return cls._build_company_contract_name(company_name=resolved_client)
+            return ContractDetailFactory.build_company_contract_name(company_name=resolved_client)
 
         return extracted_data.name
 
@@ -603,7 +472,7 @@ class DocumentCommandService:
         saved_company_contract = None
         if resolved_contract_kind == DocumentType.COMPANY:
             saved_company_contract = await self.command_repo.upsert_company_contract(
-                self._build_company_contract_entity(
+                ContractDetailFactory.build_company_contract_entity(
                     document_id=document_id,
                     data=data,
                     extracted_data=extracted_data,
@@ -612,7 +481,7 @@ class DocumentCommandService:
             )
         elif resolved_contract_kind == DocumentType.LABOR:
             await self.command_repo.upsert_labor_contract(
-                self._build_labor_contract_entity(
+                ContractDetailFactory.build_labor_contract_entity(
                     document_id=document_id,
                     data=data,
                     extracted_data=extracted_data,
@@ -633,7 +502,7 @@ class DocumentCommandService:
         try:
             persisted_service_entities = await self.command_repo.replace_document_services(doc_id=document_id, service_items=service_entities)
 
-            storage_path = await self.storage_repo.upload_file(
+            storage_path = await self.external_resources.upload_file(
                 document_id=document_id,
                 organization_id=saved_document.organization_id,
                 document_type=resolved_contract_kind,
@@ -642,7 +511,7 @@ class DocumentCommandService:
                 content_type=file_data.content_type,
             )
 
-            await self.vector_repo.add_vectors(index_name=index_name, document_id=document_id, chunks=parsed_document)
+            await self.external_resources.add_vectors(index_name=index_name, document_id=document_id, chunks=parsed_document)
             vectors_added = True
 
             saved_document.file_path = storage_path
@@ -657,24 +526,14 @@ class DocumentCommandService:
             return self.response_assembler.serialize(document=refreshed_document, service_items=persisted_service_entities)
 
         except Exception as exc:
-            if vectors_added:
-                try:
-                    await self.vector_repo.delete_vectors(index_name=index_name, document_id=document_id)
-                except Exception:
-                    pass
-
-            if storage_path:
-                try:
-                    await self.storage_repo.delete_file(path=storage_path)
-                except Exception:
-                    pass
-
-            try:
-                await self.command_repo.delete(id=document_id)
-            except Exception:
-                pass
-
-            raise DocumentTransactionError(operation="create", details=str(object=exc)) from exc
+            await self.creation_compensation.compensate(
+                document_id=document_id,
+                index_name=index_name,
+                storage_path=storage_path,
+                vectors_added=vectors_added,
+                delete_document=self.command_repo.delete,
+            )
+            raise DocumentTransactionError(operation="create", details=str(exc)) from exc
 
     async def delete_document(
         self,
@@ -692,16 +551,15 @@ class DocumentCommandService:
             self._ensure_write_access(document_type=document_kind, user_role=user_role)
 
         try:
-            for vector_index_name in self._resolve_vector_index_names(primary_index_name=index_name):
-                await self.vector_repo.delete_vectors(index_name=vector_index_name, document_id=id)
+            await self.external_resources.delete_vectors_from_indexes(
+                index_names=self._resolve_vector_index_names(primary_index_name=index_name),
+                document_id=id,
+            )
         except Exception as exc:
             raise DocumentTransactionError(operation="delete vectors", details=str(object=exc)) from exc
 
         if document.file_path:
-            try:
-                await self.storage_repo.delete_file(path=document.file_path)
-            except Exception as exc:
-                logger.exception(f"Failed to delete document file from storage: {exc!s}")
+            await self.external_resources.delete_file_safely(document.file_path)
 
         return await self.command_repo.delete(id)
 
@@ -833,13 +691,13 @@ class DocumentCommandService:
         form_data = document.form_data or {}
         if document_kind == DocumentType.COMPANY and (data.company_contract is not None or data.client is not None or data.form_data is not None):
             await self.command_repo.upsert_company_contract(
-                self._build_company_contract_entity(document_id=document.id, data=data, extracted_data=None, form_data=form_data)
+                ContractDetailFactory.build_company_contract_entity(document_id=document.id, data=data, extracted_data=None, form_data=form_data)
             )
         if document_kind == DocumentType.LABOR and (
             data.labor_contract is not None or data.client is not None or data.form_data is not None
         ):
             await self.command_repo.upsert_labor_contract(
-                self._build_labor_contract_entity(document_id=document.id, data=data, extracted_data=None, form_data=form_data)
+                ContractDetailFactory.build_labor_contract_entity(document_id=document.id, data=data, extracted_data=None, form_data=form_data)
             )
 
     async def _extract_updated_chunks(
@@ -859,7 +717,7 @@ class DocumentCommandService:
         self.chunk_enricher.enrich(chunks=parsed_document, organization_id=organization_id, form_data=form_data)
         return parsed_document
 
-    async def _update_document_with_file(  # noqa: PLR0913
+    async def _update_document_with_file(
         self,
         id: int,
         document: DocumentTable,
@@ -873,14 +731,14 @@ class DocumentCommandService:
         parsed_document = await self._extract_updated_chunks(
             file_data=file_data,
             organization_id=organization_id,
-            form_data=document.form_data,
+            form_data=document.form_data or {},
         )
 
         old_storage_path = document.file_path
         new_storage_path = None
 
         try:
-            new_storage_path = await self.storage_repo.upload_file(
+            new_storage_path = await self.external_resources.upload_file(
                 document_id=id,
                 organization_id=document.organization_id,
                 document_type=document_kind,
@@ -889,7 +747,7 @@ class DocumentCommandService:
                 content_type=file_data.content_type,
             )
 
-            await self.vector_repo.add_vectors(index_name=index_name, document_id=id, chunks=parsed_document)
+            await self.external_resources.add_vectors(index_name=index_name, document_id=id, chunks=parsed_document)
 
             document.file_path = new_storage_path
             document.file_name = file_data.filename
@@ -901,7 +759,7 @@ class DocumentCommandService:
 
             if old_storage_path and old_storage_path != new_storage_path:
                 try:
-                    await self.storage_repo.delete_file(path=old_storage_path)
+                    await self.external_resources.delete_file_safely(old_storage_path)
                 except Exception:
                     pass
 
@@ -917,7 +775,7 @@ class DocumentCommandService:
         except Exception as exc:
             if new_storage_path:
                 try:
-                    await self.storage_repo.delete_file(path=new_storage_path)
+                    await self.external_resources.delete_file_safely(new_storage_path)
                 except Exception:
                     pass
 
@@ -985,4 +843,4 @@ class DocumentCommandService:
         if document.file_path is None:
             raise DocumentFileMissingError(document_id=id)
 
-        return await self.storage_repo.create_signed_url(path=document.file_path, expires_in=expires_in)
+        return await self.external_resources.create_signed_url(path=document.file_path, expires_in=expires_in)

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from .....core.domain.access import ensure_admin
 from .....core.exceptions.base import ConflictError, NotFoundError
 from ....users.domain.entities import UserTable
-from ...api.schemas import NotificationRuleCreateRequest, NotificationRuleResponse, NotificationRuleUpdateRequest
+from ...application.dto import NotificationRuleCreateRequest, NotificationRuleResponse, NotificationRuleUpdateRequest
 from ...application.repositories import NotificationRuleRepository
 from ...domain import NotificationRuleTable
 

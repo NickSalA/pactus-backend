@@ -1,44 +1,38 @@
 """Tests unitarios para EmailAlertService."""
 
 from datetime import date, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from contractai_backend.modules.documents.domain import DocumentState, DocumentTable, DocumentType
-from contractai_backend.modules.notifications.application.services.email_alert_service import EmailAlertService, NotificationEvent
+from contractai_backend.modules.notifications.application.dto import NotificationDocument, NotificationEvent, NotificationRecipient
+from contractai_backend.modules.notifications.application.services.email_alert_service import EmailAlertService
 from contractai_backend.modules.notifications.domain.value_objs import NotificationType
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
 
 
-def _make_doc(name: str = "Contrato", days_offset: int = 3) -> DocumentTable:
+def _make_doc(name: str = "Contrato", days_offset: int = 3) -> NotificationDocument:
     today = date.today()
-    return DocumentTable(
+    return NotificationDocument(
         id=1,
-        organization_id=1,
-        name=name,
-        client="Cliente",
-        type=DocumentType.COMPANY,
-        start_date=today,
+        type="COMPANY",
         end_date=today + timedelta(days=days_offset),
-        state=DocumentState.ACTIVE,
+        file_name=name,
     )
 
 
-def _make_worker(email: str = "worker@example.com") -> UserTable:
-    return UserTable(
+def _make_worker(email: str = "worker@example.com") -> NotificationRecipient:
+    return NotificationRecipient(
         id=1,
         organization_id=1,
         email=email,
-        role=UserRole.WORKER,
+        full_name="Worker Test",
         receives_notifications=True,
         is_active=True,
     )
 
 
-def _make_service(session=None, gmail=None) -> EmailAlertService:
-    return EmailAlertService(session=session or AsyncMock(), gmail_service=gmail or AsyncMock())
+def _make_service(alert_repo=None, email_sender=None) -> EmailAlertService:
+    return EmailAlertService(alert_repo=alert_repo or AsyncMock(), email_sender=email_sender or AsyncMock())
 
 
 class TestSendDailyAlerts:
@@ -58,65 +52,62 @@ class TestSendDailyAlerts:
             "list_due_events",
             return_value=[NotificationEvent(document=doc, days_remaining=3, notification_type=NotificationType.CRITICAL)],
         ):
-            with patch.object(service, "_get_notification_recipients", return_value=[]):
-                result = await service.send_daily_alerts(organization_id=1)
+            service.alert_repo.get_notification_recipients.return_value = []
+            result = await service.send_daily_alerts(organization_id=1)
         assert result == 0
 
     @pytest.mark.asyncio
     async def test_sends_email_to_each_worker(self):
         doc = _make_doc()
         workers = [_make_worker("a@example.com"), _make_worker("b@example.com")]
-        gmail = AsyncMock()
+        email_sender = AsyncMock()
 
-        service = _make_service(gmail=gmail)
+        service = _make_service(email_sender=email_sender)
+        service.alert_repo.get_notification_recipients.return_value = workers
         with patch.object(
             service,
             "list_due_events",
             return_value=[NotificationEvent(document=doc, days_remaining=3, notification_type=NotificationType.CRITICAL)],
         ):
-            with patch.object(service, "_get_notification_recipients", return_value=workers):
-                result = await service.send_daily_alerts(organization_id=1)
+            result = await service.send_daily_alerts(organization_id=1)
 
         assert result == 2
-        assert gmail.send_email.call_count == 2
+        assert email_sender.send_email.call_count == 2
 
     @pytest.mark.asyncio
     async def test_continues_when_one_email_fails(self):
         doc = _make_doc()
         workers = [_make_worker("a@example.com"), _make_worker("b@example.com")]
-        gmail = AsyncMock()
-        gmail.send_email.side_effect = [Exception("smtp error"), None]
+        email_sender = AsyncMock()
+        email_sender.send_email.side_effect = [Exception("smtp error"), None]
 
-        service = _make_service(gmail=gmail)
+        service = _make_service(email_sender=email_sender)
+        service.alert_repo.get_notification_recipients.return_value = workers
         with patch.object(
             service,
             "list_due_events",
             return_value=[NotificationEvent(document=doc, days_remaining=3, notification_type=NotificationType.CRITICAL)],
         ):
-            with patch.object(service, "_get_notification_recipients", return_value=workers):
-                result = await service.send_daily_alerts(organization_id=1)
+            result = await service.send_daily_alerts(organization_id=1)
 
         assert result == 1  # solo el segundo tuvo éxito
 
 
-class TestBuildSections:
-    def test_returns_html_string(self):
-        service = _make_service()
-        doc = _make_doc()
-        sections = service._build_sections({3: [doc]})
-        assert isinstance(sections, str)
-        assert "Contrato" in sections
+class TestDueEvents:
+    @pytest.mark.asyncio
+    async def test_list_due_events_uses_notification_dtos(self):
+        today = date.today()
+        alert_repo = AsyncMock()
+        alert_repo.get_documents_for_notification_evaluation.return_value = [
+            NotificationDocument(id=1, type="COMPANY", end_date=today + timedelta(days=7), file_name="Contrato A"),
+            NotificationDocument(id=2, type="LABOR", end_date=today + timedelta(days=10), file_name="Contrato B"),
+        ]
+        alert_repo.get_active_rule_map.return_value = ({1: [7]}, [])
+        service = _make_service(alert_repo=alert_repo)
 
-    def test_empty_contracts_returns_empty_string(self):
-        service = _make_service()
-        sections = service._build_sections({})
-        assert sections == ""
+        events = await service.list_due_events(organization_id=1)
 
-
-class TestBuildEmailHtml:
-    def test_contains_name_and_total(self):
-        service = _make_service()
-        html = service._build_email_html(name="Juan", total=3, sections="<div>test</div>", date_str="01/01/2024")
-        assert "Juan" in html
-        assert "3" in html
-        assert "01/01/2024" in html
+        assert len(events) == 1
+        assert events[0].document.id == 1
+        assert events[0].notification_type == NotificationType.WARNING
+        alert_repo.sync_document_states.assert_called_once_with(organization_id=1)

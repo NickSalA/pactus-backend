@@ -30,7 +30,9 @@ class QdrantVectorRepository(VectorRepository):
             raise VectorDatabaseUnavailableError(message=f"No se pudo conectar con Qdrant: {e!s}") from e
 
     def _build_filters(self, document_ids: list[int] | None = None) -> MetadataFilters:
-        filters = [MetadataFilter(key="organization_id", value=str(self.organization_id), operator=FilterOperator.EQ)]
+        filters: list[MetadataFilter | MetadataFilters] = [
+            MetadataFilter(key="organization_id", value=str(self.organization_id), operator=FilterOperator.EQ)
+        ]
 
         if document_ids:
             filters.append(

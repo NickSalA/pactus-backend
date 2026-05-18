@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
-from ...documents.domain.value_objs import DocumentState, DocumentType, CurrencyType
+from ...documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
 from ..domain.value_objs import TopRankingSortBy
 
 

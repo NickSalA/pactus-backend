@@ -49,7 +49,7 @@ def create() -> FastAPI:
     app = FastAPI(title=settings.PROJECT_NAME, version=__version__, lifespan=lifespan)
 
     app.include_router(router=documents_router, prefix="/documents", tags=["Documentos"])
-    app.include_router(router=services_router, prefix="/services", tags=["Catálogo de Servicios"])
+    app.include_router(router=services_router, prefix="/services", tags=["Servicios"])
     app.include_router(router=folders_router, prefix="/folders", tags=["Carpetas"])
     app.include_router(router=auth_router, prefix="/login", tags=["Autenticación"])
     app.include_router(router=users_router, prefix="/user", tags=["Usuarios"])
@@ -63,7 +63,7 @@ def create() -> FastAPI:
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
     app.add_middleware(
         middleware_class=CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.CORS_ORIGINS,
         allow_methods=["*"],
         allow_headers=["*"],
     )

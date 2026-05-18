@@ -9,17 +9,23 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....shared.infrastructure.database import get_aclient, get_client, get_session
 from ....shared.infrastructure.http import get_http_client
-from ...catalog.api.dependencies import get_service_catalog_service, get_service_repository
+from ...catalog.application.repositories import ServiceRepository
+from ...catalog.application.services import ServiceCatalogService
+from ...catalog.composition import build_service_catalog_service
+from ...catalog.infrastructure.postgres_repo import SQLModelServiceRepository
+from ...folders.application.repositories import FolderRepository
+from ...folders.infrastructure.postgres_repo import SQLModelFolderRepository
 from ..application.repositories import (
     DocumentChunkEnricher,
     DocumentCommandRepository,
     DocumentExtractor,
     DocumentQueryRepository,
-    DocumentStructuredExtractor,
     DocumentStorageRepository,
+    DocumentStructuredExtractor,
     VectorRepository,
 )
 from ..application.services import DocumentCommandService, DocumentQueryService
+from ..composition import build_document_command_service, build_document_query_service
 from ..infrastructure import (
     GeminiDocumentStructuredExtractor,
     LlamaIndexQdrantRepository,
@@ -28,9 +34,6 @@ from ..infrastructure import (
     SupabaseStorageRepository,
     VectorChunkMetadataEnricher,
 )
-from ...catalog.application.repositories import ServiceRepository
-from ...folders.api.dependencies import get_folder_repository
-from ...folders.application.repositories import FolderRepository
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 AsyncQdrantDep = Annotated[AsyncQdrantClient, Depends(get_aclient)]
@@ -81,6 +84,21 @@ async def get_structured_extractor() -> DocumentStructuredExtractor:
     return GeminiDocumentStructuredExtractor()
 
 
+async def get_service_repository(session: SessionDep) -> ServiceRepository:
+    """Builds the catalog repository used by document validation."""
+    return SQLModelServiceRepository(session=session)
+
+
+async def get_folder_repository(session: SessionDep) -> FolderRepository:
+    """Builds the folder repository used by document validation."""
+    return SQLModelFolderRepository(session=session)
+
+
+async def get_service_catalog_service(repo: Annotated[ServiceRepository, Depends(get_service_repository)]) -> ServiceCatalogService:
+    """Builds the catalog service used by compatibility document endpoints."""
+    return build_service_catalog_service(repository=repo)
+
+
 DocumentQueryRepoDep = Annotated[DocumentQueryRepository, Depends(get_document_query_repository)]
 DocumentCommandRepoDep = Annotated[DocumentCommandRepository, Depends(get_document_command_repository)]
 ServiceRepoDep = Annotated[ServiceRepository, Depends(get_service_repository)]
@@ -104,7 +122,7 @@ async def get_document_command_service(
     structured_extractor: StructuredExtractorDep,
 ) -> DocumentCommandService:
     """Construye el servicio de comandos para documentos."""
-    return DocumentCommandService(
+    return build_document_command_service(
         command_repo=command_repo,
         query_repo=query_repo,
         service_repo=service_repo,
@@ -116,7 +134,6 @@ async def get_document_command_service(
         structured_extractor=structured_extractor,
     )
 
-
 async def get_document_query_service(sql_repo: DocumentQueryRepoDep) -> DocumentQueryService:
     """Construye un servicio de lectura para documentos."""
-    return DocumentQueryService(sql_repo=sql_repo)
+    return build_document_query_service(query_repo=sql_repo)
