@@ -48,19 +48,13 @@ class TemplateService:
         user_role: UserRole | None,
     ):
         """Generates a contract from a published template."""
-        template = await self.template_repo.get_template_by_id(template_id=template_id, organization_id=organization_id)
-        if not template:
-            raise ValueError("Template not found or does not belong to the organization.")
-        if template.state != TemplateState.PUBLISHED:
-            raise ValueError("Solo se pueden generar documentos desde plantillas en estado PUBLISHED.")
-        if not can_write_document_type(user_role=user_role, document_type=template.document_type):
-            raise ForbiddenError("No tiene permisos para generar contratos con esta plantilla")
+        template = await self._get_and_validate_template(template_id, organization_id, user_role)
 
         template_content = (
             self.content_synchronizer.sync(TemplateContent.model_validate(template.content)) if isinstance(template.content, dict) else None
         )
         now = datetime.now()
-        service_items = (form_data.get("service_items") or []) if template.document_type == DocumentType.COMPANY else []
+        service_items = form_data.get("service_items") or [] if template.document_type == DocumentType.COMPANY else []
         start_date, end_date = self._resolve_generated_dates(
             form_data=form_data,
             now=now,
@@ -70,47 +64,20 @@ class TemplateService:
 
         org_data = await self.organization_repo.get_organization_data(organization_id=organization_id)
         template_format = await self.template_format_repo.get_by_id(template.template_format_id) if template.template_format_id is not None else None
-        time_auto = build_signature_time_payload(now)
-        master_dict: dict[str, Any | int | str] = {**form_data, **org_data, **time_auto}
+
+        master_dict = {**form_data, **org_data, **build_signature_time_payload(now)}
         if template_content is not None:
             self._validate_required_fields(template_content=template_content, payload=master_dict)
+
         body_md = template_content.body_md if template_content is not None else template.content
         md_final = await self.renderer.render(template_md=body_md, payload=master_dict)
         md_final = self.rendered_contract_formatter.format(md_final, document_type=template.document_type, payload=master_dict)
 
         pdf_bytes = await self.document_generator.generate_pdf(markdown_content=md_final)
 
-        company_contract = None
-        labor_contract = None
-        counterparty_name = "contraparte"
+        company_contract, labor_contract, counterparty_name = self._extract_specific_contract_data(template.document_type, form_data)
 
-        if template.document_type == DocumentType.COMPANY:
-            counterparty_name = form_data.get("cliente_nombre") or "cliente"
-            company_contract = {
-                "ruc": form_data.get("cliente_ruc") or form_data.get("empresa_ruc") or form_data.get("ruc"),
-                "client": counterparty_name,
-            }
-        elif template.document_type == DocumentType.LABOR:
-            counterparty_name = form_data.get("trabajador_nombre") or "trabajador"
-            try:
-                salary_value = float(form_data.get("salario") or form_data.get("remuneracion") or 0)
-            except (TypeError, ValueError):
-                salary_value = None
-
-            labor_contract = {
-                "worker_name": counterparty_name,
-                "worker_document_number": form_data.get("trabajador_dni"),
-                "position": form_data.get("cargo"),
-                "salary_value": salary_value if salary_value else None,
-                "salary_currency": form_data.get("moneda"),
-                "salary_periodicity": form_data.get("periodicidad"),
-                "contract_modality": form_data.get("modalidad"),
-            }
-
-        base_name = template.name.replace(" ", "_").lower()
-        safe_counterparty = counterparty_name.replace(" ", "_").lower()
-        timestamp = int(now.timestamp())
-        generated_file_name = f"{base_name}_{safe_counterparty}_{timestamp}.pdf"
+        generated_file_name = self._generate_file_name(template.name, counterparty_name, now)
 
         document_payload: dict[str, Any] = {
             "organization_id": organization_id,
@@ -132,6 +99,54 @@ class TemplateService:
             file=pdf_bytes,
             user_role=user_role,
         )
+
+    async def _get_and_validate_template(self, template_id: int, organization_id: int, user_role: UserRole | None) -> TemplateTable:
+        template = await self.template_repo.get_template_by_id(template_id=template_id, organization_id=organization_id)
+        if not template:
+            raise ValueError("Template not found or does not belong to the organization.")
+        if template.state != TemplateState.PUBLISHED:
+            raise ValueError("Solo se pueden generar documentos desde plantillas en estado PUBLISHED.")
+        if not can_write_document_type(user_role=user_role, document_type=template.document_type):
+            raise ForbiddenError("No tiene permisos para generar contratos con esta plantilla")
+        return template
+
+    def _extract_specific_contract_data(
+        self, document_type: DocumentType, form_data: dict[str, Any]
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
+        company_contract = None
+        labor_contract = None
+        counterparty_name = "contraparte"
+
+        if document_type == DocumentType.COMPANY:
+            counterparty_name = form_data.get("cliente_nombre") or "cliente"
+            company_contract = {
+                "ruc": form_data.get("cliente_ruc") or form_data.get("empresa_ruc") or form_data.get("ruc"),
+                "client": counterparty_name,
+            }
+        elif document_type == DocumentType.LABOR:
+            counterparty_name = form_data.get("trabajador_nombre") or "trabajador"
+            try:
+                salary_value = float(form_data.get("salario") or form_data.get("remuneracion") or 0)
+            except (TypeError, ValueError):
+                salary_value = None
+
+            labor_contract = {
+                "worker_name": counterparty_name,
+                "worker_document_number": form_data.get("trabajador_dni"),
+                "position": form_data.get("cargo"),
+                "salary_value": salary_value or None,
+                "salary_currency": form_data.get("moneda"),
+                "salary_periodicity": form_data.get("periodicidad"),
+                "contract_modality": form_data.get("modalidad"),
+            }
+
+        return company_contract, labor_contract, counterparty_name
+
+    def _generate_file_name(self, template_name: str, counterparty_name: str, now: datetime) -> str:
+        base_name = template_name.replace(" ", "_").lower()
+        safe_counterparty = counterparty_name.replace(" ", "_").lower()
+        timestamp = int(now.timestamp())
+        return f"{base_name}_{safe_counterparty}_{timestamp}.pdf"
 
     async def get_template(
         self,
@@ -242,7 +257,7 @@ class TemplateService:
                 if mapping is not None
                 else "Verifica que la plantilla exponga y mapee los campos de inicio y fin del contrato."
             )
-            raise ValidationError("No se pudieron resolver las fechas de vigencia del contrato desde la plantilla. " + mapping_hint)
+            raise ValidationError(f"No se pudieron resolver las fechas de vigencia del contrato desde la plantilla. {mapping_hint}")
         fallback = now.date().isoformat()
         return start_date or fallback, end_date or fallback
 
@@ -258,12 +273,11 @@ class TemplateService:
 
     def _validate_required_fields(self, *, template_content: TemplateContent, payload: dict[str, Any]) -> None:
         """Ensures every required template field has a concrete value before rendering."""
-        missing_fields = [
+        if missing_fields := [
             field.label
             for field in template_content.fields + template_content.operational_fields
             if field.required and self._is_empty_value(payload.get(field.key))
-        ]
-        if missing_fields:
+        ]:
             raise ValidationError("Faltan campos obligatorios para generar el contrato: " + ", ".join(missing_fields))
 
     @staticmethod
@@ -271,6 +285,4 @@ class TemplateService:
         """Returns True when the provided value should be considered missing."""
         if value is None:
             return True
-        if isinstance(value, str):
-            return value.strip() == ""
-        return False
+        return value.strip() == "" if isinstance(value, str) else False

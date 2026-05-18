@@ -51,9 +51,7 @@ def extract_supported_placeholder_key(expression: str) -> str | None:
     if SIMPLE_PLACEHOLDER_PATTERN.fullmatch(expression):
         return expression
     match = SUPPORTED_FORMAT_DATE_EXPRESSION_PATTERN.fullmatch(expression)
-    if match is None:
-        return None
-    return match.group("key")
+    return None if match is None else match.group("key")
 
 
 class TemplatePlaceholderValidator:
@@ -94,8 +92,13 @@ class TemplatePlaceholderValidator:
     ) -> list[str]:
         """Valida placeholders y devuelve warnings."""
         expressions = self._extract_expressions(content.body_md)
-        unsupported_expressions = sorted({expression for expression in expressions if extract_supported_placeholder_key(expression) is None})
-        if unsupported_expressions:
+        if unsupported_expressions := sorted(
+            {
+                expression
+                for expression in expressions
+                if extract_supported_placeholder_key(expression) is None
+            }
+        ):
             raise ValueError(f"Expresiones Jinja no soportadas: {', '.join(unsupported_expressions)}")
 
         placeholders = {key for expression in expressions if (key := extract_supported_placeholder_key(expression)) is not None}
@@ -135,12 +138,17 @@ class TemplatePlaceholderValidator:
         if mapping is None:
             if document_type == DocumentType.COMPANY and require_contract_date_mapping:
                 raise ValueError(self.MISSING_CONTRACT_DATE_MAPPING_WARNING)
-            if document_type == DocumentType.COMPANY:
-                return [self.MISSING_CONTRACT_DATE_MAPPING_WARNING]
-            return []
-
-        missing_fields = [field_key for field_key in (mapping.start_date_field, mapping.end_date_field) if field_key not in all_field_keys]
-        if missing_fields:
+            else:
+                return (
+                    [self.MISSING_CONTRACT_DATE_MAPPING_WARNING]
+                    if document_type == DocumentType.COMPANY
+                    else []
+                )
+        if missing_fields := [
+            field_key
+            for field_key in (mapping.start_date_field, mapping.end_date_field)
+            if field_key not in all_field_keys
+        ]:
             raise ValueError("El mapeo de vigencia del contrato referencia campos inexistentes: " + ", ".join(sorted(missing_fields)))
         return []
 
@@ -150,10 +158,14 @@ class TemplatePlaceholderValidator:
             return []
 
         generated_clause_sequence = self.extract_clause_labels(body_md)
-        missing_clauses = [label for label in reference_clause_sequence if label not in generated_clause_sequence]
-        if not missing_clauses:
+        if missing_clauses := [
+            label
+            for label in reference_clause_sequence
+            if label not in generated_clause_sequence
+        ]:
+            return [f"Cláusulas de referencia no preservadas: {', '.join(missing_clauses)}"]
+        else:
             return []
-        return [f"Cláusulas de referencia no preservadas: {', '.join(missing_clauses)}"]
 
     def validate_structure_against_reference(self, body_md: str, reference_structure_sequence: Sequence[str]) -> list[str]:
         """Compara el draft contra una secuencia estructural genérica."""
@@ -161,10 +173,14 @@ class TemplatePlaceholderValidator:
             return []
 
         generated_structure_sequence = self.extract_structure_markers(body_md)
-        missing_markers = [marker for marker in reference_structure_sequence if marker not in generated_structure_sequence]
-        if not missing_markers:
+        if missing_markers := [
+            marker
+            for marker in reference_structure_sequence
+            if marker not in generated_structure_sequence
+        ]:
+            return [f"Estructura de referencia no preservada: {', '.join(missing_markers)}"]
+        else:
             return []
-        return [f"Estructura de referencia no preservada: {', '.join(missing_markers)}"]
 
     def extract_clause_labels(self, body_md: str) -> list[str]:
         """Extrae etiquetas normalizadas de cláusulas."""
@@ -178,21 +194,18 @@ class TemplatePlaceholderValidator:
             if not line:
                 continue
 
-            heading_match = MARKDOWN_HEADING_PATTERN.match(line)
-            if heading_match:
+            if heading_match := MARKDOWN_HEADING_PATTERN.match(line):
                 title = heading_match.group("title").strip().strip("*")
                 markers.append(f"HEADING:{self._normalize_clause_label(title)}")
                 continue
 
-            named_match = NAMED_STRUCTURE_PATTERN.match(line.strip("*"))
-            if named_match:
+            if named_match := NAMED_STRUCTURE_PATTERN.match(line.strip("*")):
                 prefix = self._normalize_clause_label(named_match.group("prefix"))
                 identifier = self._normalize_clause_label(named_match.group("identifier"))
                 markers.append(f"{prefix}:{identifier}")
                 continue
 
-            clause_match = CLAUSE_PATTERN.search(line)
-            if clause_match:
+            if clause_match := CLAUSE_PATTERN.search(line):
                 label = self._normalize_clause_label(clause_match.group("label"))
                 markers.append(f"CLAUSE:{label}")
 
@@ -238,5 +251,4 @@ class TemplatePlaceholderValidator:
         """Normaliza etiquetas de cláusulas para el mapeo."""
         normalized = unicodedata.normalize("NFD", label)
         normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
-        normalized = re.sub(r"\s+", " ", normalized).strip().upper()
-        return normalized
+        return re.sub(r"\s+", " ", normalized).strip().upper()
