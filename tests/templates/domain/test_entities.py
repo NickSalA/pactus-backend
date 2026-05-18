@@ -55,33 +55,7 @@ class TestTemplateField:
         field = TemplateField(key="nombre", label="Nombre")
         assert field.required is False
 
-    def test_infers_placeholder_from_common_field_patterns(self):
-        field = TemplateField(key="gerente_ruc", label="RUC del Gerente")
-        assert field.placeholder == "Ej. 20123456789"
 
-    def test_infers_date_placeholder_from_field_type(self):
-        field = TemplateField(key="fecha_inicio_contrato", label="Fecha de Inicio", type="date")
-        assert field.placeholder == "Ej. 2026-12-31"
-
-    def test_infers_time_placeholder_from_field_type(self):
-        field = TemplateField(key="hora_inicio_jornada", label="Hora de Inicio", type="time")
-        assert field.placeholder == "Ej. 09:00"
-
-    def test_preserves_custom_placeholder(self):
-        field = TemplateField(key="gerente_ruc", label="RUC del Gerente", placeholder="Ej. 20445566777")
-        assert field.placeholder == "Ej. 20445566777"
-
-    def test_replaces_instructional_placeholder_with_example(self):
-        field = TemplateField(
-            key="trabajador_dni",
-            label="DNI del Trabajador",
-            placeholder="Ingrese el número de DNI del trabajador",
-        )
-        assert field.placeholder == "Ej. 12345678"
-
-    def test_infers_literal_placeholder_for_textual_amounts(self):
-        field = TemplateField(key="monto_remuneracion_literal", label="Monto de la Remuneración en letras")
-        assert field.placeholder == "Ej. mil quinientos"
 
 
 class TestTemplateContent:

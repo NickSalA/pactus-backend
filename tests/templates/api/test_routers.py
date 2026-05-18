@@ -38,7 +38,7 @@ class TestTemplateRouter:
             TemplateFormatResponse(
                 id=1,
                 document_type=DocumentType.COMPANY,
-                format_code="base_company",
+                format_code="management",
                 label="Contrato base empresa",
                 default_name="Contrato de servicios",
                 default_description="Plantilla base para contratos de servicios.",
@@ -50,4 +50,4 @@ class TestTemplateRouter:
             response = await client.get("/templates/formats")
 
         assert response.status_code == 200
-        assert response.json()[0]["format_code"] == "base_company"
+        assert response.json()[0]["format_code"] == "management"

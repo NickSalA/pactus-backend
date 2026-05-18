@@ -9,6 +9,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from ....shared.config import settings
 from ..application.dto import GenerateTemplateDraftRequest, TemplateDraftResponse, TemplateUsage
 from ..application.repositories.base_draft_generator import ITemplateDraftGenerator
+from ..application.services.template_placeholder_generator import TemplatePlaceholderGenerator
 
 
 class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
@@ -59,6 +60,7 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             content = str(raw_content)
 
         payload = self._parse_json(content)
+        self._ensure_placeholders(payload)
         field_issues = self._detect_raw_field_issues(payload)
         if field_issues:
             source = payload.get("source")
@@ -107,6 +109,32 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             output_tokens=output_tokens,
             total_tokens=total_tokens,
         )
+
+    def _ensure_placeholders(self, payload: dict[str, Any]) -> None:
+        """Fills missing or invalid placeholders in the draft output before validation."""
+        content = payload.get("content")
+        if not isinstance(content, dict):
+            return
+
+        for group_name in ("fields", "operational_fields"):
+            fields = content.get(group_name)
+            if not isinstance(fields, list):
+                continue
+            for raw_field in fields:
+                if not isinstance(raw_field, dict):
+                    continue
+                key = str(raw_field.get("key") or "").strip()
+                label = str(raw_field.get("label") or key).strip()
+                field_type = str(raw_field.get("type") or "text").strip().lower()
+                placeholder = raw_field.get("placeholder")
+                placeholder_str = str(placeholder).strip() if isinstance(placeholder, str) else None
+
+                if TemplatePlaceholderGenerator.should_autogenerate_placeholder(placeholder_str):
+                    raw_field["placeholder"] = TemplatePlaceholderGenerator.build_placeholder(
+                        key=key,
+                        label=label,
+                        field_type=field_type,
+                    )
 
     def _detect_raw_field_issues(self, payload: dict[str, Any]) -> list[str]:
         """Detects semantic field issues before backend normalization hides them."""
@@ -203,6 +231,24 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             feedback_lines = "\n".join(f"- {issue}" for issue in validation_feedback)
             feedback_section = "\nVALIDATION_FEEDBACK:\n" + feedback_lines
 
+        domain_rules = ""
+        if document_type == "COMPANY":
+            domain_rules = (
+                "- IMPORTANT: You MUST use the following canonical keys for client data: 'cliente_nombre', 'cliente_ruc', 'cliente_domicilio', 'representante_cliente'.\n"
+                "- For financial data, use 'monto_retribucion' and 'moneda'.\n"
+                "- For dates, use 'fecha_inicio' and 'fecha_fin'.\n"
+                "- If the reference document does not explicitly state the client's RUC or name, you MUST add 'cliente_nombre' and 'cliente_ruc' to content.operational_fields so the backend can collect them.\n"
+            )
+        elif document_type == "LABOR":
+            domain_rules = (
+                "- IMPORTANT: You MUST use the following canonical keys for the employee: 'trabajador_nombre', 'trabajador_dni', 'trabajador_domicilio'.\n"
+                "- For the job role, use 'cargo'.\n"
+                "- For the remuneration, ALWAYS use 'salario' (must be type number), 'moneda' (PEN/USD), and 'periodicidad' (e.g. MENSUAL).\n"
+                "- For the contract type, use 'modalidad'.\n"
+                "- For dates, use 'fecha_inicio' and 'fecha_fin'.\n"
+                "- Any of these canonical keys that do not naturally appear in the text MUST be added to content.operational_fields. They are mandatory for backend processing.\n"
+            )
+
         return (
             "You are a legal template generator. Return ONLY valid JSON.\n"
             "The JSON must match this schema:\n"
@@ -241,9 +287,8 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "- Use only the auto variables that are relevant for the contract. Do not force every available variable into the template.\n"
             "- For employer-side data that already exists as an auto variable, use the canonical auto variable name instead of creating aliases like representante_nombre_empresa or ruc_empresa.\n"
             "- Do not use filters inside placeholders.\n"
-            "- content.fields must include only placeholders that actually appear in body_md.\n"
-            "- Each key must appear at most once across content.fields and content.operational_fields. Never duplicate the same key in both arrays.\n"
-            "- If a placeholder appears in body_md, define it only in content.fields and never repeat it in content.operational_fields.\n"
+            "- Each placeholder must appear at most once across content.fields and content.operational_fields.\n"
+            "- If a placeholder appears in body_md, define it ONLY in content.fields. If it is required by backend workflows but does not appear in body_md, define it ONLY in content.operational_fields.\n"
             "- Reuse one canonical key per fact. Do not invent naming variants for the same party attribute unless the contract text clearly distinguishes them as different facts.\n"
             "- Any placeholder that appears directly in body_md must be marked as required=true. Optional visible placeholders are not allowed because they break the contract text when empty.\n"
             "- Use content.operational_fields for extra form fields needed by backend workflows when they should not appear in body_md.\n"
@@ -255,14 +300,14 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "- If REFERENCE_OUTLINE is present, preserve every item in clause_sequence when available, and otherwise preserve the order of structure_sequence. Do not omit structural markers that appear in the reference.\n"
             "- Preserve section titles and the closing section when they appear in the reference.\n"
             "- Do not include signature blocks, underscore signature lines, signer labels, or representative placeholders at the end of body_md. Signature rendering is handled by the backend.\n"
-            "- When the reference mode is full_clean, stay as close as possible to the original wording and only abstract variable data into placeholders.\n"
             "- GENERATION_MODE controls how strictly the result must follow the reference.\n"
-            "- If GENERATION_MODE is strict, do not add new legal clauses that are absent from the reference just to make the template operational.\n"
+            "- If GENERATION_MODE is strict, stay as close as possible to the original wording. Do not add new legal clauses that are absent from the reference just to make the template operational.\n"
             "- If GENERATION_MODE is adaptive, the reference is guidance, not a literal constraint. You may add a concise vigencia clause to body_md when explicit contract start and end placeholders are needed.\n"
             "- Preserve distinct placeholders from the reference unless they are clearly invalid. Do not aggressively merge or remove fields.\n"
             "- Convert reference markers written as [NOMBRE DEL CAMPO] into proper Jinja placeholders instead of leaving them literal in body_md.\n"
             "- If VALIDATION_FEEDBACK is present, correct every listed issue in this attempt.\n"
-            "- Use Spanish legal language in body_md.\n\n"
+            "- Use Spanish legal language in body_md.\n"
+            f"{domain_rules}\n"
             f"NAME_HINT: {name_hint}\n"
             f"DESCRIPTION_HINT: {description_hint}\n"
             f"DOCUMENT_TYPE: {document_type}\n"

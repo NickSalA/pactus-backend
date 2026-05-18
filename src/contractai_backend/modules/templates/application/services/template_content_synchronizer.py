@@ -5,6 +5,7 @@ import unicodedata
 from typing import ClassVar
 
 from ...domain.entities import TemplateContent, TemplateContractDateMapping, TemplateField
+from .template_placeholder_generator import TemplatePlaceholderGenerator
 from .template_placeholder_validator import (
     EXPRESSION_PATTERN,
     TemplatePlaceholderValidator,
@@ -230,8 +231,8 @@ class TemplateContentSynchronizer:
         if inferred_type != field.type:
             updates["type"] = inferred_type
         resolved_type = str(updates.get("type", field.type))
-        if field.placeholder is None or resolved_type != field.type:
-            updates["placeholder"] = TemplateField.build_placeholder(
+        if TemplatePlaceholderGenerator.should_autogenerate_placeholder(field.placeholder) or resolved_type != field.type:
+            updates["placeholder"] = TemplatePlaceholderGenerator.build_placeholder(
                 key=field.key,
                 label=field.label,
                 field_type=resolved_type,
@@ -247,8 +248,8 @@ class TemplateContentSynchronizer:
         if inferred_type != field.type:
             updates["type"] = inferred_type
         resolved_type = str(updates.get("type", field.type))
-        if field.placeholder is None or resolved_type != field.type:
-            updates["placeholder"] = TemplateField.build_placeholder(
+        if TemplatePlaceholderGenerator.should_autogenerate_placeholder(field.placeholder) or resolved_type != field.type:
+            updates["placeholder"] = TemplatePlaceholderGenerator.build_placeholder(
                 key=field.key,
                 label=field.label,
                 field_type=resolved_type,
@@ -406,12 +407,15 @@ class TemplateContentSynchronizer:
 
     def _build_default_field(self, key: str, *, field_type: str = "text") -> TemplateField:
         """Builds a default field for a new placeholder."""
-        resolved_field_type = self._infer_field_type(key, self._humanize_key(key), None) if field_type == "text" else field_type
+        label = self._humanize_key(key)
+        resolved_field_type = self._infer_field_type(key, label, None) if field_type == "text" else field_type
+        placeholder = TemplatePlaceholderGenerator.build_placeholder(key=key, label=label, field_type=resolved_field_type)
         return TemplateField(
             key=key,
-            label=self._humanize_key(key),
+            label=label,
             type=resolved_field_type,
             required=True,
+            placeholder=placeholder,
         )
 
     def _infer_field_type(self, key: str, label: str, placeholder: str | None) -> str:

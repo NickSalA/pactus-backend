@@ -79,16 +79,41 @@ class TemplateService:
         md_final = self.rendered_contract_formatter.format(md_final, document_type=template.document_type, payload=master_dict)
 
         pdf_bytes = await self.document_generator.generate_pdf(markdown_content=md_final)
-        cliente_nombre = form_data.get("trabajador_nombre") or form_data.get("cliente_nombre") or "cliente"
+
+        company_contract = None
+        labor_contract = None
+        counterparty_name = "contraparte"
+
+        if template.document_type == DocumentType.COMPANY:
+            counterparty_name = form_data.get("cliente_nombre") or "cliente"
+            company_contract = {
+                "ruc": form_data.get("cliente_ruc") or form_data.get("empresa_ruc") or form_data.get("ruc"),
+                "client": counterparty_name,
+            }
+        elif template.document_type == DocumentType.LABOR:
+            counterparty_name = form_data.get("trabajador_nombre") or "trabajador"
+            try:
+                salary_value = float(form_data.get("salario") or form_data.get("remuneracion") or 0)
+            except (TypeError, ValueError):
+                salary_value = None
+
+            labor_contract = {
+                "worker_name": counterparty_name,
+                "worker_document_number": form_data.get("trabajador_dni"),
+                "position": form_data.get("cargo"),
+                "salary_value": salary_value if salary_value else None,
+                "salary_currency": form_data.get("moneda"),
+                "salary_periodicity": form_data.get("periodicidad"),
+                "contract_modality": form_data.get("modalidad"),
+            }
+
         base_name = template.name.replace(" ", "_").lower()
-        cliente_seguro = cliente_nombre.replace(" ", "_").lower()
+        safe_counterparty = counterparty_name.replace(" ", "_").lower()
         timestamp = int(now.timestamp())
-        generated_file_name = f"{base_name}_{cliente_seguro}_{timestamp}.pdf"
-        document_payload: dict[str, int | str | bytes | Any | dict[str, Any | int | str]] = {
+        generated_file_name = f"{base_name}_{safe_counterparty}_{timestamp}.pdf"
+
+        document_payload: dict[str, Any] = {
             "organization_id": organization_id,
-            "template_id": template_id,
-            "name": f"{template.name} - {cliente_nombre}",
-            "client": cliente_nombre,
             "type": template_format.format_code if template_format is not None else template.document_type.value.lower(),
             "contract_type": template.document_type,
             "state": "PENDING_SIGNATURE",
@@ -99,6 +124,8 @@ class TemplateService:
             "service_items": service_items,
             "form_data": master_dict,
             "file_name": generated_file_name,
+            "company_contract": company_contract,
+            "labor_contract": labor_contract,
         }
         return await self.document_adapter.save_generated_document(
             document_payload=document_payload,

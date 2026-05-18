@@ -14,8 +14,8 @@ class DocumentModuleAdapter(IDocumentModuleAdapter):
     async def save_generated_document(self, document_payload: dict, file: bytes, user_role: UserRole | None):
         """Implementación del método para guardar el documento generado."""
         doc_request = CreateDocumentRequest(
-            name=document_payload["name"],
-            client=document_payload["client"],
+            name=document_payload.get("name"),
+            client=document_payload.get("client"),
             type=document_payload["type"],
             contract_type=document_payload.get("contract_type"),
             start_date=document_payload["start_date"],
@@ -24,6 +24,8 @@ class DocumentModuleAdapter(IDocumentModuleAdapter):
             state=DocumentState(document_payload.get("state")),
             folder_id=document_payload.get("folder_id"),
             service_items=document_payload.get("service_items", []),
+            company_contract=document_payload.get("company_contract"),
+            labor_contract=document_payload.get("labor_contract"),
         )
 
         file_request = FileRequest(filename=document_payload["file_name"], content=file, content_type="application/pdf")
