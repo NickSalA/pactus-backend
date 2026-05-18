@@ -35,8 +35,7 @@ class RelationalHelpersMixin:
     @staticmethod
     def _read_scalar_result(value: object) -> int:
         if hasattr(value, "_mapping"):
-            mapping = cast(Any, value)._mapping
-            if mapping:
+            if mapping := cast(Any, value)._mapping:
                 return int(next(iter(mapping.values())) or 0)
 
         if isinstance(value, tuple):

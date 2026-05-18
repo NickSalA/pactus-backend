@@ -53,13 +53,12 @@ async def generate_template(
 ) -> DocumentResponse:
     """Endpoint para generar un documento a partir de una plantilla."""
     try:
-        generated_document = await template_service.generate_contract(
+        return await template_service.generate_contract(
             template_id=template_id,
             form_data=request,
             organization_id=current_user.organization_id,
             user_role=current_user.role,
         )
-        return generated_document
     except ValueError as e:
         detail = str(e)
         status_code = (

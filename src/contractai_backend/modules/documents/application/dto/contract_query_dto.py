@@ -67,9 +67,7 @@ class ContractQueryDTO(BaseModel):
         """Normaliza el valor de moneda a mayúsculas y elimina espacios, o lo deja como None si es vacío."""
         if value is None or value == "":
             return None
-        if isinstance(value, str):
-            return value.strip().upper()
-        return value
+        return value.strip().upper() if isinstance(value, str) else value
 
     @field_validator("state", "document_type", mode="before")
     @classmethod
@@ -77,9 +75,7 @@ class ContractQueryDTO(BaseModel):
         """Normaliza el valor de un enum a mayúsculas y elimina espacios, o lo deja como None si es vacío."""
         if value is None or value == "":
             return None
-        if isinstance(value, str):
-            return value.strip().upper()
-        return value
+        return value.strip().upper() if isinstance(value, str) else value
 
     @field_validator("period_start", "period_end", mode="before")
     @classmethod

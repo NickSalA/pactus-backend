@@ -52,10 +52,10 @@ class CompanyContractBase(BaseModel):
         """Rejects blank text when optional company fields are provided."""
         if value is None:
             return None
-        cleaned = value.strip()
-        if not cleaned:
+        if cleaned := value.strip():
+            return cleaned
+        else:
             raise ValueError("Field cannot be empty.")
-        return cleaned
 
 
 class CompanyContractRequest(CompanyContractBase):
@@ -90,10 +90,10 @@ class LaborContractBase(BaseModel):
         """Rejects blank text when optional labor fields are provided."""
         if value is None:
             return None
-        cleaned = value.strip()
-        if not cleaned:
+        if cleaned := value.strip():
+            return cleaned
+        else:
             raise ValueError("Field cannot be empty.")
-        return cleaned
 
 
 class LaborContractRequest(LaborContractBase):
@@ -123,10 +123,10 @@ class DocumentBase(BaseModel):
     @classmethod
     def validate_text_fields(cls, value: str) -> str:
         """Rejects blank document source types."""
-        cleaned = value.strip()
-        if not cleaned:
+        if cleaned := value.strip():
+            return cleaned
+        else:
             raise ValueError("Field cannot be empty.")
-        return cleaned
 
 
 class DocumentDraftBase(BaseModel):
@@ -149,10 +149,10 @@ class DocumentDraftBase(BaseModel):
         """Rejects blank text when optional document metadata is provided."""
         if value is None:
             return None
-        cleaned = value.strip()
-        if not cleaned:
+        if cleaned := value.strip():
+            return cleaned
+        else:
             raise ValueError("Field cannot be empty.")
-        return cleaned
 
     @field_validator("end_date")
     @classmethod
@@ -227,10 +227,10 @@ class UpdateDocumentRequest(BaseModel):
         """Rejects blank text when optional document metadata is provided."""
         if value is None:
             return None
-        cleaned = value.strip()
-        if not cleaned:
+        if cleaned := value.strip():
+            return cleaned
+        else:
             raise ValueError("Field cannot be empty.")
-        return cleaned
 
     @field_validator("service_items")
     @classmethod

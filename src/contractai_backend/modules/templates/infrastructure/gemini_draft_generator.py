@@ -61,8 +61,7 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
 
         payload = self._parse_json(content)
         self._ensure_placeholders(payload)
-        field_issues = self._detect_raw_field_issues(payload)
-        if field_issues:
+        if field_issues := self._detect_raw_field_issues(payload):
             source = payload.get("source")
             if not isinstance(source, dict):
                 source = {}
@@ -177,7 +176,7 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
 
     def _field_tokens(self, *, key: str, label: str) -> set[str]:
         """Builds normalized tokens from a field key and label."""
-        normalized = re.sub(r"[^a-z0-9]+", "_", (key + " " + label).lower()).strip("_")
+        normalized = re.sub(r"[^a-z0-9]+", "_", f"{key} {label}".lower()).strip("_")
         return {token for token in normalized.split("_") if token}
 
     def _looks_like_time_field(self, *, tokens: set[str], key: str, placeholder: str | None) -> bool:

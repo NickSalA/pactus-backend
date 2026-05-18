@@ -117,10 +117,10 @@ class CreateTemplateRequest(BaseModel):
         """Normaliza el nombre obligatorio."""
         if value is None:
             return None
-        cleaned = value.strip()
-        if not cleaned:
+        if cleaned := value.strip():
+            return cleaned
+        else:
             raise ValueError("Name cannot be empty")
-        return cleaned
 
     @field_validator("description")
     @classmethod
@@ -149,10 +149,10 @@ class UpdateTemplateRequest(BaseModel):
         """Normaliza el nombre opcional."""
         if value is None:
             return None
-        cleaned = value.strip()
-        if not cleaned:
+        if cleaned := value.strip():
+            return cleaned
+        else:
             raise ValueError("Name cannot be empty")
-        return cleaned
 
     @field_validator("description")
     @classmethod

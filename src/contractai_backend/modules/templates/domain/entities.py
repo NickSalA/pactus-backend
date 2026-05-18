@@ -37,10 +37,10 @@ class TemplateContractDateMapping(BaseModel):
     @field_validator("start_date_field", "end_date_field")
     @classmethod
     def validate_field_key(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
+        if cleaned := value.strip():
+            return cleaned
+        else:
             raise ValueError("Contract date mapping fields cannot be empty")
-        return cleaned
 
     @model_validator(mode="after")
     def validate_distinct_fields(self) -> "TemplateContractDateMapping":
