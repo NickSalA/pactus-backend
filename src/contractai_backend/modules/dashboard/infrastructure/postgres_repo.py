@@ -13,7 +13,7 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....core.exceptions.base import InternalServerError, ServiceUnavailableError
-from ....shared.infrastructure.sqlmodel_utils import RelationalHelpersMixin
+from ....core.infrastructure.sqlmodel_utils import RelationalHelpersMixin
 from ...catalog.domain.entities import ServiceTable
 from ...documents.domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable, LaborContractTable
 from ...documents.domain.value_objs import CurrencyType, DocumentState, DocumentType

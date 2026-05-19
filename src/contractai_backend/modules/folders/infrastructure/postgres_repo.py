@@ -8,7 +8,7 @@ from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col, func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from ....shared.infrastructure.sqlmodel_utils import RelationalHelpersMixin
+from ....core.infrastructure.sqlmodel_utils import RelationalHelpersMixin
 from ...documents.domain import DocumentTable
 from ...users.domain.entities import UserTable
 from ...users.domain.value_objs import UserRole
