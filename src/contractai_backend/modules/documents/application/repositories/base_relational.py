@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import Any
 
+from ...domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable, LaborContractTable
 from ..dto import ContractQueryDTO
-from ...domain import DocumentServiceTable, DocumentTable
 
 
 class DocumentQueryRepository(ABC):
@@ -15,18 +15,33 @@ class DocumentQueryRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_all(self, filters: dict[str, Any] | None = None) -> Sequence[DocumentTable]:
-        """Lists documents matching optional filters."""
+    async def get_all(self, filters: dict[str, Any] | None = None, limit: int | None = None, offset: int | None = None) -> Sequence[DocumentTable]:
+        """Lists documents matching optional filters with optional pagination."""
         pass
 
     @abstractmethod
-    async def get_document_services(self, doc_id: int) -> Sequence[DocumentServiceTable]:
+    async def get_document_services(self, doc_id: int) -> Sequence[CompanyContractServiceTable]:
         """Lists service items for one document."""
         pass
 
     @abstractmethod
-    async def get_document_services_by_document_ids(self, document_ids: Sequence[int]) -> dict[int, Sequence[DocumentServiceTable]]:
+    async def get_document_services_by_document_ids(self, document_ids: Sequence[int]) -> dict[int, Sequence[CompanyContractServiceTable]]:
         """Lists service items grouped by document id."""
+        pass
+
+    @abstractmethod
+    async def get_company_contract_by_document_id(self, document_id: int) -> CompanyContractTable | None:
+        """Returns company-specific data for a document."""
+        pass
+
+    @abstractmethod
+    async def get_labor_contract_by_document_id(self, document_id: int) -> LaborContractTable | None:
+        """Returns labor-specific data for a document."""
+        pass
+
+    @abstractmethod
+    async def get_contract_kinds_by_document_ids(self, document_ids: Sequence[int]) -> dict[int, str]:
+        """Returns COMPANY/LABOR kind inferred from child tables."""
         pass
 
     @abstractmethod
@@ -101,6 +116,16 @@ class DocumentCommandRepository(ABC):
         pass
 
     @abstractmethod
-    async def replace_document_services(self, doc_id: int, service_items: Sequence[DocumentServiceTable]) -> Sequence[DocumentServiceTable]:
+    async def upsert_company_contract(self, entity: CompanyContractTable) -> CompanyContractTable:
+        """Creates or updates company-specific data for a document."""
+        pass
+
+    @abstractmethod
+    async def upsert_labor_contract(self, entity: LaborContractTable) -> LaborContractTable:
+        """Creates or updates labor-specific data for a document."""
+        pass
+
+    @abstractmethod
+    async def replace_document_services(self, doc_id: int, service_items: Sequence[CompanyContractServiceTable]) -> Sequence[CompanyContractServiceTable]:
         """Replaces all service items for a document."""
         pass

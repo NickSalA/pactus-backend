@@ -1,69 +1,59 @@
 """Tests for application settings resolution."""
 
-from unittest.mock import patch
-
 import pytest
+from pydantic import ValidationError
 
 from contractai_backend.shared.config import Settings
 
 
-def _secret_values() -> dict[str, str]:
+def _settings_values() -> dict[str, str]:
     return {
-        "SECRET-KEY": "vault-secret-key",
-        "GEMINI-API-KEY": "vault-gemini-key",
-        "OPENAI-API-KEY": "openai-key",
-        "QDRANT-API-KEY": "qdrant-key",
-        "QDRANT-URL": "https://qdrant.example.com",
-        "LLAMA-PARSE-API-KEY": "llama-key",
-        "DATABASE-PASSWORD": "db-password",
-        "DATABASE-USER": "db-user",
-        "DATABASE-HOST": "db.example.com",
-        "SUPABASE-URL": "https://supabase.example.com",
-        "SUPABASE-SECRET-KEY": "supabase-secret",
-        "GOOGLE-CLIENT-ID": "google-client-id",
-        "GOOGLE-CLIENT-SECRET": "google-client-secret",
-        "GOOGLE-REDIRECT-URI": "https://app.example.com/integrations/drive/callback",
+        "GEMINI_API_KEY": "env-gemini-key",
+        "OPENAI_API_KEY": "env-openai-key",
+        "AZURE_OPENAI_API_KEY": "env-azure-openai-key",
+        "QDRANT_API_KEY": "env-qdrant-key",
+        "QDRANT_URL": "https://env.qdrant.example.com",
+        "LLAMA_PARSE_API_KEY": "env-llama-key",
+        "SUPABASE_URL": "https://env.supabase.example.com",
+        "SUPABASE_SECRET_KEY": "env-supabase-secret",
+        "GOOGLE_CLIENT_ID": "env-google-client-id",
+        "GOOGLE_CLIENT_SECRET": "env-google-client-secret",
+        "GOOGLE_REDIRECT_URI": "https://env.example.com/integrations/drive/callback",
     }
 
 
-def _get_secret_from(values: dict[str, str]):
-    def get_secret(vault_url: str, secret_name: str) -> str:
-        assert vault_url == "https://test.vault.azure.net"
-        if secret_name not in values:
-            raise ValueError(f"Missing secret: {secret_name}")
-        return values[secret_name]
-
-    return get_secret
+def _clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in (
+        "GEMINI_API_KEY",
+        "OPENAI_API_KEY",
+        "AZURE_OPENAI_API_KEY",
+        "QDRANT_API_KEY",
+        "QDRANT_URL",
+        "LLAMA_PARSE_API_KEY",
+        "DATABASE_PASSWORD",
+        "DATABASE_USER",
+        "DATABASE_HOST",
+        "SUPABASE_URL",
+        "SUPABASE_SECRET_KEY",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "GOOGLE_REDIRECT_URI",
+        "GMAIL_SENDER",
+        "GMAIL_APP_PASSWORD",
+        "CRON_SECRET",
+        "DATABASE_SSL_VERIFY",
+    ):
+        monkeypatch.delenv(key, raising=False)
 
 
 class TestSettings:
-    def test_loads_missing_values_from_key_vault(self):
-        with patch("contractai_backend.shared.config.SecretManager.get_secret") as get_secret_mock:
-            get_secret_mock.side_effect = _get_secret_from(_secret_values())
+    def test_loads_values_from_dotenv(self, tmp_path, monkeypatch):
+        _clear_settings_env(monkeypatch)
 
-            settings = Settings(_env_file=None, AZURE_KEY_VAULT_URL="https://test.vault.azure.net")
-
-        assert settings.OPENAI_API_KEY == "openai-key"
-        assert settings.SECRET_KEY == "vault-secret-key"
-        assert settings.GEMINI_API_KEY == "vault-gemini-key"
-        get_secret_mock.assert_any_call("https://test.vault.azure.net", "OPENAI-API-KEY")
-
-    def test_prefers_dotenv_values_over_key_vault(self, tmp_path):
-        env_values = {
-            "AZURE_KEY_VAULT_URL": "https://test.vault.azure.net",
-            "GEMINI_API_KEY": "env-gemini-key",
-            "OPENAI_API_KEY": "env-openai-key",
-            "QDRANT_API_KEY": "env-qdrant-key",
-            "QDRANT_URL": "https://env.qdrant.example.com",
-            "LLAMA_PARSE_API_KEY": "env-llama-key",
+        env_values = _settings_values() | {
             "DATABASE_PASSWORD": "env-db-password",
             "DATABASE_USER": "env-db-user",
             "DATABASE_HOST": "env-db.example.com",
-            "SUPABASE_URL": "https://env.supabase.example.com",
-            "SUPABASE_SECRET_KEY": "env-supabase-secret",
-            "GOOGLE_CLIENT_ID": "env-google-client-id",
-            "GOOGLE_CLIENT_SECRET": "env-google-client-secret",
-            "GOOGLE_REDIRECT_URI": "https://env.example.com/integrations/drive/callback",
             "GMAIL_SENDER": "alerts@example.com",
             "GMAIL_APP_PASSWORD": "app-password",
         }
@@ -73,14 +63,31 @@ class TestSettings:
             encoding="utf-8",
         )
 
-        with patch("contractai_backend.shared.config.SecretManager.get_secret") as get_secret_mock:
-            settings = Settings(_env_file=env_file)
+        settings = Settings(_env_file=env_file)
 
-        assert settings.SECRET_KEY == "env-secret-key"
         assert settings.GEMINI_API_KEY == "env-gemini-key"
         assert settings.OPENAI_API_KEY == "env-openai-key"
-        get_secret_mock.assert_not_called()
+        assert settings.AZURE_OPENAI_API_KEY == "env-azure-openai-key"
+        assert settings.CRON_SECRET is None
 
-    def test_raises_runtime_error_when_secret_fallback_has_no_vault_url(self):
-        with pytest.raises(RuntimeError, match="AZURE_KEY_VAULT_URL"):
+    def test_database_settings_are_optional_without_key_vault(self, monkeypatch):
+        _clear_settings_env(monkeypatch)
+
+        settings = Settings(_env_file=None, **_settings_values())
+
+        assert settings.DATABASE_HOST is None
+        assert settings.DATABASE_URL == "sqlite:///./test.db"
+        assert settings.DATABASE_SSL_VERIFY is False
+
+    def test_database_ssl_verify_can_be_disabled_explicitly(self, monkeypatch):
+        _clear_settings_env(monkeypatch)
+
+        settings = Settings(_env_file=None, DATABASE_SSL_VERIFY=False, **_settings_values())
+
+        assert settings.DATABASE_SSL_VERIFY is False
+
+    def test_raises_validation_error_when_required_env_values_are_missing(self, monkeypatch):
+        _clear_settings_env(monkeypatch)
+
+        with pytest.raises(ValidationError, match="GEMINI_API_KEY"):
             Settings(_env_file=None)

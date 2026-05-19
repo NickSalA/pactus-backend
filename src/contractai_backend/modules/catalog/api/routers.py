@@ -7,9 +7,9 @@ from fastapi import APIRouter, Depends, Query, Response, status
 
 from ....shared.api.dependencies.security import CurrentUserDep
 from ...users.domain.value_objs import UserRole
+from ..application.services import ServiceCatalogService
 from .dependencies import get_service_catalog_service
 from .schemas import ServiceCreateRequest, ServiceResponse, ServiceUpdateRequest
-from ..application.services import ServiceCatalogService
 
 router = APIRouter()
 
@@ -21,10 +21,11 @@ async def list_services(
     include_inactive: bool = Query(default=False),
 ) -> Sequence[ServiceResponse]:
     """Endpoint to list available services for the current organization."""
-    return await service.list_services(
+    services = await service.list_services(
         organization_id=current_user.organization_id,
         include_inactive=include_inactive and current_user.role == UserRole.ADMIN,
     )
+    return [ServiceResponse.model_validate(item) for item in services]
 
 
 @router.post(path="/", response_model=ServiceResponse, status_code=status.HTTP_201_CREATED)
@@ -34,7 +35,8 @@ async def create_service(
     current_user: CurrentUserDep,
 ) -> ServiceResponse:
     """Endpoint to create a new catalog service."""
-    return await service.create_service(current_user=current_user, data=payload)
+    item = await service.create_service(current_user=current_user, data=payload)
+    return ServiceResponse.model_validate(item)
 
 
 @router.patch(path="/{service_id}", response_model=ServiceResponse)
@@ -45,7 +47,8 @@ async def update_service(
     current_user: CurrentUserDep,
 ) -> ServiceResponse:
     """Endpoint to update a catalog service."""
-    return await service.update_service(current_user=current_user, service_id=service_id, data=payload)
+    item = await service.update_service(current_user=current_user, service_id=service_id, data=payload)
+    return ServiceResponse.model_validate(item)
 
 
 @router.delete(path="/{service_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

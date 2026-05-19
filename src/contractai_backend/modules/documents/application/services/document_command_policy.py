@@ -6,10 +6,10 @@ from typing import Any
 from pydantic import ValidationError as PydanticValidationError
 
 from .....core.application.validation import format_pydantic_validation_error
-from ...api.schemas import DocumentServiceItemRequest
-from ...domain import DocumentServiceTable, DocumentTable
-from ...domain.exceptions import DocumentValidationError
 from ....catalog.application.repositories import ServiceRepository
+from ...domain import CompanyContractServiceTable, DocumentTable
+from ...domain.exceptions import DocumentValidationError
+from ..dto import DocumentServiceItemRequest
 
 
 class DocumentCommandPolicy:
@@ -29,13 +29,13 @@ class DocumentCommandPolicy:
 
     @staticmethod
     def build_document_service_entities(
-        document_id: int,
+        company_contract_id: int,
         service_items: Sequence[DocumentServiceItemRequest],
-    ) -> list[DocumentServiceTable]:
+    ) -> list[CompanyContractServiceTable]:
         """Maps request items into document-service entities."""
         return [
-            DocumentServiceTable(
-                document_id=document_id,
+            CompanyContractServiceTable(
+                company_contract_id=company_contract_id,
                 service_id=item.service_id,
                 description=item.description,
                 value=item.value,
@@ -73,7 +73,5 @@ class DocumentCommandPolicy:
         requested_ids = [item.service_id for item in service_items]
         existing_services = await self.service_repo.get_services_by_ids(organization_id=organization_id, service_ids=requested_ids)
         existing_ids = {service.id for service in existing_services if service.id is not None}
-        missing_ids = sorted(set(requested_ids) - existing_ids)
-
-        if missing_ids:
+        if missing_ids := sorted(set(requested_ids) - existing_ids):
             raise DocumentValidationError(message=f"Los servicios con IDs {missing_ids} no existen o no pertenecen a la organización actual.")

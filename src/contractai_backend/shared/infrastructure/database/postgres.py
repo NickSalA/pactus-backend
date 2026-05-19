@@ -1,9 +1,9 @@
 """Database configuration and session management for ContractAI Backend."""
 
 import ssl
-from urllib.parse import urlparse
 from contextlib import asynccontextmanager
-from typing import Literal
+from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
@@ -13,16 +13,22 @@ from contractai_backend.shared.config import settings
 
 DATABASE_URL: str = settings.DATABASE_URL
 parsed_database_url = urlparse(DATABASE_URL)
+SUPAVISOR_TRANSACTION_POOLER_PORT = 6543
 
-connect_args = {}
+connect_args: dict[str, Any] = {}
 if DATABASE_URL and "localhost" not in DATABASE_URL:
     ctx: ssl.SSLContext = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode: Literal[ssl.VerifyMode.CERT_NONE] = ssl.CERT_NONE
-    connect_args: dict[str, ssl.SSLContext] = {"ssl": ctx}
+    if not settings.DATABASE_SSL_VERIFY:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+    connect_args = {"ssl": ctx}
 
 # Supavisor transaction mode does not support prepared statements.
-if parsed_database_url.port == 6543 and parsed_database_url.hostname and parsed_database_url.hostname.endswith(".pooler.supabase.com"):
+if (
+    parsed_database_url.port == SUPAVISOR_TRANSACTION_POOLER_PORT
+    and parsed_database_url.hostname
+    and parsed_database_url.hostname.endswith(".pooler.supabase.com")
+):
     connect_args["statement_cache_size"] = 0
 
 engine: AsyncEngine = create_async_engine(

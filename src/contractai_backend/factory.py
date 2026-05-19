@@ -16,6 +16,7 @@ from .core.exceptions.base import AppError
 from .modules.catalog.api.routers import router as services_router
 from .modules.chatbot.api import chat_router, conversation_router
 from .modules.chatbot.infrastructure.agent import init_checkpointer
+from .modules.dashboard.api import dashboard_router
 from .modules.documents.api.routers import router as documents_router
 from .modules.documents.infrastructure import configure_embedding
 from .modules.folders.api.routers import router as folders_router
@@ -48,12 +49,13 @@ def create() -> FastAPI:
     app = FastAPI(title=settings.PROJECT_NAME, version=__version__, lifespan=lifespan)
 
     app.include_router(router=documents_router, prefix="/documents", tags=["Documentos"])
-    app.include_router(router=services_router, prefix="/services", tags=["Catálogo de Servicios"])
+    app.include_router(router=services_router, prefix="/services", tags=["Servicios"])
     app.include_router(router=folders_router, prefix="/folders", tags=["Carpetas"])
     app.include_router(router=auth_router, prefix="/login", tags=["Autenticación"])
     app.include_router(router=users_router, prefix="/user", tags=["Usuarios"])
     app.include_router(router=chat_router, prefix="/chatbot", tags=["Chatbot"])
     app.include_router(router=conversation_router, prefix="/conversations", tags=["Conversaciones"])
+    app.include_router(router=dashboard_router, prefix="/dashboard", tags=["Dashboard"])
     app.include_router(router=integrations_router, prefix="/integrations", tags=["Integraciones"])
     app.include_router(router=organizations_router, prefix="/organizations", tags=["Organizaciones"])
     app.include_router(router=notifications_router, prefix="/notifications", tags=["Notificaciones"])
@@ -61,7 +63,7 @@ def create() -> FastAPI:
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
     app.add_middleware(
         middleware_class=CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.CORS_ORIGINS,
         allow_methods=["*"],
         allow_headers=["*"],
     )

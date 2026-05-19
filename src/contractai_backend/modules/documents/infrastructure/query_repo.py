@@ -1,32 +1,35 @@
 """PostgreSQL implementation of document query and command repositories."""
 
+import re
+import unicodedata
 from collections import defaultdict
 from collections.abc import Sequence
 from datetime import date
 from difflib import SequenceMatcher
-import re
-import unicodedata
+from typing import Any
+from typing import cast as type_cast
 
-from loguru import logger
 from sqlalchemy import Float, asc, case, cast, desc, func, or_, text
-from sqlalchemy.exc import OperationalError, SQLAlchemyError, TimeoutError as SQLAlchemyTimeoutError
-from sqlmodel import col, delete, select
+from sqlalchemy import select as sa_select
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....core.infrastructure.base import PostgresBaseRepository
+from ....core.infrastructure.sqlmodel_utils import RelationalHelpersMixin
+from ...catalog.domain.entities import ServiceTable
 from ..application.dto import ContractQueryDTO
-from ..application.repositories import DocumentCommandRepository, DocumentQueryRepository
-from ..domain import DocumentServiceTable, DocumentTable, ServiceTable
-from ..domain.value_objs import DocumentState
+from ..application.repositories import DocumentQueryRepository
+from ..domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable, LaborContractTable
 from ..domain.exceptions import DocumentDatabaseError, DocumentDatabaseUnavailableError
-from ....shared.infrastructure.sqlmodel_utils import RelationalHelpersMixin
+from ..domain.value_objs import DocumentType
 
 
-class SQLModelDocumentRepository(
+class SQLModelDocumentQueryRepository(
     RelationalHelpersMixin,
     PostgresBaseRepository[DocumentTable],
     DocumentQueryRepository,
-    DocumentCommandRepository,
 ):
     """Document repository for query and command operations via SQLModel."""
 
@@ -39,11 +42,36 @@ class SQLModelDocumentRepository(
 
     @staticmethod
     def _build_contract_value_expression():
-        return cast(DocumentTable.form_data["value"].astext, Float)
+        form_data = type_cast(Any, DocumentTable.form_data)
+        return cast(form_data["value"].astext, Float)
 
     @staticmethod
     def _build_contract_currency_expression():
-        return func.upper(DocumentTable.form_data["currency"].astext)
+        form_data = type_cast(Any, DocumentTable.form_data)
+        return func.upper(form_data["currency"].astext)
+
+    @staticmethod
+    def _build_party_expression():
+        return func.coalesce(col(CompanyContractTable.client), col(LaborContractTable.worker_name))
+
+    @staticmethod
+    def _build_contract_title_expression():
+        return func.coalesce(col(CompanyContractTable.client), col(LaborContractTable.worker_name), col(DocumentTable.file_name))
+
+    @staticmethod
+    def _build_document_kind_expression():
+        return case(
+            (col(CompanyContractTable.id).is_not(None), DocumentType.COMPANY.value),
+            (col(LaborContractTable.id).is_not(None), DocumentType.LABOR.value),
+            else_=None,
+        )
+
+    @staticmethod
+    def _join_contract_detail_tables(statement):
+        return statement.outerjoin(CompanyContractTable, col(CompanyContractTable.document_id) == col(DocumentTable.id)).outerjoin(
+            LaborContractTable,
+            col(LaborContractTable.document_id) == col(DocumentTable.id),
+        )
 
     def _apply_period_filters(self, statement, filters: ContractQueryDTO):
         if not (filters.period_start or filters.period_end):
@@ -84,14 +112,14 @@ class SQLModelDocumentRepository(
 
     @staticmethod
     def _apply_chatbot_ready_contract_filters(statement):
+        form_data = type_cast(Any, DocumentTable.form_data)
         return (
-            statement.where(col(DocumentTable.name).is_not(None))
-            .where(col(DocumentTable.client).is_not(None))
-            .where(col(DocumentTable.type).is_not(None))
+            statement.where(SQLModelDocumentQueryRepository._build_party_expression().is_not(None))
+            .where(SQLModelDocumentQueryRepository._build_document_kind_expression().is_not(None))
             .where(col(DocumentTable.start_date).is_not(None))
             .where(col(DocumentTable.end_date).is_not(None))
-            .where(DocumentTable.form_data["value"].astext.is_not(None))
-            .where(DocumentTable.form_data["currency"].astext.is_not(None))
+            .where(form_data["value"].astext.is_not(None))
+            .where(form_data["currency"].astext.is_not(None))
         )
 
     @staticmethod
@@ -165,8 +193,8 @@ class SQLModelDocumentRepository(
 
     def _apply_contract_sorting(self, statement, query: ContractQueryDTO):
         sort_mapping = {
-            "client": col(DocumentTable.client),
-            "name": col(DocumentTable.name),
+            "client": self._build_party_expression(),
+            "name": self._build_contract_title_expression(),
             "value": self._build_contract_value_expression(),
             "start_date": col(DocumentTable.start_date),
             "end_date": col(DocumentTable.end_date),
@@ -219,13 +247,17 @@ class SQLModelDocumentRepository(
         if filters.service_id is None and normalized_service_name is None:
             return None
 
-        statement = select(col(DocumentServiceTable.document_id)).distinct()
+        statement = (
+            select(col(CompanyContractTable.document_id))
+            .join(CompanyContractServiceTable, col(CompanyContractServiceTable.company_contract_id) == col(CompanyContractTable.id))
+            .distinct()
+        )
 
         if filters.service_id is not None:
-            statement = statement.where(col(DocumentServiceTable.service_id) == filters.service_id)
+            statement = statement.where(col(CompanyContractServiceTable.service_id) == filters.service_id)
 
         if normalized_service_name is not None:
-            statement = statement.join(ServiceTable, col(ServiceTable.id) == col(DocumentServiceTable.service_id)).where(
+            statement = statement.join(ServiceTable, col(ServiceTable.id) == col(CompanyContractServiceTable.service_id)).where(
                 col(ServiceTable.organization_id) == organization_id,
                 col(ServiceTable.name).ilike(f"%{normalized_service_name}%"),
             )
@@ -245,16 +277,16 @@ class SQLModelDocumentRepository(
         filters: ContractQueryDTO,
     ):
         """Aplica los filtros de búsqueda de contratos a la consulta base."""
+        statement = self._join_contract_detail_tables(statement)
         statement = statement.where(DocumentTable.organization_id == organization_id)
 
         text_filters = (
-            (filters.client, DocumentTable.client),
-            (filters.contract_name, DocumentTable.name),
+            (filters.client, self._build_party_expression()),
+            (filters.contract_name, self._build_contract_title_expression()),
         )
         for raw_value, field in text_filters:
-            normalized_value = self._normalize_text_filter(raw_value)
-            if normalized_value:
-                statement = statement.where(col(field).ilike(f"%{normalized_value}%"))
+            if normalized_value := self._normalize_text_filter(raw_value):
+                statement = statement.where(field.ilike(f"%{normalized_value}%"))
 
         statement = self._apply_service_filters(statement=statement, organization_id=organization_id, filters=filters)
 
@@ -265,15 +297,12 @@ class SQLModelDocumentRepository(
             statement = statement.where(contract_value <= filters.max_value)
 
         if filters.currency:
-            statement = statement.where(func.upper(DocumentTable.form_data["currency"].astext) == filters.currency)
+            statement = statement.where(self._build_contract_currency_expression() == filters.currency)
 
-        exact_filters = (
-            (filters.state, col(DocumentTable.state)),
-            (filters.document_type, col(DocumentTable.type)),
-        )
-        for value, field in exact_filters:
-            if value is not None:
-                statement = statement.where(field == value)
+        if filters.state is not None:
+            statement = statement.where(col(DocumentTable.state) == filters.state)
+        if filters.document_type is not None:
+            statement = statement.where(self._build_document_kind_expression() == filters.document_type.value)
 
         statement = self._apply_period_filters(statement=statement, filters=filters)
         return self._apply_current_activity_filter(statement=statement, filters=filters)
@@ -282,16 +311,56 @@ class SQLModelDocumentRepository(
     #  DocumentQueryRepository
     # ──────────────────────────────────────
 
-    async def get_document_services(self, doc_id: int) -> Sequence[DocumentServiceTable]:
+    async def get_document_services(self, doc_id: int) -> Sequence[CompanyContractServiceTable]:
         """Obtiene los servicios asociados a un documento."""
         try:
-            query = select(DocumentServiceTable).where(col(DocumentServiceTable.document_id) == doc_id).order_by(col(DocumentServiceTable.id))
+            query = (
+                select(CompanyContractServiceTable)
+                .join(CompanyContractTable, col(CompanyContractTable.id) == col(CompanyContractServiceTable.company_contract_id))
+                .where(col(CompanyContractTable.document_id) == doc_id)
+                .order_by(col(CompanyContractServiceTable.id))
+            )
             result = await self.session.exec(statement=query)
             return result.all()
         except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
+
+    def _build_access_candidates_statement(self, organization_id: int, chatbot_ready_only: bool, state: str | None):
+        statement = self._join_contract_detail_tables(
+            sa_select(
+                col(DocumentTable.id).label("document_id"),
+                self._build_contract_title_expression().label("name"),
+                self._build_party_expression().label("client"),
+                self._build_document_kind_expression().label("document_type"),
+                col(DocumentTable.file_name).label("file_name"),
+            )
+        )
+        statement = statement.where(DocumentTable.organization_id == organization_id).where(self._build_party_expression().is_not(None))
+        if chatbot_ready_only:
+            statement = self._apply_chatbot_ready_contract_filters(statement)
+        if state is not None:
+            statement = statement.where(col(DocumentTable.state) == state)
+        return statement
+
+    def _process_access_candidate_row(self, row: Any, normalized_query: str) -> dict[str, str | int | float | None] | None:
+        mapping = row._mapping if hasattr(row, "_mapping") else None
+        client = mapping["client"] if mapping else row[2]
+
+        if client is None or not self._is_viable_party_match(query=normalized_query, candidate=str(client)):
+            return None
+
+        document_type = mapping["document_type"] if mapping else row[3]
+        match_score, _, _, _ = self._compute_party_match_metrics(query=normalized_query, candidate=str(client))
+        return {
+            "document_id": mapping["document_id"] if mapping else row[0],
+            "name": mapping["name"] if mapping else row[1],
+            "client": client,
+            "document_type": document_type.value if hasattr(document_type, "value") else document_type,
+            "file_name": mapping["file_name"] if mapping else row[4],
+            "match_score": round(match_score, 6),
+        }
 
     async def search_contract_access_candidates(
         self,
@@ -307,46 +376,13 @@ class SQLModelDocumentRepository(
             return []
 
         try:
-            statement = (
-                select(
-                    col(DocumentTable.id).label("document_id"),
-                    col(DocumentTable.name).label("name"),
-                    col(DocumentTable.client).label("client"),
-                    col(DocumentTable.type).label("document_type"),
-                    col(DocumentTable.file_name).label("file_name"),
-                )
-                .where(DocumentTable.organization_id == organization_id)
-                .where(col(DocumentTable.client).is_not(None))
-                .where(col(DocumentTable.type).is_not(None))
-            )
-            if chatbot_ready_only:
-                statement = self._apply_chatbot_ready_contract_filters(statement)
-            if state is not None:
-                statement = statement.where(col(DocumentTable.state) == state)
-
+            statement = self._build_access_candidates_statement(organization_id=organization_id, chatbot_ready_only=chatbot_ready_only, state=state)
             result = await self.session.exec(statement=statement)
+
             candidates: list[dict[str, str | int | float | None]] = []
             for row in result.all():
-                mapping = row._mapping if hasattr(row, "_mapping") else None
-                document_id = mapping["document_id"] if mapping else row[0]
-                name = mapping["name"] if mapping else row[1]
-                client = mapping["client"] if mapping else row[2]
-                document_type = mapping["document_type"] if mapping else row[3]
-                file_name = mapping["file_name"] if mapping else row[4]
-                if client is None or not self._is_viable_party_match(query=normalized_query, candidate=str(client)):
-                    continue
-
-                match_score, _, _, _ = self._compute_party_match_metrics(query=normalized_query, candidate=str(client))
-                candidates.append(
-                    {
-                        "document_id": document_id,
-                        "name": name,
-                        "client": client,
-                        "document_type": document_type.value if hasattr(document_type, "value") else document_type,
-                        "file_name": file_name,
-                        "match_score": round(match_score, 6),
-                    }
-                )
+                if candidate := self._process_access_candidate_row(row, normalized_query):
+                    candidates.append(candidate)
 
             candidates.sort(
                 key=lambda item: (
@@ -362,21 +398,24 @@ class SQLModelDocumentRepository(
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
 
-    async def get_document_services_by_document_ids(self, document_ids: Sequence[int]) -> dict[int, Sequence[DocumentServiceTable]]:
+    async def get_document_services_by_document_ids(self, document_ids: Sequence[int]) -> dict[int, Sequence[CompanyContractServiceTable]]:
         """Obtiene los servicios asociados a múltiples documentos en una sola consulta."""
         if not document_ids:
             return {}
 
         try:
             query = (
-                select(DocumentServiceTable)
-                .where(col(DocumentServiceTable.document_id).in_(document_ids))
-                .order_by(col(DocumentServiceTable.document_id), col(DocumentServiceTable.id))
+                select(CompanyContractServiceTable, col(CompanyContractTable.document_id).label("document_id"))
+                .join(CompanyContractTable, col(CompanyContractTable.id) == col(CompanyContractServiceTable.company_contract_id))
+                .where(col(CompanyContractTable.document_id).in_(document_ids))
+                .order_by(col(CompanyContractTable.document_id), col(CompanyContractServiceTable.id))
             )
             result = await self.session.exec(statement=query)
-            grouped_services: defaultdict[int, list[DocumentServiceTable]] = defaultdict(list)
-            for service_item in result.all():
-                grouped_services[service_item.document_id].append(service_item)
+            grouped_services: defaultdict[int, list[CompanyContractServiceTable]] = defaultdict(list)
+            for row in result.all():
+                service_item = row[0]
+                document_id = row[1]
+                grouped_services[document_id].append(service_item)
             return dict(grouped_services)
         except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise DocumentDatabaseUnavailableError() from e
@@ -396,6 +435,47 @@ class SQLModelDocumentRepository(
             )
             result = await self.session.exec(statement=query)
             return result.all()
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
+            raise DocumentDatabaseUnavailableError() from e
+        except SQLAlchemyError as e:
+            raise DocumentDatabaseError() from e
+
+    async def get_company_contract_by_document_id(self, document_id: int) -> CompanyContractTable | None:
+        """Obtiene los datos company de un documento."""
+        try:
+            result = await self.session.exec(select(CompanyContractTable).where(col(CompanyContractTable.document_id) == document_id))
+            return result.first()
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
+            raise DocumentDatabaseUnavailableError() from e
+        except SQLAlchemyError as e:
+            raise DocumentDatabaseError() from e
+
+    async def get_labor_contract_by_document_id(self, document_id: int) -> LaborContractTable | None:
+        """Obtiene los datos labor de un documento."""
+        try:
+            result = await self.session.exec(select(LaborContractTable).where(col(LaborContractTable.document_id) == document_id))
+            return result.first()
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
+            raise DocumentDatabaseUnavailableError() from e
+        except SQLAlchemyError as e:
+            raise DocumentDatabaseError() from e
+
+    async def get_contract_kinds_by_document_ids(self, document_ids: Sequence[int]) -> dict[int, str]:
+        """Infers COMPANY/LABOR kind from the child contract tables."""
+        if not document_ids:
+            return {}
+
+        try:
+            company_result = await self.session.exec(
+                select(col(CompanyContractTable.document_id)).where(col(CompanyContractTable.document_id).in_(document_ids))
+            )
+            labor_result = await self.session.exec(
+                select(col(LaborContractTable.document_id)).where(col(LaborContractTable.document_id).in_(document_ids))
+            )
+            kinds: dict[int, str] = {document_id: DocumentType.COMPANY.value for document_id in company_result.all()} | {
+                document_id: DocumentType.LABOR.value for document_id in labor_result.all()
+            }
+            return kinds
         except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:
@@ -453,7 +533,7 @@ class SQLModelDocumentRepository(
     ) -> Sequence[dict[str, object]]:
         """Construye un ranking agregado por cliente y moneda."""
         try:
-            client_field = col(DocumentTable.client)
+            client_field = self._build_party_expression()
             currency_field = self._build_contract_currency_expression()
             contract_value = self._build_contract_value_expression()
 
@@ -532,37 +612,11 @@ class SQLModelDocumentRepository(
         """Sincroniza estados documentales persistidos según reglas de notificación."""
         try:
             result = await self.session.exec(
-                text("select public.sync_document_states(:organization_id)"),
+                type_cast(Any, text("select public.sync_document_states(:organization_id)")),
                 params={"organization_id": organization_id},
             )
             return self._read_scalar_result(result.one())
         except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:
-            raise DocumentDatabaseError() from e
-
-    # ──────────────────────────────────────
-    #  DocumentCommandRepository
-    # ──────────────────────────────────────
-
-    async def replace_document_services(self, doc_id: int, service_items: Sequence[DocumentServiceTable]) -> Sequence[DocumentServiceTable]:
-        """Reemplaza el conjunto de servicios asociados a un documento."""
-        try:
-            await self.session.exec(delete(DocumentServiceTable).where(col(DocumentServiceTable.document_id) == doc_id))
-
-            if service_items:
-                self.session.add_all(service_items)
-
-            await self.session.commit()
-            query = select(DocumentServiceTable).where(col(DocumentServiceTable.document_id) == doc_id).order_by(col(DocumentServiceTable.id))
-            result = await self.session.exec(statement=query)
-            return result.all()
-
-        except (SQLAlchemyTimeoutError, OperationalError) as e:
-            await self.session.rollback()
-            logger.debug(f"OperationalError replacing services for document {doc_id}: {e}")
-            raise DocumentDatabaseUnavailableError() from e
-        except SQLAlchemyError as e:
-            await self.session.rollback()
-            logger.debug(f"SQLAlchemyError replacing services for document {doc_id}: {e}")
             raise DocumentDatabaseError() from e

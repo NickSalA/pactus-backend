@@ -1,7 +1,7 @@
 """Domain entities for chatbot module."""
 
-from typing import Any
 from datetime import UTC, datetime
+from typing import Any
 
 from pydantic import BaseModel, field_validator
 from sqlalchemy import Column, DateTime, Integer, String

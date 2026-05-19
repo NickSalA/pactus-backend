@@ -60,13 +60,17 @@ class PostgresBaseRepository[T: BaseTable](BaseRepository[T]):
             logger.debug(f"SQLAlchemyError al guardar {self.model.__name__}: {e}")
             raise InternalServerError("Error al acceder a la base de datos relacional") from e
 
-    async def get_all(self, filters: dict[str, Any] | None = None) -> Sequence[T]:
-        """Lista entidades, opcionalmente filtrando por campos específicos."""
+    async def get_all(self, filters: dict[str, Any] | None = None, limit: int | None = None, offset: int | None = None) -> Sequence[T]:
+        """Lista entidades, opcionalmente filtrando por campos específicos y con paginación."""
         try:
             query = select(self.model).order_by(asc(column=self.model.id))
             if filters:
                 for field, value in filters.items():
                     query = query.where(getattr(self.model, field) == value)
+            if offset is not None:
+                query = query.offset(offset)
+            if limit is not None:
+                query = query.limit(limit)
             result = await self.session.exec(statement=query)
             return result.all()
         except (SQLAlchemyTimeoutError, OperationalError) as e:

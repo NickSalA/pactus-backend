@@ -8,7 +8,8 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError, TimeoutError as SQ
 
 from contractai_backend.core.exceptions.base import ServiceUnavailableError
 from contractai_backend.modules.documents.application.dto import ContractQueryDTO
-from contractai_backend.modules.documents.domain import DocumentServiceTable, DocumentTable, ServiceTable
+from contractai_backend.modules.catalog.domain.entities import ServiceTable
+from contractai_backend.modules.documents.domain import CompanyContractTable, DocumentServiceTable, DocumentTable
 from contractai_backend.modules.documents.domain.exceptions import DocumentDatabaseError, DocumentDatabaseUnavailableError
 from contractai_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
 from contractai_backend.modules.documents.infrastructure.postgres_repo import SQLModelDocumentRepository
@@ -18,9 +19,7 @@ def _make_doc(id: int = 1) -> DocumentTable:
     return DocumentTable(
         id=id,
         organization_id=1,
-        name="Contrato Test",
-        client="Cliente Test",
-        type=DocumentType.COMPANY,
+        type="manual_upload",
         start_date=date(2024, 1, 1),
         end_date=date(2024, 12, 31),
         form_data={"value": 120.0, "currency": "PEN"},
@@ -31,7 +30,7 @@ def _make_doc(id: int = 1) -> DocumentTable:
 def _make_document_service(id: int = 1) -> DocumentServiceTable:
     return DocumentServiceTable(
         id=id,
-        document_id=1,
+        company_contract_id=id,
         service_id=2,
         description="Hosting",
         value=120.0,
@@ -78,7 +77,7 @@ class TestSearchContracts:
 
         statement = session.exec.await_args.kwargs["statement"]
         compiled = statement.compile()
-        assert "documents_services" in str(statement)
+        assert "company_contract_services" in str(statement)
         assert "services" in str(statement)
         assert any(value == "%hosting%" for value in compiled.params.values())
 
@@ -122,7 +121,7 @@ class TestCountContracts:
 
         statement = session.exec.await_args.kwargs["statement"]
         compiled = statement.compile()
-        assert "documents_services" in str(statement)
+        assert "company_contract_services" in str(statement)
         assert any(value == 2 for value in compiled.params.values())
 
 
@@ -175,7 +174,7 @@ class TestRankContractsByClient:
 
         statement = session.exec.await_args.kwargs["statement"]
         compiled = statement.compile()
-        assert "documents_services" in str(statement)
+        assert "company_contract_services" in str(statement)
         assert "services" in str(statement)
         assert any(value == 2 for value in compiled.params.values())
         assert any(value == "%hosting%" for value in compiled.params.values())
@@ -228,9 +227,8 @@ class TestGetDocumentServicesByDocumentIds:
         repo, session = _make_repo()
         first_item = _make_document_service(1)
         second_item = _make_document_service(2)
-        second_item.document_id = 2
         result_mock = MagicMock()
-        result_mock.all.return_value = [first_item, second_item]
+        result_mock.all.return_value = [(first_item, 1), (second_item, 2)]
         session.exec.return_value = result_mock
 
         result = await repo.get_document_services_by_document_ids(document_ids=[1, 2])
@@ -253,15 +251,17 @@ class TestReplaceDocumentServices:
     async def test_replaces_services_and_commits(self):
         repo, session = _make_repo()
         service_items = [_make_document_service()]
+        company_contract_result = MagicMock()
+        company_contract_result.first.return_value = CompanyContractTable(id=1, document_id=1, client="Cliente Test")
         delete_result = MagicMock()
         select_result = MagicMock()
         select_result.all.return_value = service_items
-        session.exec.side_effect = [delete_result, select_result]
+        session.exec.side_effect = [company_contract_result, delete_result, select_result]
 
         result = await repo.replace_document_services(doc_id=1, service_items=service_items)
 
         assert result == service_items
-        assert session.exec.call_count == 2
+        assert session.exec.call_count == 3
         session.add_all.assert_called_once_with(service_items)
         session.commit.assert_called_once()
 
@@ -273,16 +273,18 @@ class TestReplaceDocumentServices:
         with pytest.raises(DocumentDatabaseError):
             await repo.replace_document_services(doc_id=1, service_items=[])
 
-        session.rollback.assert_called_once()
+        session.rollback.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_replaces_multiple_services_and_returns_reloaded_rows(self):
         repo, session = _make_repo()
         service_items = [_make_document_service(1), _make_document_service(2)]
+        company_contract_result = MagicMock()
+        company_contract_result.first.return_value = CompanyContractTable(id=1, document_id=1, client="Cliente Test")
         delete_result = MagicMock()
         select_result = MagicMock()
         select_result.all.return_value = service_items
-        session.exec.side_effect = [delete_result, select_result]
+        session.exec.side_effect = [company_contract_result, delete_result, select_result]
 
         result = await repo.replace_document_services(doc_id=1, service_items=service_items)
 

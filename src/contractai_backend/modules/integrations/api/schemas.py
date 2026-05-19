@@ -1,3 +1,5 @@
+"""HTTP schemas for third-party integration endpoints."""
+
 from pydantic import BaseModel, Field
 
 from ...documents.api.schemas import CreateDocumentDraftRequest

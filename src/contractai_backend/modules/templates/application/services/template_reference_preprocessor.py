@@ -94,9 +94,9 @@ class TemplateReferencePreprocessor:
                 clean_chars=0,
                 clean_text="",
                 prompt_text="",
-                section_titles=tuple(),
-                clause_sequence=tuple(),
-                structure_sequence=tuple(),
+                section_titles=(),
+                clause_sequence=(),
+                structure_sequence=(),
             )
 
         repeated_lines = self._find_repeated_lines(page_lines)
@@ -109,9 +109,9 @@ class TemplateReferencePreprocessor:
                 clean_chars=0,
                 clean_text="",
                 prompt_text="",
-                section_titles=tuple(),
-                clause_sequence=tuple(),
-                structure_sequence=tuple(),
+                section_titles=(),
+                clause_sequence=(),
+                structure_sequence=(),
             )
 
         sections = self._split_sections(flat_lines)
@@ -236,10 +236,8 @@ class TemplateReferencePreprocessor:
         """Builds prompt sections without compact truncation."""
         prompt_sections: list[tuple[int, str, str]] = []
         for index, (title, body) in enumerate(sections):
-            normalized_body = body.strip()
-            if not normalized_body:
-                continue
-            prompt_sections.append((index, title, normalized_body))
+            if normalized_body := body.strip():
+                prompt_sections.append((index, title, normalized_body))
         return prompt_sections
 
     def _find_best_section_window(
@@ -297,9 +295,7 @@ class TemplateReferencePreprocessor:
 
     def _compose_full_clean_prompt(self, clean_text: str) -> str:
         """Builds the prompt payload for short documents."""
-        if not clean_text:
-            return ""
-        return f"FULL_CLEAN_REFERENCE:\n{clean_text}"
+        return f"FULL_CLEAN_REFERENCE:\n{clean_text}" if clean_text else ""
 
     def _score_section(self, title: str, body: str, index: int) -> int:
         """Scores a section based on likely drafting relevance."""
@@ -348,21 +344,18 @@ class TemplateReferencePreprocessor:
             if not line:
                 continue
 
-            heading_match = MARKDOWN_HEADING_PATTERN.match(line)
-            if heading_match:
+            if heading_match := MARKDOWN_HEADING_PATTERN.match(line):
                 title = heading_match.group("title").strip().strip("*")
                 markers.append(f"HEADING:{self._normalize_clause_label(title)}")
                 continue
 
-            named_match = NAMED_STRUCTURE_PATTERN.match(line.strip("*"))
-            if named_match:
+            if named_match := NAMED_STRUCTURE_PATTERN.match(line.strip("*")):
                 prefix = self._normalize_clause_label(named_match.group("prefix"))
                 identifier = self._normalize_clause_label(named_match.group("identifier"))
                 markers.append(f"{prefix}:{identifier}")
                 continue
 
-            clause_match = CLAUSE_LABEL_PATTERN.search(line)
-            if clause_match:
+            if clause_match := CLAUSE_LABEL_PATTERN.search(line):
                 label = self._normalize_clause_label(clause_match.group("label"))
                 markers.append(f"CLAUSE:{label}")
 
@@ -372,17 +365,14 @@ class TemplateReferencePreprocessor:
         """Normalizes clause labels for consistent comparison."""
         normalized = unicodedata.normalize("NFD", label)
         normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
-        normalized = re.sub(r"\s+", " ", normalized).strip().upper()
-        return normalized
+        return re.sub(r"\s+", " ", normalized).strip().upper()
 
     def _format_section(self, title: str, body: str) -> str:
         """Formats a selected section for the prompt."""
-        body = body.strip()
-        if not body:
+        if body := body.strip():
+            return f"## {title}\n{body}" if title else body
+        else:
             return ""
-        if title:
-            return f"## {title}\n{body}"
-        return body
 
     def _truncate_text(self, text: str, limit: int) -> str:
         """Truncates text without cutting a word in the middle."""

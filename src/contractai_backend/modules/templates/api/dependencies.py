@@ -2,16 +2,19 @@
 
 from typing import Annotated
 
+import httpx
 from fastapi import Depends
+from qdrant_client import AsyncQdrantClient, QdrantClient
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from ....shared.infrastructure.database import get_session
-from ...documents.api.dependencies import get_document_command_service
+from ....shared.infrastructure.database import get_aclient, get_client, get_session
+from ....shared.infrastructure.http import get_http_client
 from ...documents.application.repositories import DocumentExtractor
 from ...documents.application.services import DocumentCommandService
-from ...documents.infrastructure import LlamaParseExtractor
-from ...organizations.api.dependencies import get_organization_service
+from ...documents.composition import build_default_document_command_service, build_default_document_extractor
 from ...organizations.application.services.organization_service import OrganizationService
+from ...organizations.composition import build_organization_service
+from ...organizations.infrastructure.postgres_repo import SQLModelOrganizationRepository
 from ..application.repositories import (
     IDocumentGenerator,
     IDocumentModuleAdapter,
@@ -34,8 +37,8 @@ from ..infrastructure import (
 )
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
-DocumentServiceDep = Annotated[DocumentCommandService, Depends(get_document_command_service)]
-OrganizationDep = Annotated[OrganizationService, Depends(get_organization_service)]
+AsyncQdrantDep = Annotated[AsyncQdrantClient, Depends(get_aclient)]
+SyncQdrantDep = Annotated[QdrantClient, Depends(get_client)]
 
 
 async def get_template_repository(session: SessionDep) -> ITemplateRepository:
@@ -46,6 +49,25 @@ async def get_template_repository(session: SessionDep) -> ITemplateRepository:
 async def get_template_format_repository(session: SessionDep) -> ITemplateFormatRepository:
     """Devuelve una instancia del repositorio de formatos de plantilla."""
     return SQLModelTemplateFormatRepository(session=session)
+
+
+async def get_document_command_service(
+    session: SessionDep,
+    async_qdrant: AsyncQdrantDep,
+    sync_qdrant: SyncQdrantDep,
+    client: Annotated[httpx.AsyncClient, Depends(get_http_client)],
+) -> DocumentCommandService:
+    """Builds the document service needed by template generation."""
+    return build_default_document_command_service(session=session, async_qdrant=async_qdrant, sync_qdrant=sync_qdrant, http_client=client)
+
+
+async def get_organization_service(session: SessionDep) -> OrganizationService:
+    """Builds the organization service needed by template rendering."""
+    return build_organization_service(repository=SQLModelOrganizationRepository(session=session))
+
+
+DocumentServiceDep = Annotated[DocumentCommandService, Depends(get_document_command_service)]
+OrganizationDep = Annotated[OrganizationService, Depends(get_organization_service)]
 
 
 async def get_document_module_adapter(doc_service: DocumentServiceDep) -> IDocumentModuleAdapter:
@@ -70,7 +92,7 @@ async def get_document_generator() -> IDocumentGenerator:
 
 async def get_document_extractor() -> DocumentExtractor:
     """Devuelve una instancia del extractor de documentos."""
-    return LlamaParseExtractor()
+    return build_default_document_extractor()
 
 
 async def get_template_draft_generator() -> ITemplateDraftGenerator:

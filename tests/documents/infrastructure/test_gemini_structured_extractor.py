@@ -1,6 +1,6 @@
 """Tests for GeminiDocumentStructuredExtractor prompt rules."""
 
-from contractai_backend.modules.documents.domain import ServiceTable
+from contractai_backend.modules.catalog.domain.entities import ServiceTable
 from contractai_backend.modules.documents.infrastructure.gemini_structured_extractor import GeminiDocumentStructuredExtractor
 
 

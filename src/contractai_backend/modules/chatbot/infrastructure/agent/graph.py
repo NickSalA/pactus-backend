@@ -1,7 +1,7 @@
 """Graph definition for the ContractAI chatbot agent."""
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from functools import partial
 from typing import Any
 
@@ -56,7 +56,7 @@ def _get_permission_tool(tools: Sequence[BaseTool], tool_name: str) -> BaseTool 
     return next((tool for tool in tools if tool.name == tool_name), None)
 
 
-def _get_allowed_document_types(user_context: dict[str, Any], access_decision) -> set[str] | None:
+def _get_allowed_document_types(user_context: Mapping[str, Any], access_decision) -> set[str] | None:
     if access_decision.allowed_document_types is not None:
         return {document_type.value for document_type in access_decision.allowed_document_types}
 
@@ -114,7 +114,7 @@ def _build_permission_clarification_response(party_candidate: str, allowed_match
 
 async def _resolve_named_party_access(
     message: str,
-    user_context: dict[str, Any],
+    user_context: Mapping[str, Any],
     access_decision,
     tools: Sequence[BaseTool],
 ) -> dict[str, Any] | None:
@@ -331,8 +331,9 @@ async def call_model(state: AgentState, llm: Runnable):
     return {"messages": [response]}
 
 
-def finalize_response(_: AgentState):
+def finalize_response(state: AgentState):
     """N3: explicit final response node."""
+    del state
     return {}
 
 

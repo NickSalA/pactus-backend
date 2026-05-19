@@ -34,4 +34,4 @@ class OrganizationMemberNotificationsUpdateRequest(BaseModel):
 
 
 class OrganizationMemberResponse(UserResponse):
-    pass
+    """HTTP response body for organization members."""

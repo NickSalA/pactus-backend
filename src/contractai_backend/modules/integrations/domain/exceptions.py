@@ -1,5 +1,6 @@
 from contractai_backend.core.exceptions.base import AppError
 
+
 class CloudStorageIntegrationError(AppError):
     def __init__(self, message: str = "Error al comunicarse con el proveedor de almacenamiento en la nube."):
         super().__init__(message=message, status_code=502)

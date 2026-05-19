@@ -47,10 +47,12 @@ class RenderedContractFormatter:
     def format(self, markdown: str, *, document_type: DocumentType, payload: dict[str, Any]) -> str:
         """Formats rendered markdown for output-specific presentation."""
         normalized_markdown = self.strip_signature_blocks(markdown)
-        signature_block = self._build_signature_block(document_type=document_type, payload=payload)
-        if not signature_block:
+        if signature_block := self._build_signature_block(
+            document_type=document_type, payload=payload
+        ):
+            return f"{normalized_markdown}\n\n{signature_block}" if normalized_markdown else signature_block
+        else:
             return normalized_markdown
-        return f"{normalized_markdown}\n\n{signature_block}" if normalized_markdown else signature_block
 
     def strip_signature_blocks(self, markdown: str) -> str:
         """Removes generated or legacy signature sections from markdown."""
@@ -105,8 +107,10 @@ class RenderedContractFormatter:
             return True
         if self.CLOSING_LINE_PATTERN.match(stripped):
             return False
-        alpha_count = sum(1 for char in stripped if char.isalpha())
-        uppercase_ratio = sum(1 for char in stripped if char.isupper()) / max(1, alpha_count)
+        alpha_count = sum(bool(char.isalpha())
+                        for char in stripped)
+        uppercase_ratio = sum(bool(char.isupper())
+                        for char in stripped) / max(1, alpha_count)
         if len(stripped) <= 60 and uppercase_ratio >= 0.35:
             return True
         if len(stripped) > 90:
@@ -213,8 +217,7 @@ class RenderedContractFormatter:
             if value is None:
                 continue
             if isinstance(value, str):
-                cleaned = value.strip()
-                if cleaned:
+                if cleaned := value.strip():
                     return cleaned
                 continue
             return str(value)

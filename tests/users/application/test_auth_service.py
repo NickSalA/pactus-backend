@@ -46,21 +46,19 @@ class TestAuthenticateUser:
         repo.save.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_creates_user_when_not_found(self):
+    async def test_rejects_user_when_not_found(self):
         ext_user = _make_external_user(full_name="Test User")
-        new_user = _make_db_user(supabase_user_id=ext_user.id, full_name="Test User")
 
         jwt = AsyncMock()
         jwt.get_authenticated_user.return_value = ext_user
         repo = AsyncMock()
         repo.get_by_email.return_value = None
-        repo.save.return_value = new_user
 
         service = _make_service(jwt, repo)
-        result = await service.authenticate_user("token")
+        with pytest.raises(ForbiddenError):
+            await service.authenticate_user("token")
 
-        repo.save.assert_called_once()
-        assert result == new_user
+        repo.save.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_inactive_user_raises_forbidden(self):

@@ -2,15 +2,15 @@
 
 from collections.abc import Sequence
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
+from ....catalog.application.repositories import ServiceRepository
 from ....users.domain.value_objs import UserRole
-from ...domain import DocumentServiceTable, DocumentTable
+from ...domain import CompanyContractServiceTable, DocumentTable
 from ...domain.access_policy import can_read_document_type, get_readable_document_types
 from ...domain.value_objs import DocumentState, DocumentType
 from ..dto import ContractQueryDTO
 from ..repositories import DocumentQueryRepository
-from ....catalog.application.repositories import ServiceRepository
 
 DEFAULT_LIST_LIMIT = 20
 MAX_LIST_LIMIT = 50
@@ -22,7 +22,7 @@ class ContractQueryService:
 
     def __init__(self, sql_repo: DocumentQueryRepository, service_repo: ServiceRepository | None = None):
         self.sql_repo = sql_repo
-        self.service_repo = service_repo or sql_repo
+        self.service_repo = service_repo or cast(ServiceRepository, sql_repo)
 
     @staticmethod
     def _clamp_limit(limit: int | None) -> int:
@@ -59,9 +59,7 @@ class ContractQueryService:
     def has_required_chatbot_contract_data(document: DocumentTable) -> bool:
         form_data = document.form_data if isinstance(document.form_data, dict) else {}
         return (
-            document.name is not None
-            and document.client is not None
-            and document.type is not None
+            document.type is not None
             and document.start_date is not None
             and document.end_date is not None
             and form_data.get("value") is not None
@@ -80,7 +78,7 @@ class ContractQueryService:
 
     @staticmethod
     def _serialize_service_item(
-        service_item: DocumentServiceTable,
+        service_item: CompanyContractServiceTable,
         service_names: dict[int, str],
     ) -> dict[str, Any]:
         return {
@@ -98,7 +96,7 @@ class ContractQueryService:
         cls,
         document: DocumentTable,
         today: date,
-        service_items: Sequence[DocumentServiceTable] | None = None,
+        service_items: Sequence[CompanyContractServiceTable] | None = None,
         service_names: dict[int, str] | None = None,
     ) -> dict[str, Any]:
         form_data = document.form_data if isinstance(document.form_data, dict) else {}
@@ -107,8 +105,8 @@ class ContractQueryService:
 
         return {
             "id": document.id,
-            "name": document.name,
-            "client": document.client,
+            "name": document.file_name,
+            "client": None,
             "type": document.type.value if document.type is not None and hasattr(document.type, "value") else document.type,
             "state": document.state.value if document.state is not None and hasattr(document.state, "value") else document.state,
             "start_date": cls._serialize_optional_date(document.start_date),
@@ -126,7 +124,7 @@ class ContractQueryService:
         self,
         organization_id: int,
         documents: Sequence[DocumentTable],
-    ) -> tuple[dict[int, Sequence[DocumentServiceTable]], dict[int, str]]:
+    ) -> tuple[dict[int, Sequence[CompanyContractServiceTable]], dict[int, str]]:
         document_ids = [document.id for document in documents if document.id is not None]
         if not document_ids:
             return {}, {}

@@ -10,7 +10,9 @@ from ....documents.application.repositories import DocumentExtractor
 from ....documents.domain import DocumentType
 from ....documents.domain.access_policy import can_write_document_type
 from ....users.domain.value_objs import UserRole
-from ...api.schemas import (
+from ...domain.entities import TemplateContent, TemplateField, TemplateFormatTable, TemplateTable
+from ...domain.value_objs import TemplateGenerationMode, TemplateState
+from ..dto import (
     CreateTemplateRequest,
     GenerateTemplateDraftRequest,
     PersistedTemplateDraftResponse,
@@ -22,8 +24,6 @@ from ...api.schemas import (
     UpdateTemplateRequest,
     build_template_response,
 )
-from ...domain.entities import TemplateContent, TemplateField, TemplateFormatTable, TemplateTable
-from ...domain.value_objs import TemplateGenerationMode, TemplateState
 from ..repositories import IOrganizationRepository, ITemplateFormatRepository, ITemplateRenderer, ITemplateRepository
 from ..repositories.base_draft_generator import ITemplateDraftGenerator
 from .rendered_contract_formatter import RenderedContractFormatter
@@ -484,8 +484,7 @@ class TemplateAuthoringService:
                 retry_feedback = [str(exc)]
                 continue
 
-            raw_field_issues = self._extract_raw_field_issues(draft)
-            if raw_field_issues:
+            if raw_field_issues := self._extract_raw_field_issues(draft):
                 if attempt == max_attempts - 1:
                     self._finalize_draft(draft, backend_warnings, preparation_warnings, raw_field_issues)
                     return draft, attempt
@@ -783,9 +782,7 @@ class TemplateAuthoringService:
             return None
         if company_score >= labor_score + 2:
             return DocumentType.COMPANY
-        if labor_score >= company_score + 2:
-            return DocumentType.LABOR
-        return None
+        return DocumentType.LABOR if labor_score >= company_score + 2 else None
 
     def _score_classifier_patterns(self, text: str, patterns: tuple[tuple[str, int], ...]) -> int:
         """Scores a normalized reference text using weighted regex patterns."""
@@ -803,9 +800,9 @@ class TemplateAuthoringService:
 
     def _build_mock_payload(self, fields: list[TemplateField]) -> dict[str, Any]:
         """Builds mock payload values for preview."""
-        payload: dict[str, Any] = {}
-        for field in fields:
-            payload[field.key] = self._mock_value(field)
+        payload: dict[str, Any] = {
+            field.key: self._mock_value(field) for field in fields
+        }
         return payload
 
     def _mock_value(self, field: TemplateField) -> Any:
@@ -816,6 +813,4 @@ class TemplateAuthoringService:
             return "09:00"
         if field.type == "number":
             return 1000
-        if field.type == "boolean":
-            return True
-        return field.label
+        return True if field.type == "boolean" else field.label

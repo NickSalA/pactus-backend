@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from langchain.chat_models import BaseChatModel
 from langchain_core.tools import BaseTool
 from langchain_openai import AzureChatOpenAI
+from pydantic import SecretStr
 
 from .....shared.config import settings
 from ...domain import LLMInitializationError
@@ -16,7 +17,7 @@ def get_llm() -> AzureChatOpenAI:
         return AzureChatOpenAI(
             api_version="2024-12-01-preview",
             azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
-            api_key=settings.AZURE_OPENAI_API_KEY,
+            api_key=SecretStr(settings.AZURE_OPENAI_API_KEY),
             temperature=settings.MODEL_TEMPERATURE,
             azure_deployment=settings.AZURE_OPENAI_DEPLOYMENT,
         )

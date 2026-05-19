@@ -1,12 +1,12 @@
-import io
 import asyncio
+import io
 
 from google.auth.exceptions import GoogleAuthError
 from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload
-from google_auth_oauthlib.flow import Flow
 
 from contractai_backend.modules.integrations.application import ICloudIntegrationProvider
 from contractai_backend.modules.integrations.domain import CloudFileNotFoundError, CloudStorageIntegrationError, InvalidCloudTokenError
@@ -121,7 +121,7 @@ class GoogleDriveProvider(ICloudIntegrationProvider):
 
             done = False
             while not done:
-                status, done = downloader.next_chunk()
+                _status, done = downloader.next_chunk()
 
             return file_stream.getvalue()
         except HttpError as e:
