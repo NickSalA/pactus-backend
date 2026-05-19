@@ -30,7 +30,8 @@ from ..infrastructure import (
     GeminiDocumentStructuredExtractor,
     LlamaIndexQdrantRepository,
     LlamaParseExtractor,
-    SQLModelDocumentRepository,
+    SQLModelDocumentCommandRepository,
+    SQLModelDocumentQueryRepository,
     SupabaseStorageRepository,
     VectorChunkMetadataEnricher,
 )
@@ -40,23 +41,18 @@ AsyncQdrantDep = Annotated[AsyncQdrantClient, Depends(get_aclient)]
 SyncQdrantDep = Annotated[QdrantClient, Depends(get_client)]
 
 
-async def get_document_relational_repository(session: SessionDep) -> SQLModelDocumentRepository:
-    """Construye el repositorio SQL de documentos."""
-    return SQLModelDocumentRepository(session=session)
-
-
 async def get_document_query_repository(
-    repo: Annotated[SQLModelDocumentRepository, Depends(get_document_relational_repository)],
+    session: SessionDep,
 ) -> DocumentQueryRepository:
-    """Exposes the SQL repo through the query port."""
-    return repo
+    """Construye el repositorio SQL de consultas para documentos."""
+    return SQLModelDocumentQueryRepository(session=session)
 
 
 async def get_document_command_repository(
-    repo: Annotated[SQLModelDocumentRepository, Depends(get_document_relational_repository)],
+    session: SessionDep,
 ) -> DocumentCommandRepository:
-    """Exposes the SQL repo through the command port."""
-    return repo
+    """Construye el repositorio SQL de comandos para documentos."""
+    return SQLModelDocumentCommandRepository(session=session)
 
 
 async def get_vector_repository(async_qdrant: AsyncQdrantDep, sync_qdrant: SyncQdrantDep) -> VectorRepository:
@@ -133,6 +129,7 @@ async def get_document_command_service(
         folder_repo=folder_repo,
         structured_extractor=structured_extractor,
     )
+
 
 async def get_document_query_service(sql_repo: DocumentQueryRepoDep) -> DocumentQueryService:
     """Construye un servicio de lectura para documentos."""

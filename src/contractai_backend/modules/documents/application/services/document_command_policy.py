@@ -73,7 +73,5 @@ class DocumentCommandPolicy:
         requested_ids = [item.service_id for item in service_items]
         existing_services = await self.service_repo.get_services_by_ids(organization_id=organization_id, service_ids=requested_ids)
         existing_ids = {service.id for service in existing_services if service.id is not None}
-        missing_ids = sorted(set(requested_ids) - existing_ids)
-
-        if missing_ids:
+        if missing_ids := sorted(set(requested_ids) - existing_ids):
             raise DocumentValidationError(message=f"Los servicios con IDs {missing_ids} no existen o no pertenecen a la organización actual.")

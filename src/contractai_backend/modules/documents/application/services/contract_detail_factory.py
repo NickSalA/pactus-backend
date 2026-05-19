@@ -23,10 +23,8 @@ class ContractDetailFactory:
     @staticmethod
     def first_text_value(*values: Any) -> str | None:
         """Returns the first non-empty stripped text value."""
-        for value in values:
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-        return None
+        stripped_values = (v.strip() for v in values if isinstance(v, str))
+        return next((v for v in stripped_values if v), None)
 
     @staticmethod
     def first_float_value(*values: Any) -> float | None:

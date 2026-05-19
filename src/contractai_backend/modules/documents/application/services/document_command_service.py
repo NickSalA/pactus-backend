@@ -1,5 +1,7 @@
 """DocumentCommandService: orchestrates document writes and file access."""
 
+
+import contextlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -178,9 +180,7 @@ class DocumentCommandService:
             return extracted_data.type
         if user_role == UserRole.HR:
             return DocumentType.LABOR
-        if user_role == UserRole.MANAGER:
-            return DocumentType.COMPANY
-        return None
+        return DocumentType.COMPANY if user_role == UserRole.MANAGER else None
 
     @classmethod
     def _resolve_vector_index_names(cls, primary_index_name: str) -> tuple[str, ...]:
@@ -270,28 +270,27 @@ class DocumentCommandService:
         if document_start_date is None or document_end_date is None:
             return []
 
-        candidates: list[DocumentServiceItemRequest] = []
-        for item in extracted_data.service_items:
-            if item.service_id is None or item.value is None or item.currency is None or item.start_date is None or item.end_date is None:
-                continue
-
-            candidates.append(
-                DocumentServiceItemRequest(
-                    service_id=item.service_id,
-                    description=item.description,
-                    value=item.value,
-                    currency=item.currency,
-                    start_date=item.start_date,
-                    end_date=item.end_date,
-                )
+        candidates: list[DocumentServiceItemRequest] = [
+            DocumentServiceItemRequest(
+                service_id=item.service_id,
+                description=item.description,
+                value=item.value,
+                currency=item.currency,
+                start_date=item.start_date,
+                end_date=item.end_date,
             )
-
+            for item in extracted_data.service_items
+            if item.service_id is not None
+            and item.value is not None
+            and item.currency is not None
+            and item.start_date is not None
+            and item.end_date is not None
+        ]
         service_id_counts: dict[int, int] = {}
         for item in candidates:
             service_id_counts[item.service_id] = service_id_counts.get(item.service_id, 0) + 1
 
-        duplicated_service_ids = {service_id for service_id, count in service_id_counts.items() if count > 1}
-        if duplicated_service_ids:
+        if duplicated_service_ids := {service_id for service_id, count in service_id_counts.items() if count > 1}:
             logger.debug(
                 "Discarding duplicated extracted service_ids for document import: {}",
                 sorted(duplicated_service_ids),
@@ -330,22 +329,14 @@ class DocumentCommandService:
 
         return valid_candidates
 
-    async def _prepare_create_data(
+    def _resolve_document_core_fields(
         self,
         *,
         data: CreateDocumentRequest | CreateDocumentDraftRequest,
-        organization_id: int,
         extracted_data: ExtractedDocumentData,
-        user_role: UserRole | None,
-    ) -> tuple[DocumentTable, list[DocumentServiceItemRequest], dict[str, Any], DocumentType | None]:
-        is_draft_request = self._is_draft_request(data)
-        resolved_type = self._resolve_contract_kind(
-            requested_contract_type=data.contract_type,
-            requested_type=data.type,
-            extracted_data=extracted_data,
-            user_role=user_role,
-        )
-        resolved_source_type = self._normalize_source_type(data.type, data.form_data)
+        resolved_type: DocumentType | None,
+        is_draft_request: bool,
+    ) -> tuple[str | None, str | None, Any, Any, DocumentState | None]:
         resolved_client = (
             data.client if data.client is not None else self._resolve_extracted_client(extracted_data=extracted_data, resolved_type=resolved_type)
         )
@@ -359,17 +350,22 @@ class DocumentCommandService:
         resolved_end_date = data.end_date if data.end_date is not None else extracted_data.end_date
         resolved_state = data.state if data.state is not None else (DocumentState.DRAFT if is_draft_request else None)
 
-        normalized_form_data = dict(data.form_data or {})
-        normalized_form_data = self._apply_extracted_form_data(
-            normalized_form_data=normalized_form_data,
-            extracted_data=extracted_data,
-            resolved_type=resolved_type,
-        )
+        return resolved_client, resolved_name, resolved_start_date, resolved_end_date, resolved_state
 
-        manual_service_items = list(data.service_items)
-        if manual_service_items and resolved_type != DocumentType.COMPANY:
-            raise DocumentValidationError(message="Solo los contratos company pueden registrar servicios.")
+    async def _process_service_items(
+        self,
+        *,
+        manual_service_items: list[DocumentServiceItemRequest],
+        resolved_type: DocumentType | None,
+        resolved_start_date: Any,
+        resolved_end_date: Any,
+        organization_id: int,
+        extracted_data: ExtractedDocumentData,
+        normalized_form_data: dict[str, Any],
+    ) -> tuple[list[DocumentServiceItemRequest], dict[str, Any]]:
         if manual_service_items:
+            if resolved_type != DocumentType.COMPANY:
+                raise DocumentValidationError(message="Solo los contratos company pueden registrar servicios.")
             if resolved_start_date is None or resolved_end_date is None:
                 raise DocumentValidationError(message="Las fechas del contrato son obligatorias cuando se registran servicios.")
 
@@ -406,6 +402,45 @@ class DocumentCommandService:
                     normalized_form_data["value"] = summarized_form_data.get("value")
                 if normalized_form_data.get("currency") is None:
                     normalized_form_data["currency"] = summarized_form_data.get("currency")
+
+        return resolved_service_items, normalized_form_data
+
+    async def _prepare_create_data(
+        self,
+        *,
+        data: CreateDocumentRequest | CreateDocumentDraftRequest,
+        organization_id: int,
+        extracted_data: ExtractedDocumentData,
+        user_role: UserRole | None,
+    ) -> tuple[DocumentTable, list[DocumentServiceItemRequest], dict[str, Any], DocumentType | None]:
+        is_draft_request = self._is_draft_request(data)
+        resolved_type = self._resolve_contract_kind(
+            requested_contract_type=data.contract_type,
+            requested_type=data.type,
+            extracted_data=extracted_data,
+            user_role=user_role,
+        )
+        resolved_source_type = self._normalize_source_type(data.type, data.form_data)
+
+        resolved_client, resolved_name, resolved_start_date, resolved_end_date, resolved_state = self._resolve_document_core_fields(
+            data=data, extracted_data=extracted_data, resolved_type=resolved_type, is_draft_request=is_draft_request
+        )
+
+        normalized_form_data = self._apply_extracted_form_data(
+            normalized_form_data=dict(data.form_data or {}),
+            extracted_data=extracted_data,
+            resolved_type=resolved_type,
+        )
+
+        resolved_service_items, normalized_form_data = await self._process_service_items(
+            manual_service_items=list(data.service_items),
+            resolved_type=resolved_type,
+            resolved_start_date=resolved_start_date,
+            resolved_end_date=resolved_end_date,
+            organization_id=organization_id,
+            extracted_data=extracted_data,
+            normalized_form_data=normalized_form_data,
+        )
 
         if is_draft_request:
             normalized_form_data.setdefault("value", None)
@@ -693,9 +728,7 @@ class DocumentCommandService:
             await self.command_repo.upsert_company_contract(
                 ContractDetailFactory.build_company_contract_entity(document_id=document.id, data=data, extracted_data=None, form_data=form_data)
             )
-        if document_kind == DocumentType.LABOR and (
-            data.labor_contract is not None or data.client is not None or data.form_data is not None
-        ):
+        if document_kind == DocumentType.LABOR and (data.labor_contract is not None or data.client is not None or data.form_data is not None):
             await self.command_repo.upsert_labor_contract(
                 ContractDetailFactory.build_labor_contract_entity(document_id=document.id, data=data, extracted_data=None, form_data=form_data)
             )
@@ -758,11 +791,8 @@ class DocumentCommandService:
             updated_document = await self.command_repo.update(entity=document)
 
             if old_storage_path and old_storage_path != new_storage_path:
-                try:
+                with contextlib.suppress(Exception):
                     await self.external_resources.delete_file_safely(old_storage_path)
-                except Exception:
-                    pass
-
             await self.query_repo.sync_contract_states(organization_id=organization_id)
 
             if updated_document.id is not None:
@@ -774,11 +804,8 @@ class DocumentCommandService:
 
         except Exception as exc:
             if new_storage_path:
-                try:
+                with contextlib.suppress(Exception):
                     await self.external_resources.delete_file_safely(new_storage_path)
-                except Exception:
-                    pass
-
             raise DocumentTransactionError(operation="update", details=str(object=exc)) from exc
 
     async def update_document(

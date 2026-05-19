@@ -22,7 +22,8 @@ from .infrastructure import (
     GeminiDocumentStructuredExtractor,
     LlamaIndexQdrantRepository,
     LlamaParseExtractor,
-    SQLModelDocumentRepository,
+    SQLModelDocumentCommandRepository,
+    SQLModelDocumentQueryRepository,
     SupabaseStorageRepository,
     VectorChunkMetadataEnricher,
 )
@@ -59,9 +60,9 @@ def build_document_query_service(query_repo: DocumentQueryRepository) -> Documen
     return DocumentQueryService(sql_repo=query_repo)
 
 
-def build_default_document_repository(session: AsyncSession) -> SQLModelDocumentRepository:
-    """Builds the default SQL document repository without exposing infrastructure imports to other modules."""
-    return SQLModelDocumentRepository(session=session)
+def build_default_document_repository(session: AsyncSession) -> SQLModelDocumentQueryRepository:
+    """Builds the default SQL document query repository without exposing infrastructure imports to other modules."""
+    return SQLModelDocumentQueryRepository(session=session)
 
 
 def build_default_document_extractor() -> DocumentExtractor:
@@ -77,10 +78,9 @@ def build_default_document_command_service(
     http_client: httpx.AsyncClient,
 ) -> DocumentCommandService:
     """Builds the default production document command service graph."""
-    sql_repo = SQLModelDocumentRepository(session=session)
     return build_document_command_service(
-        command_repo=sql_repo,
-        query_repo=sql_repo,
+        command_repo=SQLModelDocumentCommandRepository(session=session),
+        query_repo=SQLModelDocumentQueryRepository(session=session),
         service_repo=SQLModelServiceRepository(session=session),
         folder_repo=SQLModelFolderRepository(session=session),
         vector_repo=LlamaIndexQdrantRepository(async_client=async_qdrant, sync_client=sync_qdrant),

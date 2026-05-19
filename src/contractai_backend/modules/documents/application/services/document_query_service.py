@@ -35,12 +35,16 @@ class DocumentQueryService:
         all_document_ids = [document.id for document in all_documents if document.id is not None]
         document_kinds = await self.sql_repo.get_contract_kinds_by_document_ids(document_ids=all_document_ids)
         documents = [document for document in all_documents if self._can_read_document_kind(document_kinds.get(document.id), user_role=user_role)]
-        document_ids = [document.id for document in documents if document.id is not None]
-        service_items_by_document = {}
-
-        if document_ids:
-            service_items_by_document = await self.sql_repo.get_document_services_by_document_ids(document_ids=document_ids)
-
+        if document_ids := [
+            document.id for document in documents if document.id is not None
+        ]:
+            service_items_by_document = (
+                await self.sql_repo.get_document_services_by_document_ids(
+                    document_ids=document_ids
+                )
+            )
+        else:
+            service_items_by_document = {}
         return await self.response_assembler.build_many(
             documents=documents,
             service_items_by_document=service_items_by_document,

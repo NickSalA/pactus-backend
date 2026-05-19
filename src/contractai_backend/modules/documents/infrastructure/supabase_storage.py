@@ -27,9 +27,7 @@ def sanitize_storage_filename(filename: str) -> str:
 
 def normalize_storage_document_type(document_type: DocumentType | None) -> str:
     """Maps document types to stable storage prefixes."""
-    if document_type is None:
-        return "untyped"
-    return document_type.value.lower()
+    return "untyped" if document_type is None else document_type.value.lower()
 
 
 def build_document_storage_path(
@@ -164,8 +162,7 @@ class SupabaseStorageRepository(DocumentStorageRepository):
             raise DocumentStorageError("Fallo al generar la URL firmada para el archivo del almacenamiento de documentos.")
 
         data = response.json()
-        signed_url = data.get("signedURL")
-        if not signed_url:
+        if signed_url := data.get("signedURL"):
+            return f"{self.base_url}/storage/v1{signed_url}"
+        else:
             raise DocumentStorageError("La respuesta del almacenamiento de documentos no contiene la URL firmada.")
-
-        return f"{self.base_url}/storage/v1{signed_url}"
