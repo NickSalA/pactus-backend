@@ -12,10 +12,13 @@ from contractai_backend.modules.documents.application.dto import (
     ExtractedDocumentServiceItem,
 )
 from contractai_backend.modules.documents.api.schemas import (
+    CompanyContractResponse,
     CreateDocumentDraftRequest,
     CreateDocumentRequest,
     DocumentServiceItemRequest,
+    DocumentResponse,
     FileRequest,
+    LaborContractResponse,
     UpdateDocumentRequest,
 )
 from contractai_backend.modules.documents.infrastructure.chunk_metadata_enricher import VectorChunkMetadataEnricher
@@ -67,10 +70,10 @@ def _make_doc(
     )
 
 
-def _make_document_service(id: int = 1, document_id: int = 1, service_id: int = 2) -> DocumentServiceTable:
+def _make_document_service(id: int = 1, company_contract_id: int = 1, service_id: int = 2) -> DocumentServiceTable:
     return DocumentServiceTable(
         id=id,
-        document_id=document_id,
+        company_contract_id=company_contract_id,
         service_id=service_id,
         description="Hosting administrado",
         value=250.0,
@@ -154,6 +157,42 @@ def _create_draft_request(**overrides) -> CreateDocumentDraftRequest:
 
 def _file_request() -> FileRequest:
     return FileRequest(content=b"pdf content", filename="file.pdf", content_type="application/pdf")
+
+
+class TestDocumentResponseContractDetails:
+    def test_document_response_accepts_company_and_labor_contract_details(self):
+        response = DocumentResponse(
+            id=1,
+            type="manual_upload",
+            start_date=date(2024, 1, 1),
+            end_date=date(2024, 12, 31),
+            form_data={},
+            state=DocumentState.ACTIVE,
+            company_contract=CompanyContractResponse(
+                id=1,
+                document_id=1,
+                ruc="20123456789",
+                client="Cliente SAC",
+                created_at=_make_doc().created_at,
+                updated_at=_make_doc().updated_at,
+            ),
+            labor_contract=LaborContractResponse(
+                id=2,
+                document_id=1,
+                worker_name="Ana Perez",
+                salary_value=2500.0,
+                salary_currency=CurrencyType.PEN,
+                created_at=_make_doc().created_at,
+                updated_at=_make_doc().updated_at,
+            ),
+            created_at=_make_doc().created_at,
+            updated_at=_make_doc().updated_at,
+        )
+
+        assert response.company_contract is not None
+        assert response.company_contract.client == "Cliente SAC"
+        assert response.labor_contract is not None
+        assert response.labor_contract.worker_name == "Ana Perez"
 
 
 class TestCreateDocument:
@@ -456,7 +495,7 @@ class TestCreateDocument:
         sql_repo = AsyncMock()
         sql_repo.save.return_value = saved
         sql_repo.update.return_value = updated
-        sql_repo.replace_document_services.return_value = [_make_document_service(document_id=1, service_id=2)]
+        sql_repo.replace_document_services.return_value = [_make_document_service(company_contract_id=1, service_id=2)]
         sql_repo.get_document_services.return_value = []
         sql_repo.get_services_by_ids.return_value = [ServiceTable(id=2, organization_id=1, name="Hosting")]
 
@@ -507,7 +546,7 @@ class TestCreateDocument:
         sql_repo = AsyncMock()
         sql_repo.save.return_value = saved
         sql_repo.update.return_value = updated
-        sql_repo.replace_document_services.return_value = [_make_document_service(document_id=1, service_id=2)]
+        sql_repo.replace_document_services.return_value = [_make_document_service(company_contract_id=1, service_id=2)]
         sql_repo.get_document_services.return_value = []
         sql_repo.get_services_by_ids.return_value = [ServiceTable(id=2, organization_id=1, name="Hosting")]
 
@@ -713,7 +752,7 @@ class TestCreateDocument:
         sql_repo = AsyncMock()
         sql_repo.save.return_value = saved
         sql_repo.update.return_value = updated
-        sql_repo.replace_document_services.return_value = [_make_document_service(document_id=1, service_id=3)]
+        sql_repo.replace_document_services.return_value = [_make_document_service(company_contract_id=1, service_id=3)]
         sql_repo.get_document_services.return_value = []
         sql_repo.get_services_by_ids.return_value = [
             ServiceTable(id=2, organization_id=1, name="Hosting"),
@@ -1147,7 +1186,7 @@ class TestContractQueryService:
         sql_repo = AsyncMock()
         sql_repo.count_contracts.side_effect = [3, 1]
         sql_repo.search_contracts.return_value = [_make_doc()]
-        sql_repo.get_document_services_by_document_ids.return_value = {1: [_make_document_service(document_id=1)]}
+        sql_repo.get_document_services_by_document_ids.return_value = {1: [_make_document_service(company_contract_id=1)]}
         sql_repo.get_services_by_ids.return_value = [ServiceTable(id=2, organization_id=1, name="Hosting")]
         service = _make_contract_query_service(sql_repo=sql_repo)
 
@@ -1173,7 +1212,7 @@ class TestContractQueryService:
         sql_repo = AsyncMock()
         sql_repo.count_contracts.side_effect = [3, 1]
         sql_repo.search_contracts.return_value = [_make_doc()]
-        sql_repo.get_document_services_by_document_ids.return_value = {1: [_make_document_service(document_id=1)]}
+        sql_repo.get_document_services_by_document_ids.return_value = {1: [_make_document_service(company_contract_id=1)]}
         sql_repo.get_services_by_ids.return_value = [ServiceTable(id=2, organization_id=1, name="Hosting")]
         service = _make_contract_query_service(sql_repo=sql_repo)
 
