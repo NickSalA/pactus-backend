@@ -53,11 +53,15 @@ class TestDashboardAccess:
             await service.get_area_chart(current_user=_make_user(UserRole.ADMIN), document_type=DocumentType.COMPANY)
 
     @pytest.mark.asyncio
-    async def test_worker_is_forbidden(self):
-        service = _make_service()
+    async def test_worker_can_access_company_dashboard(self):
+        repo = AsyncMock()
+        repo.sync_contract_states.return_value = 0
+        repo.get_monthly_amounts.return_value = [DashboardMonthlyAmount(month=date.today().replace(day=1), amount=1000.0)]
+        service = _make_service(repo)
 
-        with pytest.raises(ForbiddenError):
-            await service.get_area_chart(current_user=_make_user(UserRole.WORKER), document_type=DocumentType.COMPANY)
+        response = await service.get_area_chart(current_user=_make_user(UserRole.WORKER), document_type=DocumentType.COMPANY)
+
+        assert response.props.title == "Ingresos Proyectados"
 
 
 class TestDashboardLimits:
