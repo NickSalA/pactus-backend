@@ -6,8 +6,11 @@ import pytest
 from pydantic import ValidationError
 
 from contractai_backend.modules.documents.domain import (
+    CompanyContractTable,
+    CompanyContractServiceTable,
     DocumentServiceTable,
     DocumentTable,
+    LaborContractTable,
     validate_service_currency_alignment,
     validate_service_periods,
 )
@@ -82,7 +85,148 @@ class TestDocumentTableValidation:
         assert doc.state is None
 
 
+class TestCompanyContractTableValidation:
+    def test_creates_valid_company_contract(self):
+        contract = CompanyContractTable.model_validate(
+            {
+                "document_id": 1,
+                "ruc": "20123456789",
+                "client": "Cliente SAC",
+            }
+        )
+
+        assert contract.document_id == 1
+        assert contract.ruc == "20123456789"
+        assert contract.client == "Cliente SAC"
+
+    def test_blank_ruc_raises(self):
+        with pytest.raises(ValidationError, match="Field cannot be empty"):
+            CompanyContractTable.model_validate(
+                {
+                    "document_id": 1,
+                    "ruc": "   ",
+                    "client": "Cliente SAC",
+                }
+            )
+
+    def test_blank_client_raises(self):
+        with pytest.raises(ValidationError, match="Field cannot be empty"):
+            CompanyContractTable.model_validate(
+                {
+                    "document_id": 1,
+                    "ruc": "20123456789",
+                    "client": "   ",
+                }
+            )
+
+    def test_nullable_fields_are_allowed(self):
+        contract = CompanyContractTable.model_validate(
+            {
+                "document_id": 1,
+                "ruc": None,
+                "client": None,
+            }
+        )
+
+        assert contract.ruc is None
+        assert contract.client is None
+
+
+class TestLaborContractTableValidation:
+    def test_creates_valid_labor_contract(self):
+        contract = LaborContractTable.model_validate(
+            {
+                "document_id": 1,
+                "worker_name": "Ana Perez",
+                "worker_document_number": "12345678",
+                "position": "Analista",
+                "salary_value": 2500.0,
+                "salary_currency": CurrencyType.PEN,
+                "salary_periodicity": "monthly",
+                "contract_modality": "full_time",
+            }
+        )
+
+        assert contract.document_id == 1
+        assert contract.worker_name == "Ana Perez"
+        assert contract.salary_value == 2500.0
+
+    def test_blank_worker_name_raises(self):
+        with pytest.raises(ValidationError, match="Field cannot be empty"):
+            LaborContractTable.model_validate(
+                {
+                    "document_id": 1,
+                    "worker_name": "   ",
+                }
+            )
+
+    def test_blank_position_raises(self):
+        with pytest.raises(ValidationError, match="Field cannot be empty"):
+            LaborContractTable.model_validate(
+                {
+                    "document_id": 1,
+                    "position": "   ",
+                }
+            )
+
+    def test_negative_salary_value_raises(self):
+        with pytest.raises(ValidationError, match="Salary value must be a positive number"):
+            LaborContractTable.model_validate(
+                {
+                    "document_id": 1,
+                    "salary_value": -1.0,
+                }
+            )
+
+    def test_nullable_optional_fields_are_allowed(self):
+        contract = LaborContractTable.model_validate(
+            {
+                "document_id": 1,
+                "worker_name": None,
+                "worker_document_number": None,
+                "position": None,
+                "salary_value": None,
+                "salary_currency": None,
+                "salary_periodicity": None,
+                "contract_modality": None,
+            }
+        )
+
+        assert contract.worker_name is None
+        assert contract.salary_value is None
+        assert contract.contract_modality is None
+
+
 class TestDocumentServiceTableValidation:
+    def test_creates_valid_company_contract_service(self):
+        service_item = CompanyContractServiceTable.model_validate(
+            {
+                "company_contract_id": 1,
+                "service_id": 2,
+                "description": "Hosting",
+                "value": 1500.0,
+                "currency": CurrencyType.PEN,
+                "start_date": date(2024, 1, 1),
+                "end_date": date(2024, 6, 30),
+            }
+        )
+
+        assert service_item.company_contract_id == 1
+        assert service_item.currency == CurrencyType.PEN
+
+    def test_non_positive_company_contract_id_raises(self):
+        with pytest.raises(ValidationError, match="ID must be a positive integer"):
+            CompanyContractServiceTable.model_validate(
+                {
+                    "company_contract_id": 0,
+                    "service_id": 2,
+                    "value": 10.0,
+                    "currency": CurrencyType.USD,
+                    "start_date": date(2024, 1, 1),
+                    "end_date": date(2024, 1, 2),
+                }
+            )
+
     def test_creates_valid_document_service(self):
         service_item = DocumentServiceTable.model_validate(
             {
