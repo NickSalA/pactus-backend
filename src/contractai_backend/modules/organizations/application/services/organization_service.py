@@ -2,9 +2,10 @@
 
 from collections.abc import Sequence
 
-from contractai_backend.core.exceptions.base import NotFoundError
+from contractai_backend.modules.organizations.application.dto import OrganizationCreateRequest, OrganizationUpdateRequest
 from contractai_backend.modules.organizations.application.repositories.base_organization import OrganizationRepository
 from contractai_backend.modules.organizations.domain.entities import OrganizationTable
+from contractai_backend.modules.organizations.domain.exceptions import OrganizationAlreadyExistsError, OrganizationNotFoundError
 
 
 class OrganizationService:
@@ -15,12 +16,44 @@ class OrganizationService:
 
     async def list_organizations(self, active_only: bool = False) -> Sequence[OrganizationTable]:
         """Lists organizations, optionally filtering only active ones."""
-        organizations = await (self.repository.get_active() if active_only else self.repository.get_all())
-        return organizations
+        return await (
+            self.repository.get_active()
+            if active_only
+            else self.repository.get_all()
+        )
 
     async def get_organization(self, organization_id: int) -> OrganizationTable:
         """Fetches one organization by ID, raising if not found."""
-        organization = await self.repository.get_by_id(organization_id)
+        organization: OrganizationTable | None = await self.repository.get_by_id(organization_id)
         if organization is None:
-            raise NotFoundError("La organización solicitada no existe.")
+            raise OrganizationNotFoundError()
         return organization
+
+    async def create_organization(self, payload: OrganizationCreateRequest) -> OrganizationTable:
+        """Creates a new organization."""
+        existing: OrganizationTable | None = await self.repository.get_by_name(payload.name)
+        if existing:
+            raise OrganizationAlreadyExistsError()
+
+        organization = OrganizationTable(**payload.model_dump())
+        return await self.repository.save(organization)
+
+    async def update_organization(self, organization_id: int, payload: OrganizationUpdateRequest) -> OrganizationTable:
+        """Updates an existing organization."""
+        organization: OrganizationTable = await self.get_organization(organization_id)
+
+        if payload.name is not None and payload.name != organization.name:
+            existing: OrganizationTable | None = await self.repository.get_by_name(payload.name)
+            if existing:
+                raise OrganizationAlreadyExistsError()
+
+        for key, value in payload.model_dump(exclude_unset=True).items():
+            setattr(organization, key, value)
+
+        return await self.repository.update(organization)
+
+    async def delete_organization(self, organization_id: int) -> OrganizationTable:
+        """Soft deletes an organization."""
+        organization: OrganizationTable = await self.get_organization(organization_id)
+        organization.is_active = False
+        return await self.repository.update(organization)
