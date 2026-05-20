@@ -1,7 +1,6 @@
 """PostgreSQL implementation of document command repositories."""
 
 from collections.abc import Sequence
-from typing import Any
 
 from loguru import logger
 from sqlalchemy.exc import OperationalError, SQLAlchemyError

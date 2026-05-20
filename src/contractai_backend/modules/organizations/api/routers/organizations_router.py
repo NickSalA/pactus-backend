@@ -27,11 +27,19 @@ router = APIRouter()
 async def list_organizations(
     service: Annotated[OrganizationService, Depends(get_organization_service)],
     current_user: CurrentUserDep,
+    is_active: bool | None = None,
+    name: str | None = None,
+    ruc: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
 ) -> Sequence[OrganizationResponse]:
     """Lists all organizations. Only accessible by admins."""
     if current_user.role != UserRole.ADMIN:
         raise ForbiddenError("Acceso denegado")
-    organizations = await service.list_organizations()
+
+    organizations = await service.list_organizations(
+        is_active=is_active, name=name, ruc=ruc, limit=limit, offset=offset
+    )
     return [OrganizationResponse.model_validate(org) for org in organizations]
 
 

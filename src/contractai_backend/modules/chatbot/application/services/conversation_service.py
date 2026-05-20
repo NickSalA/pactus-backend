@@ -35,9 +35,7 @@ class ConversationService:
             organization_id=organization_id,
             user_id=user_id,
         )
-        if not conversation:
-            return None
-        return ConversationTable.model_validate(conversation)
+        return ConversationTable.model_validate(conversation) if conversation else None
 
     async def list_user_conversations(self, organization_id: int, user_id: int) -> list[ConversationTable]:
         """Obtiene una lista de conversaciones asociadas a un usuario específico."""

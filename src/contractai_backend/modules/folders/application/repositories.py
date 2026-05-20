@@ -11,8 +11,8 @@ from ..domain.entities import FolderTable
 
 class FolderRepository(ABC):
     @abstractmethod
-    async def get_all(self, filters: dict[str, Any] | None = None) -> Sequence[FolderTable]:
-        """Lists folders matching optional filters."""
+    async def get_all(self, filters: dict[str, Any] | None = None, limit: int | None = None, offset: int | None = None) -> Sequence[FolderTable]:
+        """Lists folders matching optional filters with optional pagination."""
         pass
 
     @abstractmethod

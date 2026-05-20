@@ -14,13 +14,24 @@ class OrganizationService:
     def __init__(self, repository: OrganizationRepository):
         self.repository = repository
 
-    async def list_organizations(self, active_only: bool = False) -> Sequence[OrganizationTable]:
-        """Lists organizations, optionally filtering only active ones."""
-        return await (
-            self.repository.get_active()
-            if active_only
-            else self.repository.get_all()
-        )
+    async def list_organizations(
+        self,
+        is_active: bool | None = None,
+        name: str | None = None,
+        ruc: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> Sequence[OrganizationTable]:
+        """Lists organizations with optional filtering and pagination."""
+        filters = {}
+        if is_active is not None:
+            filters["is_active"] = is_active
+        if name is not None:
+            filters["name"] = name
+        if ruc is not None:
+            filters["ruc"] = ruc
+
+        return await self.repository.get_all(filters=filters or None, limit=limit, offset=offset)
 
     async def get_organization(self, organization_id: int) -> OrganizationTable:
         """Fetches one organization by ID, raising if not found."""

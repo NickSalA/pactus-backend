@@ -1,9 +1,8 @@
 """Organization repository backed by SQLModel."""
 
-from collections.abc import Sequence
 
 from sqlalchemy import func
-from sqlmodel import col, select
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from contractai_backend.core.infrastructure.base import PostgresBaseRepository
@@ -19,8 +18,3 @@ class SQLModelOrganizationRepository(PostgresBaseRepository[OrganizationTable], 
         query = select(self.model).where(func.lower(self.model.name) == name.strip().lower())
         result = await self.session.exec(query)
         return result.first()
-
-    async def get_active(self) -> Sequence[OrganizationTable]:
-        query = select(self.model).where(col(self.model.is_active).is_(True)).order_by(col(self.model.id))
-        result = await self.session.exec(query)
-        return result.all()

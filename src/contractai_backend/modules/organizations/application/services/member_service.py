@@ -12,7 +12,7 @@ class OrganizationMemberService:
     """Handles admin operations over organization members."""
 
     def __init__(self, user_repository: IUserRepository):
-        self.user_repository = user_repository
+        self.user_repository: IUserRepository = user_repository
 
     @staticmethod
     def _ensure_admin(user: UserTable) -> None:

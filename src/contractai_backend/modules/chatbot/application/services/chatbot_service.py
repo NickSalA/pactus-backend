@@ -37,7 +37,11 @@ class ChatbotService:
         user_message = Message(role="user", content=message).as_record()
 
         if thread_id is None:
-            generated_title: str = message[:LIMIT_TITLE] + "..." if len(message) > LIMIT_TITLE else message
+            generated_title: str = (
+                f"{message[:LIMIT_TITLE]}..."
+                if len(message) > LIMIT_TITLE
+                else message
+            )
             saved_conv = await self.conv_service.create_conversation(
                 organization_id=current_user.organization_id,
                 user_id=current_user.id,

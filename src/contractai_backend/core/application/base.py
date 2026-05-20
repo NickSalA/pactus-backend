@@ -13,8 +13,8 @@ class BaseRepository[T](ABC):
         pass
 
     @abstractmethod
-    async def get_all(self, filters: dict[str, Any] | None = None) -> Sequence[T]:
-        """Returns a sequence of all entities."""
+    async def get_all(self, filters: dict[str, Any] | None = None, limit: int | None = None, offset: int | None = None) -> Sequence[T]:
+        """Returns a sequence of all entities, optionally filtered and paginated."""
         pass
 
     @abstractmethod
