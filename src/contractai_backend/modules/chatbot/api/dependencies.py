@@ -53,25 +53,29 @@ async def get_llm_provider(
     readable_document_types = get_readable_document_types(current_user.role)
     document_filters = {"organization_id": current_user.organization_id}
     documents = await contract_repo.get_all(filters=document_filters)
+    document_ids = [document.id for document in documents if document.id is not None]
+    document_kinds = await contract_repo.get_contract_kinds_by_document_ids(document_ids=document_ids)
+
+    documents_with_children = [
+        document
+        for document in documents
+        if document.id is not None and document_kinds.get(document.id) is not None
+    ]
+
     if readable_document_types is not None:
-        document_ids = [document.id for document in documents if document.id is not None]
-        document_kinds = await contract_repo.get_contract_kinds_by_document_ids(document_ids=document_ids)
-        documents = [
-            document
-            for document in documents
-            if document.id is not None
-            and document_kinds.get(document.id) is not None
-            and DocumentType(document_kinds[document.id]) in readable_document_types
+        documents_with_children = [
+            doc for doc in documents_with_children if DocumentType(document_kinds[doc.id]) in readable_document_types
         ]
 
-    default_document_ids = {
-        document.id for document in documents if document.id is not None and ContractQueryService.is_chatbot_visible_contract(document=document)
-    }
+    visible_documents = [
+        doc for doc in documents_with_children if ContractQueryService.is_chatbot_visible_contract(doc)
+    ]
+
+    default_document_ids = {document.id for document in visible_documents if document.id is not None}
     document_ids_by_state: dict[DocumentState, set[int]] = {}
-    for document in documents:
-        if document.id is None or document.state is None or not ContractQueryService.has_required_chatbot_contract_data(document=document):
-            continue
-        document_ids_by_state.setdefault(DocumentState(document.state), set()).add(document.id)
+    for document in visible_documents:
+        if document.id is not None and document.state is not None:
+            document_ids_by_state.setdefault(DocumentState(document.state), set()).add(document.id)
 
     bc_tool = build_bc_tool(
         repo=vector_repo,

@@ -89,8 +89,27 @@ class DocumentQueryRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_all_document_ids_with_chatbot_ready(self, organization_id: int) -> Sequence[int]:
+        """Returns all chatbot-ready document IDs for an organization."""
+        pass
+
+    @abstractmethod
     async def sync_contract_states(self, organization_id: int) -> int:
         """Synchronizes persisted document states for one organization."""
+        pass
+
+    @abstractmethod
+    async def get_contract_value_context(
+        self, document_ids: Sequence[int]
+    ) -> dict[int, dict[str, Any]]:
+        """Returns labor values and company totals for documents."""
+        pass
+
+    @abstractmethod
+    async def get_contract_party_context(
+        self, document_ids: Sequence[int]
+    ) -> dict[int, str | None]:
+        """Returns client/worker_name for documents."""
         pass
 
 

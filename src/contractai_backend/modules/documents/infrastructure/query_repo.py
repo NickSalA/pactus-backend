@@ -42,13 +42,31 @@ class SQLModelDocumentQueryRepository(
 
     @staticmethod
     def _build_contract_value_expression():
-        form_data = type_cast(Any, DocumentTable.form_data)
-        return cast(form_data["value"].astext, Float)
+        labor_value = col(LaborContractTable.salary_value)
+        company_subquery = (
+            select(func.coalesce(func.sum(CompanyContractServiceTable.value), 0.0))
+            .where(col(CompanyContractServiceTable.company_contract_id) == CompanyContractTable.id)
+            .scalar_subquery()
+        )
+        return case(
+            (col(CompanyContractTable.id).is_not(None), company_subquery),
+            (col(LaborContractTable.id).is_not(None), labor_value),
+            else_=0.0,
+        )
 
     @staticmethod
     def _build_contract_currency_expression():
-        form_data = type_cast(Any, DocumentTable.form_data)
-        return func.upper(form_data["currency"].astext)
+        labor_currency = LaborContractTable.salary_currency
+        company_subquery = (
+            select(func.array_agg(CompanyContractServiceTable.currency)[1])
+            .where(col(CompanyContractServiceTable.company_contract_id) == CompanyContractTable.id)
+            .scalar_subquery()
+        )
+        return case(
+            (col(CompanyContractTable.id).is_not(None), company_subquery),
+            (col(LaborContractTable.id).is_not(None), labor_currency),
+            else_=None,
+        )
 
     @staticmethod
     def _build_party_expression():
@@ -112,14 +130,11 @@ class SQLModelDocumentQueryRepository(
 
     @staticmethod
     def _apply_chatbot_ready_contract_filters(statement):
-        form_data = type_cast(Any, DocumentTable.form_data)
         return (
             statement.where(SQLModelDocumentQueryRepository._build_party_expression().is_not(None))
             .where(SQLModelDocumentQueryRepository._build_document_kind_expression().is_not(None))
             .where(col(DocumentTable.start_date).is_not(None))
             .where(col(DocumentTable.end_date).is_not(None))
-            .where(form_data["value"].astext.is_not(None))
-            .where(form_data["currency"].astext.is_not(None))
         )
 
     @staticmethod
@@ -608,6 +623,19 @@ class SQLModelDocumentQueryRepository(
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
 
+    async def get_all_document_ids_with_chatbot_ready(self, organization_id: int) -> Sequence[int]:
+        """Obtiene todos los IDs de documentos chatbot-ready para una organización."""
+        try:
+            statement = select(col(DocumentTable.id))
+            statement = statement.where(col(DocumentTable.organization_id) == organization_id)
+            statement = self._apply_chatbot_ready_contract_filters(statement)
+            result = await self.session.exec(statement=statement)
+            return result.all()
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
+            raise DocumentDatabaseUnavailableError() from e
+        except SQLAlchemyError as e:
+            raise DocumentDatabaseError() from e
+
     async def sync_contract_states(self, organization_id: int) -> int:
         """Sincroniza estados documentales persistidos según reglas de notificación."""
         try:
@@ -616,6 +644,83 @@ class SQLModelDocumentQueryRepository(
                 params={"organization_id": organization_id},
             )
             return self._read_scalar_result(result.one())
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
+            raise DocumentDatabaseUnavailableError() from e
+        except SQLAlchemyError as e:
+            raise DocumentDatabaseError() from e
+
+    async def get_contract_value_context(
+        self, document_ids: Sequence[int]
+    ) -> dict[int, dict[str, Any]]:
+        """Returns labor values and company totals for documents."""
+        if not document_ids:
+            return {}
+
+        try:
+            labor_subq = (
+                select(LaborContractTable.document_id, LaborContractTable.salary_value, LaborContractTable.salary_currency)
+                .where(col(LaborContractTable.document_id).in_(document_ids))
+                .subquery()
+            )
+            company_subq = (
+                select(
+                    CompanyContractTable.document_id,
+                    func.sum(CompanyContractServiceTable.value).label("total_value"),
+                    func.array_agg(CompanyContractServiceTable.currency)[1].label("currency"),
+                )
+                .join(CompanyContractServiceTable, col(CompanyContractServiceTable.company_contract_id) == col(CompanyContractTable.id))
+                .where(col(CompanyContractTable.document_id).in_(document_ids))
+                .group_by(CompanyContractTable.document_id)
+                .subquery()
+            )
+
+            stmt = select(labor_subq.c.document_id, labor_subq.c.salary_value, labor_subq.c.salary_currency).outerjoin(
+                company_subq, col(labor_subq.c.document_id) == company_subq.c.document_id
+            )
+
+            result = await self.session.exec(statement=stmt)
+            context: dict[int, dict[str, Any]] = {}
+            for row in result.all():
+                mapping = row._mapping if hasattr(row, "_mapping") else row
+                doc_id = mapping["document_id"]
+                context[doc_id] = {
+                    "labor_value": mapping.get("salary_value"),
+                    "labor_currency": mapping.get("salary_currency"),
+                    "company_total_value": mapping.get("total_value"),
+                    "company_currency": mapping.get("currency"),
+                }
+            return context
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
+            raise DocumentDatabaseUnavailableError() from e
+        except SQLAlchemyError as e:
+            raise DocumentDatabaseError() from e
+
+    async def get_contract_party_context(
+        self, document_ids: Sequence[int]
+    ) -> dict[int, str | None]:
+        """Returns client/worker_name for documents."""
+        if not document_ids:
+            return {}
+
+        try:
+            company_result = await self.session.exec(
+                select(CompanyContractTable.document_id, CompanyContractTable.client).where(
+                    col(CompanyContractTable.document_id).in_(document_ids)
+                )
+            )
+            labor_result = await self.session.exec(
+                select(LaborContractTable.document_id, LaborContractTable.worker_name).where(
+                    col(LaborContractTable.document_id).in_(document_ids)
+                )
+            )
+
+            context: dict[int, str | None] = {}
+            for row in company_result.all():
+                context[row.document_id] = row.client
+            for row in labor_result.all():
+                if row.document_id not in context:
+                    context[row.document_id] = row.worker_name
+            return context
         except (SQLAlchemyTimeoutError, OperationalError) as e:
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:
