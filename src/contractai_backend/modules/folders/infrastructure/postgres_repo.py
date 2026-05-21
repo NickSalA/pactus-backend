@@ -25,7 +25,7 @@ class SQLModelFolderRepository(RelationalHelpersMixin, FolderRepository):
 
     async def get_all(self, filters: dict[str, Any] | None = None, limit: int | None = None, offset: int | None = None) -> Sequence[FolderTable]:
         try:
-            query = select(FolderTable)
+            query = select(FolderTable).order_by(col(FolderTable.id))
             if filters:
                 for key, value in filters.items():
                     if hasattr(FolderTable, key):

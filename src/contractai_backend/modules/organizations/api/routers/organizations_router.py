@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
 from contractai_backend.core.exceptions.base import ForbiddenError
 from contractai_backend.modules.organizations.api.dependencies import get_organization_member_service, get_organization_service
@@ -19,6 +19,7 @@ from contractai_backend.modules.organizations.api.schemas import (
 from contractai_backend.modules.organizations.application.services import OrganizationMemberService, OrganizationService
 from contractai_backend.modules.users.domain.value_objs import UserRole
 from contractai_backend.shared.api.dependencies.security import CurrentUserDep
+from contractai_backend.shared.config import settings
 
 router = APIRouter()
 
@@ -30,8 +31,8 @@ async def list_organizations(
     is_active: bool | None = None,
     name: str | None = None,
     ruc: str | None = None,
-    limit: int = 100,
-    offset: int = 0,
+    limit: Annotated[int, Query(ge=0, le=settings.MAX_ORGANIZATIONS_LIMIT)] = settings.MAX_ORGANIZATIONS_LIMIT,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> Sequence[OrganizationResponse]:
     """Lists all organizations. Only accessible by admins."""
     if current_user.role != UserRole.ADMIN:
