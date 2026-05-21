@@ -5,12 +5,18 @@ import unicodedata
 from datetime import datetime
 from typing import Any
 
-from .....core.exceptions.base import AppError, ForbiddenError, NotFoundError, ValidationError
 from ....documents.application.repositories import DocumentExtractor
 from ....documents.domain import DocumentType
 from ....documents.domain.access_policy import can_write_document_type
 from ....users.domain.value_objs import UserRole
 from ...domain.entities import TemplateContent, TemplateField, TemplateFormatTable, TemplateTable
+from ...domain.exceptions import (
+    TemplateAccessDeniedError,
+    TemplateNotFoundError,
+    TemplateReferenceError,
+    TemplateStateError,
+    TemplateValidationError,
+)
 from ...domain.value_objs import TemplateGenerationMode, TemplateState
 from ..dto import (
     CreateTemplateRequest,
@@ -114,7 +120,7 @@ class TemplateAuthoringService:
     ) -> list[TemplateFormatResponse]:
         """Lists the template formats available to the current role."""
         if user_role == UserRole.WORKER:
-            raise ForbiddenError("No tiene permisos para gestionar plantillas")
+            raise TemplateAccessDeniedError("No tiene permisos para gestionar plantillas")
 
         effective_document_type = None
         if user_role != UserRole.ADMIN:
@@ -306,19 +312,19 @@ class TemplateAuthoringService:
         template = await self._get_template_or_raise(template_id=template_id, organization_id=organization_id)
         self._ensure_can_author_document_type(user_role=user_role, document_type=template.document_type)
         if template.state != TemplateState.DRAFT:
-            raise ValidationError("Solo se pueden editar plantillas en estado DRAFT.")
+            raise TemplateStateError("Solo se pueden editar plantillas en estado DRAFT.")
 
         fields_set = request.model_fields_set
 
         if "content" in fields_set:
             if request.content is None:
-                raise ValidationError("Content cannot be null")
+                raise TemplateValidationError("Content cannot be null")
             synced_content = self.content_synchronizer.sync(request.content)
             self.validator.validate(synced_content, document_type=template.document_type)
             template.content = synced_content.model_dump(mode="python")
         if "name" in fields_set:
             if request.name is None:
-                raise ValidationError("Name cannot be null")
+                raise TemplateValidationError("Name cannot be null")
             template.name = request.name
         if "description" in fields_set:
             template.description = request.description
@@ -337,10 +343,10 @@ class TemplateAuthoringService:
         template = await self._get_template_or_raise(template_id=template_id, organization_id=organization_id)
         self._ensure_can_author_document_type(user_role=user_role, document_type=template.document_type)
         if template.state != TemplateState.DRAFT:
-            raise ValidationError("Solo se pueden publicar plantillas en estado DRAFT.")
+            raise TemplateStateError("Solo se pueden publicar plantillas en estado DRAFT.")
         template_format = await self._get_template_format_by_id(template.template_format_id)
         if template_format is None:
-            raise ValidationError("La plantilla debe tener un formato válido antes de publicarse.")
+            raise TemplateValidationError("La plantilla debe tener un formato válido antes de publicarse.")
         await self._get_template_format_or_raise(document_type=template.document_type, format_code=template_format.format_code)
 
         content = self.content_synchronizer.sync(TemplateContent.model_validate(template.content))
@@ -366,7 +372,7 @@ class TemplateAuthoringService:
         template = await self._get_template_or_raise(template_id=template_id, organization_id=organization_id)
         self._ensure_can_author_document_type(user_role=user_role, document_type=template.document_type)
         if template.state == TemplateState.ARCHIVED:
-            raise ValidationError("La plantilla ya se encuentra archivada.")
+            raise TemplateStateError("La plantilla ya se encuentra archivada.")
 
         template.state = TemplateState.ARCHIVED
         archived_template = await self.template_repo.update(entity=template)
@@ -419,7 +425,7 @@ class TemplateAuthoringService:
                     document_type=document_type,
                     generation_mode=request.generation_mode,
                 )
-            except ValueError as exc:
+            except TemplateValidationError as exc:
                 if attempt == max_attempts - 1:
                     raise
                 retry_feedback = [str(exc)]
@@ -453,7 +459,7 @@ class TemplateAuthoringService:
 
             retry_feedback = retryable_issues
 
-        raise ValidationError("No se pudo generar un borrador valido desde el archivo de referencia.")
+        raise TemplateValidationError("No se pudo generar un borrador valido desde el archivo de referencia.")
 
     async def _generate_validated_prompt_draft(
         self,
@@ -478,7 +484,7 @@ class TemplateAuthoringService:
                     document_type=document_type,
                     generation_mode=request.generation_mode,
                 )
-            except ValueError as exc:
+            except TemplateValidationError as exc:
                 if attempt == max_attempts - 1:
                     raise
                 retry_feedback = [str(exc)]
@@ -494,13 +500,13 @@ class TemplateAuthoringService:
             self._finalize_draft(draft, backend_warnings, preparation_warnings)
             return draft, attempt
 
-        raise ValidationError("No se pudo generar un borrador valido a partir de las instrucciones.")
+        raise TemplateValidationError("No se pudo generar un borrador valido a partir de las instrucciones.")
 
     async def _get_template_or_raise(self, template_id: int, organization_id: int) -> TemplateTable:
         """Loads one template or raises a not found error."""
         template = await self.template_repo.get_template_by_id(template_id=template_id, organization_id=organization_id)
         if template is None:
-            raise NotFoundError("Plantilla no encontrada")
+            raise TemplateNotFoundError("Plantilla no encontrada")
         return template
 
     def _prepare_generated_content(
@@ -594,11 +600,11 @@ class TemplateAuthoringService:
         """Requires start and end placeholders to be explicit in body_md."""
         mapping = content.contract_date_mapping
         if mapping is None:
-            raise ValueError(self.EXPLICIT_CONTRACT_DATES_REQUIRED_MESSAGE)
+            raise TemplateValidationError(self.EXPLICIT_CONTRACT_DATES_REQUIRED_MESSAGE)
 
         placeholders = self.validator.extract(content.body_md)
         if mapping.start_date_field not in placeholders or mapping.end_date_field not in placeholders:
-            raise ValueError(self.EXPLICIT_CONTRACT_DATES_REQUIRED_MESSAGE)
+            raise TemplateValidationError(self.EXPLICIT_CONTRACT_DATES_REQUIRED_MESSAGE)
 
     def _inject_contract_date_clause(self, content: TemplateContent) -> TemplateContent:
         """Adds a minimal vigencia clause when the draft has a date mapping but the body does not expose it."""
@@ -690,22 +696,22 @@ class TemplateAuthoringService:
         """Resolves the effective document type for authoring operations."""
         if user_role == UserRole.ADMIN:
             if requested_document_type is None:
-                raise ValidationError("document_type es obligatorio para usuarios ADMIN.")
+                raise TemplateValidationError("document_type es obligatorio para usuarios ADMIN.")
             return requested_document_type
 
         locked_document_type = ROLE_LOCKED_DOCUMENT_TYPES.get(user_role)
         if locked_document_type is None:
-            raise ForbiddenError("No tiene permisos para gestionar plantillas")
+            raise TemplateAccessDeniedError("No tiene permisos para gestionar plantillas")
 
         if requested_document_type is not None and requested_document_type != locked_document_type:
-            raise ForbiddenError(f"No tiene permisos para crear plantillas de tipo {requested_document_type.value}.")
+            raise TemplateAccessDeniedError(f"No tiene permisos para crear plantillas de tipo {requested_document_type.value}.")
 
         return locked_document_type
 
     def _ensure_can_author_document_type(self, user_role: UserRole, document_type: DocumentType) -> None:
         """Checks whether the current role can author templates for the type."""
         if not can_write_document_type(user_role=user_role, document_type=document_type):
-            raise ForbiddenError(f"No tiene permisos para gestionar plantillas de tipo {document_type.value}.")
+            raise TemplateAccessDeniedError(f"No tiene permisos para gestionar plantillas de tipo {document_type.value}.")
 
     async def _get_template_format_or_raise(
         self,
@@ -718,7 +724,7 @@ class TemplateAuthoringService:
             format_code=format_code,
         )
         if template_format is None:
-            raise ValidationError(f"format_code '{format_code}' no es válido para document_type '{document_type.value}'.")
+            raise TemplateValidationError(f"format_code '{format_code}' no es válido para document_type '{document_type.value}'.")
         return template_format
 
     async def _get_template_format_by_id(self, template_format_id: int | None) -> TemplateFormatTable | None:
@@ -765,12 +771,9 @@ class TemplateAuthoringService:
         """Validates that the uploaded file matches the expected base type."""
         detected_document_type = self._classify_reference_document_type(reference_context.clean_text)
         if detected_document_type is None:
-            raise AppError("No se pudo determinar si el archivo corresponde a COMPANY o LABOR.", status_code=422)
+            raise TemplateReferenceError("No se pudo determinar si el archivo corresponde a COMPANY o LABOR.")
         if detected_document_type != expected_document_type:
-            raise AppError(
-                f"El archivo no corresponde a una plantilla de tipo {expected_document_type.value}.",
-                status_code=422,
-            )
+            raise TemplateReferenceError(f"El archivo no corresponde a una plantilla de tipo {expected_document_type.value}.")
 
     def _classify_reference_document_type(self, clean_text: str) -> DocumentType | None:
         """Classifies a reference document as COMPANY or LABOR using heuristics."""
@@ -800,9 +803,7 @@ class TemplateAuthoringService:
 
     def _build_mock_payload(self, fields: list[TemplateField]) -> dict[str, Any]:
         """Builds mock payload values for preview."""
-        payload: dict[str, Any] = {
-            field.key: self._mock_value(field) for field in fields
-        }
+        payload: dict[str, Any] = {field.key: self._mock_value(field) for field in fields}
         return payload
 
     def _mock_value(self, field: TemplateField) -> Any:

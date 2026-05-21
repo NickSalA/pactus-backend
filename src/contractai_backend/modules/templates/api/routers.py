@@ -59,12 +59,6 @@ async def generate_template(
             organization_id=current_user.organization_id,
             user_role=current_user.role,
         )
-    except ValueError as e:
-        detail = str(e)
-        status_code = (
-            status.HTTP_404_NOT_FOUND if detail == "Template not found or does not belong to the organization." else status.HTTP_400_BAD_REQUEST
-        )
-        raise HTTPException(status_code=status_code, detail=detail) from e
     except AppError:
         raise
     except Exception as e:
@@ -125,8 +119,6 @@ async def generate_template_draft(
         return PersistedTemplateDraftResponse.model_validate(draft, from_attributes=True)
     except HTTPException:
         raise
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except AppError:
         raise
     except Exception as e:
@@ -147,8 +139,6 @@ async def preview_template(
             user_role=current_user.role,
         )
         return PreviewTemplateResponse.model_validate(preview, from_attributes=True)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except AppError:
         raise
     except Exception as e:
@@ -193,8 +183,6 @@ async def create_template(
             user_role=current_user.role,
         )
         return TemplateResponse.model_validate(template, from_attributes=True)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except AppError:
         raise
     except Exception as e:
@@ -217,10 +205,6 @@ async def update_template(
             user_role=current_user.role,
         )
         return TemplateResponse.model_validate(template, from_attributes=True)
-    except ValueError as e:
-        detail = str(e)
-        status_code = status.HTTP_404_NOT_FOUND if detail == "Plantilla no encontrada" else status.HTTP_400_BAD_REQUEST
-        raise HTTPException(status_code=status_code, detail=detail) from e
     except AppError:
         raise
     except Exception as e:
@@ -241,10 +225,6 @@ async def publish_template(
             user_role=current_user.role,
         )
         return TemplateResponse.model_validate(template, from_attributes=True)
-    except ValueError as e:
-        detail = str(e)
-        status_code = status.HTTP_404_NOT_FOUND if detail == "Plantilla no encontrada" else status.HTTP_400_BAD_REQUEST
-        raise HTTPException(status_code=status_code, detail=detail) from e
     except AppError:
         raise
     except Exception as e:
@@ -265,10 +245,6 @@ async def archive_template(
             user_role=current_user.role,
         )
         return TemplateResponse.model_validate(template, from_attributes=True)
-    except ValueError as e:
-        detail = str(e)
-        status_code = status.HTTP_404_NOT_FOUND if detail == "Plantilla no encontrada" else status.HTTP_400_BAD_REQUEST
-        raise HTTPException(status_code=status_code, detail=detail) from e
     except AppError:
         raise
     except Exception as e:

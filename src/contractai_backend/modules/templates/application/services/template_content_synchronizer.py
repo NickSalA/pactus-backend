@@ -5,6 +5,7 @@ import unicodedata
 from typing import ClassVar
 
 from ...domain.entities import TemplateContent, TemplateContractDateMapping, TemplateField
+from ...domain.exceptions import TemplateValidationError
 from .template_placeholder_generator import TemplatePlaceholderGenerator
 from .template_placeholder_validator import (
     EXPRESSION_PATTERN,
@@ -71,7 +72,7 @@ class TemplateContentSynchronizer:
         normalized_body_md = self._normalize_reference_markers(content.body_md)
         expressions = [expression.strip() for expression in EXPRESSION_PATTERN.findall(normalized_body_md)]
         if unsupported_expressions := sorted({expression for expression in expressions if extract_supported_placeholder_key(expression) is None}):
-            raise ValueError(f"Expresiones Jinja no soportadas: {', '.join(unsupported_expressions)}")
+            raise TemplateValidationError(f"Expresiones Jinja no soportadas: {', '.join(unsupported_expressions)}")
 
         ordered_manual_keys = self._extract_manual_keys(expressions)
         normalized_mapping = self._normalize_contract_date_mapping(content.contract_date_mapping)
@@ -389,7 +390,7 @@ class TemplateContentSynchronizer:
 
         if duplicate_keys:
             duplicates = ", ".join(sorted(duplicate_keys))
-            raise ValueError(f"Field keys duplicados: {duplicates}")
+            raise TemplateValidationError(f"Field keys duplicados: {duplicates}")
 
         return indexed_fields
 

@@ -23,13 +23,17 @@ class SQLModelFolderRepository(RelationalHelpersMixin, FolderRepository):
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get_all(self, filters: dict[str, Any] | None = None) -> Sequence[FolderTable]:
+    async def get_all(self, filters: dict[str, Any] | None = None, limit: int | None = None, offset: int | None = None) -> Sequence[FolderTable]:
         try:
-            query = select(FolderTable)
+            query = select(FolderTable).order_by(col(FolderTable.id))
             if filters:
                 for key, value in filters.items():
                     if hasattr(FolderTable, key):
                         query = query.where(col(getattr(FolderTable, key)) == value)
+            if offset is not None:
+                query = query.offset(offset)
+            if limit is not None:
+                query = query.limit(limit)
             result = await self.session.exec(statement=query)
             return result.all()
         except (SQLAlchemyTimeoutError, OperationalError) as e:
