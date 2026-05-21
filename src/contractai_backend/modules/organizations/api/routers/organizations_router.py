@@ -38,9 +38,7 @@ async def list_organizations(
     if current_user.role != UserRole.ADMIN:
         raise ForbiddenError("Acceso denegado")
 
-    organizations = await service.list_organizations(
-        is_active=is_active, name=name, ruc=ruc, limit=limit, offset=offset
-    )
+    organizations = await service.list_organizations(is_active=is_active, name=name, ruc=ruc, limit=limit, offset=offset)
     return [OrganizationResponse.model_validate(org) for org in organizations]
 
 
