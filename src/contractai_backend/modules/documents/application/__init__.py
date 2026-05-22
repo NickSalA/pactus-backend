@@ -1,4 +1,4 @@
-from .dto import ContractQueryDTO
+from .dto import CompanyContractQueryDTO, LaborContractQueryDTO
 from .repositories import (
     DocumentChunkEnricher,
     DocumentCommandRepository,
@@ -9,7 +9,7 @@ from .repositories import (
 from .services import ContractQueryService, DocumentCommandService, DocumentQueryService
 
 __all__ = [
-    "ContractQueryDTO",
+    "CompanyContractQueryDTO",
     "ContractQueryService",
     "DocumentChunkEnricher",
     "DocumentCommandRepository",
@@ -17,5 +17,6 @@ __all__ = [
     "DocumentExtractor",
     "DocumentQueryRepository",
     "DocumentQueryService",
+    "LaborContractQueryDTO",
     "VectorRepository",
 ]

@@ -7,9 +7,9 @@ from typing import Any, cast
 from ....catalog.application.repositories import ServiceRepository
 from ....users.domain.value_objs import UserRole
 from ...domain import CompanyContractServiceTable, DocumentTable
-from ...domain.access_policy import can_read_document_type, get_readable_document_types
+from ...domain.access_policy import get_readable_document_types
 from ...domain.value_objs import DocumentState, DocumentType
-from ..dto import ContractQueryDTO
+from ..dto import CompanyContractQueryDTO, LaborContractQueryDTO
 from ..repositories import DocumentQueryRepository
 
 DEFAULT_LIST_LIMIT = 20
@@ -35,41 +35,16 @@ class ContractQueryService:
         return document.start_date is not None and document.end_date is not None and document.start_date <= today <= document.end_date
 
     @staticmethod
+    def is_chatbot_visible_contract(document: DocumentTable) -> bool:
+        if document.start_date is None or document.end_date is None:
+            return False
+        if document.type is None:
+            return False
+        return True
+
+    @staticmethod
     def _serialize_optional_date(value: date | None) -> str | None:
         return value.isoformat() if value is not None else None
-
-    @staticmethod
-    def _scope_query_by_role(query: ContractQueryDTO, user_role: UserRole | None) -> ContractQueryDTO | None:
-        readable_document_types = get_readable_document_types(user_role)
-        if readable_document_types is None:
-            return query
-
-        if query.document_type is not None:
-            resolved_document_type = DocumentType(query.document_type)
-            if not can_read_document_type(user_role=user_role, document_type=resolved_document_type):
-                return None
-            return query
-
-        if len(readable_document_types) == 1:
-            return query.model_copy(update={"document_type": next(iter(readable_document_types))})
-
-        return query
-
-    @staticmethod
-    def _is_document_with_child(document: DocumentTable) -> bool:
-        return document.type is not None
-
-    @classmethod
-    def is_chatbot_visible_contract(cls, document: DocumentTable) -> bool:
-        if document.state not in (DocumentState.ACTIVE, DocumentState.EXPIRING_SOON):
-            return False
-        return cls._is_document_with_child(document)
-
-    @staticmethod
-    def _scope_query_for_chatbot(query: ContractQueryDTO) -> ContractQueryDTO:
-        if query.state is not None:
-            return query
-        return query.model_copy(update={"state": DocumentState.ACTIVE})
 
     @staticmethod
     def _serialize_service_item(
@@ -87,25 +62,18 @@ class ContractQueryService:
         }
 
     @classmethod
-    def _serialize_contract(
+    def _serialize_company_contract(
         cls,
         document: DocumentTable,
         today: date,
         service_items: Sequence[CompanyContractServiceTable] | None = None,
         service_names: dict[int, str] | None = None,
         client: str | None = None,
-        labor_value: float | None = None,
-        labor_currency: str | None = None,
         company_total_value: float | None = None,
         company_currency: str | None = None,
     ) -> dict[str, Any]:
-        form_data = document.form_data if isinstance(document.form_data, dict) else {}
         resolved_service_items = list(service_items or [])
         resolved_service_names = service_names or {}
-
-        is_company = document.type == DocumentType.COMPANY if document.type else False
-        contract_value = company_total_value if is_company else labor_value
-        contract_currency = company_currency if is_company else labor_currency
 
         return {
             "id": document.id,
@@ -115,12 +83,39 @@ class ContractQueryService:
             "state": document.state.value if document.state is not None and hasattr(document.state, "value") else document.state,
             "start_date": cls._serialize_optional_date(document.start_date),
             "end_date": cls._serialize_optional_date(document.end_date),
-            "value": contract_value,
-            "currency": contract_currency,
+            "value": company_total_value,
+            "currency": company_currency,
             "is_currently_active": cls._is_currently_active(document=document, today=today),
             "service_items": [
                 cls._serialize_service_item(service_item=item, service_names=resolved_service_names) for item in resolved_service_items
             ],
+            "file_name": document.file_name,
+        }
+
+    @classmethod
+    def _serialize_labor_contract(
+        cls,
+        document: DocumentTable,
+        today: date,
+        worker_name: str | None = None,
+        worker_document_number: str | None = None,
+        position: str | None = None,
+        labor_value: float | None = None,
+        labor_currency: str | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "id": document.id,
+            "name": document.file_name,
+            "worker_name": worker_name,
+            "worker_document_number": worker_document_number,
+            "position": position,
+            "type": document.type.value if document.type is not None and hasattr(document.type, "value") else document.type,
+            "state": document.state.value if document.state is not None and hasattr(document.state, "value") else document.state,
+            "start_date": cls._serialize_optional_date(document.start_date),
+            "end_date": cls._serialize_optional_date(document.end_date),
+            "value": labor_value,
+            "currency": labor_currency,
+            "is_currently_active": cls._is_currently_active(document=document, today=today),
             "file_name": document.file_name,
         }
 
@@ -142,7 +137,7 @@ class ContractQueryService:
         service_names = {service.id: service.name for service in services if service.id is not None}
         return service_items_by_document, service_names
 
-    async def _run_services_ranking(self, organization_id: int, query: ContractQueryDTO, user_role: UserRole | None = None) -> dict[str, Any]:
+    async def _run_company_services_ranking(self, organization_id: int) -> dict[str, Any]:
         document_ids = await self.sql_repo.get_all_document_ids_with_chatbot_ready(
             organization_id=organization_id,
         )
@@ -157,113 +152,127 @@ class ContractQueryService:
             services = await self.sql_repo.get_services_by_ids(organization_id=organization_id, service_ids=service_ids)
             service_names = {service.id: service.name for service in services if service.id is not None}
 
-        service_totals: dict[int, dict[str, Any]] = {}
+        service_totals: dict[tuple[int, str], dict[str, Any]] = {}
         for doc_id, items in service_items_by_document.items():
             for item in items:
-                if item.service_id not in service_totals:
-                    service_totals[item.service_id] = {
+                key = (item.service_id, item.currency.value if hasattr(item.currency, 'value') else str(item.currency))
+                if key not in service_totals:
+                    service_totals[key] = {
                         "service_id": item.service_id,
                         "service_name": service_names.get(item.service_id, f"Servicio {item.service_id}"),
+                        "currency": item.currency.value if hasattr(item.currency, 'value') else str(item.currency),
                         "contracts_count": 0,
-                        "total_quantity": 0.0,
+                        "total_value": 0.0,
                     }
-                service_totals[item.service_id]["contracts_count"] += 1
-                service_totals[item.service_id]["total_quantity"] += float(item.quantity or 0)
+                service_totals[key]["contracts_count"] += 1
+                service_totals[key]["total_value"] += float(item.value or 0)
 
         sorted_services = sorted(
             service_totals.values(),
-            key=lambda x: x["total_quantity"],
+            key=lambda x: x["total_value"],
             reverse=True,
         )
 
         return {
             "status": "success",
-            "message": "Ranking de servicios por cantidad total contratada.",
+            "message": "Ranking de servicios por monto total contratado.",
             "items": sorted_services,
             "returned_items": len(sorted_services),
         }
 
-    async def run_query(self, organization_id: int, query: ContractQueryDTO, user_role: UserRole | None = None) -> dict[str, Any]:
-        """Ejecuta una consulta estructurada sobre los contratos de la organización con los filtros y operación especificados."""
+    async def _run_company_client_services_ranking(self, organization_id: int, query: CompanyContractQueryDTO) -> dict[str, Any]:
+        resolved_limit = self._clamp_limit(query.limit)
+
+        items = await self.sql_repo.rank_company_contracts_by_services(
+            organization_id=organization_id,
+            query=query,
+            limit=resolved_limit,
+            chatbot_ready_only=True,
+        )
+
+        return {
+            "status": "success",
+            "message": "Ranking de clientes por cantidad de servicios contratados.",
+            "items": items,
+            "returned_items": len(items),
+            "limit": resolved_limit,
+        }
+
+    async def run_company_query(self, organization_id: int, query: CompanyContractQueryDTO) -> dict[str, Any]:
+        """Ejecuta una consulta estructurada sobre contratos COMPANY."""
         today = date.today()
         await self.sql_repo.sync_contract_states(organization_id=organization_id)
 
-        scoped_query = self._scope_query_by_role(query=query, user_role=user_role)
-        if scoped_query is None:
-            return {"status": "forbidden", "message": ROLE_PERMISSION_DENIED_RESPONSE}
-        scoped_query = self._scope_query_for_chatbot(query=scoped_query)
-
-        base_query = self._scope_query_by_role(query=ContractQueryDTO(operation=query.operation, state=query.state), user_role=user_role)
-        if base_query is None:
-            return {"status": "forbidden", "message": ROLE_PERMISSION_DENIED_RESPONSE}
-        base_query = self._scope_query_for_chatbot(query=base_query)
-
-        if (scoped_query.min_value is not None or scoped_query.max_value is not None) and not scoped_query.currency:
+        if (query.min_value is not None or query.max_value is not None) and not query.currency:
             return {
                 "status": "needs_clarification",
                 "message": "Indique la moneda del monto a evaluar, por ejemplo USD, PEN o EUR.",
             }
 
-        if scoped_query.period_start and scoped_query.period_end and scoped_query.period_start > scoped_query.period_end:
+        if query.period_start and query.period_end and query.period_start > query.period_end:
             return {
                 "status": "invalid_request",
                 "message": "La fecha inicial no puede ser posterior a la fecha final.",
             }
 
-        if scoped_query.operation == "services_ranking":
-            return await self._run_services_ranking(organization_id=organization_id, query=scoped_query, user_role=user_role)
+        if query.operation == "services_ranking":
+            return await self._run_company_services_ranking(organization_id=organization_id)
 
-        resolved_limit = self._clamp_limit(scoped_query.limit)
+        if query.operation == "client_services_ranking":
+            return await self._run_company_client_services_ranking(organization_id=organization_id, query=query)
 
-        total_contracts = await self.sql_repo.count_contracts(
+        resolved_limit = self._clamp_limit(query.limit)
+
+        total_contracts = await self.sql_repo.count_company_contracts(
             organization_id=organization_id,
-            query=base_query,
+            query=query,
             chatbot_ready_only=True,
         )
         if total_contracts == 0:
             return {
                 "status": "no_data",
-                "message": "No hay contratos cargados para la organizacion actual.",
+                "message": "No hay contratos COMPANY cargados para la organizacion actual.",
             }
 
-        filtered_count = await self.sql_repo.count_contracts(
+        filtered_count = await self.sql_repo.count_company_contracts(
             organization_id=organization_id,
-            query=scoped_query,
+            query=query,
             chatbot_ready_only=True,
         )
 
         response: dict[str, Any] = {
             "status": "success",
-            "operation": scoped_query.operation,
+            "operation": query.operation,
+            "document_type": "COMPANY",
             "count": filtered_count,
             "total_contracts_available": total_contracts,
             "evaluated_on": today.isoformat(),
             "filters_applied": {
-                "client": scoped_query.client,
-                "contract_name": scoped_query.contract_name,
-                "service_name": scoped_query.service_name,
-                "service_id": scoped_query.service_id,
-                "min_value": scoped_query.min_value,
-                "max_value": scoped_query.max_value,
-                "currency": scoped_query.currency,
-                "state": scoped_query.state,
-                "document_type": scoped_query.document_type,
-                "period_start": scoped_query.period_start.isoformat() if scoped_query.period_start else None,
-                "period_end": scoped_query.period_end.isoformat() if scoped_query.period_end else None,
-                "date_mode": scoped_query.date_mode,
-                "currently_active": scoped_query.currently_active,
-                "sort_by": scoped_query.sort_by,
-                "sort_direction": scoped_query.sort_direction,
+                "client": query.client,
+                "ruc": query.ruc,
+                "contract_name": query.contract_name,
+                "service_name": query.service_name,
+                "service_id": query.service_id,
+                "min_value": query.min_value,
+                "max_value": query.max_value,
+                "currency": query.currency,
+                "state": query.state,
+                "period_start": query.period_start.isoformat() if query.period_start else None,
+                "period_end": query.period_end.isoformat() if query.period_end else None,
+                "date_mode": query.date_mode,
+                "currently_active": query.currently_active,
+                "sort_by": query.sort_by,
+                "sort_direction": query.sort_direction,
             },
         }
 
-        if scoped_query.operation == "count":
+        if query.operation == "count":
             return response
 
-        if scoped_query.operation == "ranking":
-            items = await self.sql_repo.rank_contracts_by_client(
+        if query.operation == "ranking":
+            items = await self.sql_repo.rank_company_contracts_by_client(
                 organization_id=organization_id,
-                query=scoped_query,
+                query=query,
                 limit=resolved_limit,
                 chatbot_ready_only=True,
             )
@@ -272,12 +281,9 @@ class ContractQueryService:
             response["limit"] = resolved_limit
             return response
 
-        if scoped_query.operation == "services_ranking":
-            return await self._run_services_ranking(organization_id=organization_id, query=scoped_query, user_role=user_role)
-
-        documents = await self.sql_repo.search_contracts(
+        documents = await self.sql_repo.search_company_contracts(
             organization_id=organization_id,
-            query=scoped_query,
+            query=query,
             limit=resolved_limit,
             chatbot_ready_only=True,
         )
@@ -289,14 +295,12 @@ class ContractQueryService:
             documents=documents,
         )
         response["items"] = [
-            self._serialize_contract(
+            self._serialize_company_contract(
                 document=document,
                 today=today,
                 service_items=service_items_by_document.get(document.id, []) if document.id is not None else [],
                 service_names=service_names,
                 client=party_context.get(document.id) if document.id else None,
-                labor_value=value_context.get(document.id, {}).get("labor_value") if document.id else None,
-                labor_currency=value_context.get(document.id, {}).get("labor_currency") if document.id else None,
                 company_total_value=value_context.get(document.id, {}).get("company_total_value") if document.id else None,
                 company_currency=value_context.get(document.id, {}).get("company_currency") if document.id else None,
             )
@@ -305,3 +309,109 @@ class ContractQueryService:
         response["returned_items"] = len(response["items"])
         response["limit"] = resolved_limit
         return response
+
+    async def run_labor_query(self, organization_id: int, query: LaborContractQueryDTO) -> dict[str, Any]:
+        """Ejecuta una consulta estructurada sobre contratos LABOR."""
+        today = date.today()
+        await self.sql_repo.sync_contract_states(organization_id=organization_id)
+
+        if (query.min_value is not None or query.max_value is not None) and not query.currency:
+            return {
+                "status": "needs_clarification",
+                "message": "Indique la moneda del monto a evaluar, por ejemplo USD, PEN o EUR.",
+            }
+
+        if query.period_start and query.period_end and query.period_start > query.period_end:
+            return {
+                "status": "invalid_request",
+                "message": "La fecha inicial no puede ser posterior a la fecha final.",
+            }
+
+        resolved_limit = self._clamp_limit(query.limit)
+
+        total_contracts = await self.sql_repo.count_labor_contracts(
+            organization_id=organization_id,
+            query=query,
+            chatbot_ready_only=True,
+        )
+        if total_contracts == 0:
+            return {
+                "status": "no_data",
+                "message": "No hay contratos LABOR cargados para la organizacion actual.",
+            }
+
+        filtered_count = await self.sql_repo.count_labor_contracts(
+            organization_id=organization_id,
+            query=query,
+            chatbot_ready_only=True,
+        )
+
+        response: dict[str, Any] = {
+            "status": "success",
+            "operation": query.operation,
+            "document_type": "LABOR",
+            "count": filtered_count,
+            "total_contracts_available": total_contracts,
+            "evaluated_on": today.isoformat(),
+            "filters_applied": {
+                "worker_name": query.worker_name,
+                "worker_document_number": query.worker_document_number,
+                "position": query.position,
+                "contract_name": query.contract_name,
+                "contract_modality": query.contract_modality,
+                "salary_periodicity": query.salary_periodicity,
+                "min_value": query.min_value,
+                "max_value": query.max_value,
+                "currency": query.currency,
+                "state": query.state,
+                "period_start": query.period_start.isoformat() if query.period_start else None,
+                "period_end": query.period_end.isoformat() if query.period_end else None,
+                "date_mode": query.date_mode,
+                "currently_active": query.currently_active,
+                "sort_by": query.sort_by,
+                "sort_direction": query.sort_direction,
+            },
+        }
+
+        if query.operation == "count":
+            return response
+
+        documents = await self.sql_repo.search_labor_contracts(
+            organization_id=organization_id,
+            query=query,
+            limit=resolved_limit,
+            chatbot_ready_only=True,
+        )
+        document_ids = [doc.id for doc in documents if doc.id is not None]
+        value_context = await self.sql_repo.get_contract_value_context(document_ids=document_ids) if document_ids else {}
+        party_context = await self.sql_repo.get_contract_party_context(document_ids=document_ids) if document_ids else {}
+
+        labor_details = await self._get_labor_contract_details(document_ids) if document_ids else {}
+
+        response["items"] = [
+            self._serialize_labor_contract(
+                document=document,
+                today=today,
+                worker_name=party_context.get(document.id) if document.id else None,
+                worker_document_number=labor_details.get(document.id, {}).get("worker_document_number") if document.id else None,
+                position=labor_details.get(document.id, {}).get("position") if document.id else None,
+                labor_value=value_context.get(document.id, {}).get("labor_value") if document.id else None,
+                labor_currency=value_context.get(document.id, {}).get("labor_currency") if document.id else None,
+            )
+            for document in documents
+        ]
+        response["returned_items"] = len(response["items"])
+        response["limit"] = resolved_limit
+        return response
+
+    async def _get_labor_contract_details(self, document_ids: list[int]) -> dict[int, dict[str, Any]]:
+        """Fetch labor contract details for a list of document IDs."""
+        details: dict[int, dict[str, Any]] = {}
+        for doc_id in document_ids:
+            labor_contract = await self.sql_repo.get_labor_contract_by_document_id(doc_id)
+            if labor_contract:
+                details[doc_id] = {
+                    "worker_document_number": labor_contract.worker_document_number,
+                    "position": labor_contract.position,
+                }
+        return details

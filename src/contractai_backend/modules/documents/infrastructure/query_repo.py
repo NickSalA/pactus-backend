@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from datetime import date
 from difflib import SequenceMatcher
-from typing import Any
+from typing import Any, Union
 from typing import cast as type_cast
 
 from sqlalchemy import Float, asc, case, cast, desc, func, or_, text
@@ -19,7 +19,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from ....core.infrastructure.base import PostgresBaseRepository
 from ....core.infrastructure.sqlmodel_utils import RelationalHelpersMixin
 from ...catalog.domain.entities import ServiceTable
-from ..application.dto import ContractQueryDTO
+from ..application.dto import CompanyContractQueryDTO, LaborContractQueryDTO
 from ..application.repositories import DocumentQueryRepository
 from ..domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable, LaborContractTable
 from ..domain.exceptions import DocumentDatabaseError, DocumentDatabaseUnavailableError
@@ -91,7 +91,7 @@ class SQLModelDocumentQueryRepository(
             col(LaborContractTable.document_id) == col(DocumentTable.id),
         )
 
-    def _apply_period_filters(self, statement, filters: ContractQueryDTO):
+    def _apply_period_filters(self, statement, filters: Union[CompanyContractQueryDTO, LaborContractQueryDTO]):
         if not (filters.period_start or filters.period_end):
             return statement
 
@@ -111,7 +111,7 @@ class SQLModelDocumentQueryRepository(
             statement = statement.where(period_end_column <= filters.period_end)
         return statement
 
-    def _apply_current_activity_filter(self, statement, filters: ContractQueryDTO):
+    def _apply_current_activity_filter(self, statement, filters: Union[CompanyContractQueryDTO, LaborContractQueryDTO]):
         if filters.currently_active is None:
             return statement
 
@@ -206,15 +206,25 @@ class SQLModelDocumentQueryRepository(
             return ordered_expression.nulls_last()
         return ordered_expression.nulls_first()
 
-    def _apply_contract_sorting(self, statement, query: ContractQueryDTO):
-        sort_mapping = {
-            "client": self._build_party_expression(),
-            "name": self._build_contract_title_expression(),
-            "value": self._build_contract_value_expression(),
-            "start_date": col(DocumentTable.start_date),
-            "end_date": col(DocumentTable.end_date),
-            "currency": self._build_contract_currency_expression(),
-        }
+    def _apply_contract_sorting(self, statement, query: Union[CompanyContractQueryDTO, LaborContractQueryDTO]):
+        if isinstance(query, CompanyContractQueryDTO):
+            sort_mapping = {
+                "client": self._build_party_expression(),
+                "name": self._build_contract_title_expression(),
+                "value": self._build_contract_value_expression(),
+                "start_date": col(DocumentTable.start_date),
+                "end_date": col(DocumentTable.end_date),
+                "currency": self._build_contract_currency_expression(),
+            }
+        else:
+            sort_mapping = {
+                "worker_name": col(LaborContractTable.worker_name),
+                "position": col(LaborContractTable.position),
+                "salary_value": col(LaborContractTable.salary_value),
+                "start_date": col(DocumentTable.start_date),
+                "end_date": col(DocumentTable.end_date),
+                "currency": col(LaborContractTable.salary_currency),
+            }
 
         sort_expression = sort_mapping.get(query.sort_by or "")
         if sort_expression is None:
@@ -229,7 +239,7 @@ class SQLModelDocumentQueryRepository(
     def _apply_client_ranking_sorting(
         self,
         statement,
-        query: ContractQueryDTO,
+        query: CompanyContractQueryDTO,
         *,
         client_expression,
         currency_expression,
@@ -257,7 +267,7 @@ class SQLModelDocumentQueryRepository(
             asc(client_expression),
         )
 
-    def _build_service_document_ids_subquery(self, organization_id: int, filters: ContractQueryDTO):
+    def _build_service_document_ids_subquery(self, organization_id: int, filters: CompanyContractQueryDTO):
         normalized_service_name = self._normalize_text_filter(filters.service_name)
         if filters.service_id is None and normalized_service_name is None:
             return None
@@ -279,29 +289,37 @@ class SQLModelDocumentQueryRepository(
 
         return statement
 
-    def _apply_service_filters(self, statement, organization_id: int, filters: ContractQueryDTO):
+    def _apply_service_filters(self, statement, organization_id: int, filters: CompanyContractQueryDTO):
         service_document_ids = self._build_service_document_ids_subquery(organization_id=organization_id, filters=filters)
         if service_document_ids is None:
             return statement
         return statement.where(col(DocumentTable.id).in_(service_document_ids))
 
-    def _apply_contract_filters(
+    def _apply_company_contract_filters(
         self,
         statement,
         organization_id: int,
-        filters: ContractQueryDTO,
+        filters: CompanyContractQueryDTO,
     ):
-        """Aplica los filtros de búsqueda de contratos a la consulta base."""
+        """Aplica los filtros de búsqueda específicos para contratos COMPANY."""
         statement = self._join_contract_detail_tables(statement)
         statement = statement.where(DocumentTable.organization_id == organization_id)
+        statement = statement.where(col(CompanyContractTable.id).is_not(None))
 
-        text_filters = (
-            (filters.client, self._build_party_expression()),
-            (filters.contract_name, self._build_contract_title_expression()),
-        )
-        for raw_value, field in text_filters:
-            if normalized_value := self._normalize_text_filter(raw_value):
-                statement = statement.where(field.ilike(f"%{normalized_value}%"))
+        if filters.client:
+            normalized = self._normalize_text_filter(filters.client)
+            if normalized:
+                statement = statement.where(col(CompanyContractTable.client).ilike(f"%{normalized}%"))
+
+        if filters.ruc:
+            normalized = self._normalize_text_filter(filters.ruc)
+            if normalized:
+                statement = statement.where(col(CompanyContractTable.ruc).ilike(f"%{normalized}%"))
+
+        if filters.contract_name:
+            normalized = self._normalize_text_filter(filters.contract_name)
+            if normalized:
+                statement = statement.where(col(DocumentTable.file_name).ilike(f"%{normalized}%"))
 
         statement = self._apply_service_filters(statement=statement, organization_id=organization_id, filters=filters)
 
@@ -316,8 +334,61 @@ class SQLModelDocumentQueryRepository(
 
         if filters.state is not None:
             statement = statement.where(col(DocumentTable.state) == filters.state)
-        if filters.document_type is not None:
-            statement = statement.where(self._build_document_kind_expression() == filters.document_type.value)
+
+        statement = self._apply_period_filters(statement=statement, filters=filters)
+        return self._apply_current_activity_filter(statement=statement, filters=filters)
+
+    def _apply_labor_contract_filters(
+        self,
+        statement,
+        organization_id: int,
+        filters: LaborContractQueryDTO,
+    ):
+        """Aplica los filtros de búsqueda específicos para contratos LABOR."""
+        statement = self._join_contract_detail_tables(statement)
+        statement = statement.where(DocumentTable.organization_id == organization_id)
+        statement = statement.where(col(LaborContractTable.id).is_not(None))
+
+        if filters.worker_name:
+            normalized = self._normalize_text_filter(filters.worker_name)
+            if normalized:
+                statement = statement.where(col(LaborContractTable.worker_name).ilike(f"%{normalized}%"))
+
+        if filters.worker_document_number:
+            normalized = self._normalize_text_filter(filters.worker_document_number)
+            if normalized:
+                statement = statement.where(col(LaborContractTable.worker_document_number).ilike(f"%{normalized}%"))
+
+        if filters.position:
+            normalized = self._normalize_text_filter(filters.position)
+            if normalized:
+                statement = statement.where(col(LaborContractTable.position).ilike(f"%{normalized}%"))
+
+        if filters.contract_modality:
+            normalized = self._normalize_text_filter(filters.contract_modality)
+            if normalized:
+                statement = statement.where(col(LaborContractTable.contract_modality).ilike(f"%{normalized}%"))
+
+        if filters.salary_periodicity:
+            normalized = self._normalize_text_filter(filters.salary_periodicity)
+            if normalized:
+                statement = statement.where(col(LaborContractTable.salary_periodicity).ilike(f"%{normalized}%"))
+
+        if filters.contract_name:
+            normalized = self._normalize_text_filter(filters.contract_name)
+            if normalized:
+                statement = statement.where(col(DocumentTable.file_name).ilike(f"%{normalized}%"))
+
+        if filters.min_value is not None:
+            statement = statement.where(col(LaborContractTable.salary_value) >= filters.min_value)
+        if filters.max_value is not None:
+            statement = statement.where(col(LaborContractTable.salary_value) <= filters.max_value)
+
+        if filters.currency:
+            statement = statement.where(col(LaborContractTable.salary_currency) == filters.currency)
+
+        if filters.state is not None:
+            statement = statement.where(col(DocumentTable.state) == filters.state)
 
         statement = self._apply_period_filters(statement=statement, filters=filters)
         return self._apply_current_activity_filter(statement=statement, filters=filters)
@@ -510,17 +581,17 @@ class SQLModelDocumentQueryRepository(
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
 
-    async def search_contracts(
+    async def search_company_contracts(
         self,
         organization_id: int,
-        query: ContractQueryDTO,
+        query: CompanyContractQueryDTO,
         limit: int | None = None,
         chatbot_ready_only: bool = False,
     ) -> Sequence[DocumentTable]:
-        """Obtiene contratos aplicando filtros estructurados."""
+        """Obtiene contratos COMPANY aplicando filtros estructurados."""
         try:
             statement = select(DocumentTable)
-            statement = self._apply_contract_filters(
+            statement = self._apply_company_contract_filters(
                 statement=statement,
                 organization_id=organization_id,
                 filters=query,
@@ -539,16 +610,45 @@ class SQLModelDocumentQueryRepository(
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
 
-    async def rank_contracts_by_client(
+    async def search_labor_contracts(
         self,
         organization_id: int,
-        query: ContractQueryDTO,
+        query: LaborContractQueryDTO,
+        limit: int | None = None,
+        chatbot_ready_only: bool = False,
+    ) -> Sequence[DocumentTable]:
+        """Obtiene contratos LABOR aplicando filtros estructurados."""
+        try:
+            statement = select(DocumentTable)
+            statement = self._apply_labor_contract_filters(
+                statement=statement,
+                organization_id=organization_id,
+                filters=query,
+            )
+            if chatbot_ready_only:
+                statement = self._apply_chatbot_ready_contract_filters(statement)
+            statement = self._apply_contract_sorting(statement=statement, query=query)
+
+            if limit is not None:
+                statement = statement.limit(limit)
+
+            result = await self.session.exec(statement=statement)
+            return result.all()
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
+            raise DocumentDatabaseUnavailableError() from e
+        except SQLAlchemyError as e:
+            raise DocumentDatabaseError() from e
+
+    async def rank_company_contracts_by_client(
+        self,
+        organization_id: int,
+        query: CompanyContractQueryDTO,
         limit: int | None = None,
         chatbot_ready_only: bool = False,
     ) -> Sequence[dict[str, object]]:
-        """Construye un ranking agregado por cliente y moneda."""
+        """Construye un ranking agregado por cliente y moneda para contratos COMPANY."""
         try:
-            client_field = self._build_party_expression()
+            client_field = col(CompanyContractTable.client)
             currency_field = self._build_contract_currency_expression()
             contract_value = self._build_contract_value_expression()
 
@@ -563,7 +663,7 @@ class SQLModelDocumentQueryRepository(
                 total_value_expression,
                 contracts_count_expression,
             )
-            statement = self._apply_contract_filters(
+            statement = self._apply_company_contract_filters(
                 statement=statement,
                 organization_id=organization_id,
                 filters=query,
@@ -604,11 +704,106 @@ class SQLModelDocumentQueryRepository(
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
 
-    async def count_contracts(self, organization_id: int, query: ContractQueryDTO, chatbot_ready_only: bool = False) -> int:
-        """Cuenta contratos aplicando filtros estructurados."""
+    async def rank_company_contracts_by_services(
+        self,
+        organization_id: int,
+        query: CompanyContractQueryDTO,
+        limit: int | None = None,
+        chatbot_ready_only: bool = False,
+    ) -> Sequence[dict[str, object]]:
+        """Construye un ranking agregado por cliente y moneda basado en la cantidad de servicios contratados."""
+        try:
+            service_count_subquery = (
+                select(
+                    CompanyContractTable.document_id,
+                    func.count(CompanyContractServiceTable.id).label("service_count"),
+                )
+                .join(CompanyContractServiceTable, col(CompanyContractServiceTable.company_contract_id) == CompanyContractTable.id)
+                .group_by(CompanyContractTable.document_id)
+                .subquery()
+            )
+
+            client_field = col(CompanyContractTable.client)
+            currency_field = self._build_contract_currency_expression()
+            contract_value = self._build_contract_value_expression()
+
+            client_expression = client_field.label("client")
+            currency_expression = currency_field.label("currency")
+            total_value_expression = func.coalesce(func.sum(contract_value), 0.0).label("total_value")
+            contracts_count_expression = func.count(col(DocumentTable.id)).label("contracts_count")
+            total_services_expression = func.coalesce(func.sum(service_count_subquery.c.service_count), 0).label("total_services")
+
+            statement = select(
+                client_expression,
+                currency_expression,
+                total_value_expression,
+                contracts_count_expression,
+                total_services_expression,
+            )
+            statement = self._apply_company_contract_filters(
+                statement=statement,
+                organization_id=organization_id,
+                filters=query,
+            )
+            if chatbot_ready_only:
+                statement = self._apply_chatbot_ready_contract_filters(statement)
+
+            statement = statement.join(
+                service_count_subquery,
+                col(service_count_subquery.c.document_id) == col(DocumentTable.id)
+            )
+            statement = statement.group_by(client_field, currency_field)
+            statement = statement.order_by(desc(total_services_expression), desc(contracts_count_expression), asc(client_expression))
+
+            if limit is not None:
+                statement = statement.limit(limit)
+
+            result = await self.session.exec(statement=statement)
+            rows = result.all()
+
+            serialized_rows: list[dict[str, object]] = []
+            for row in rows:
+                mapping = row._mapping if hasattr(row, "_mapping") else None
+                serialized_rows.append(
+                    {
+                        "client": mapping["client"] if mapping else row[0],
+                        "currency": mapping["currency"] if mapping else row[1],
+                        "total_value": float((mapping["total_value"] if mapping else row[2]) or 0.0),
+                        "contracts_count": int((mapping["contracts_count"] if mapping else row[3]) or 0),
+                        "total_services": int((mapping["total_services"] if mapping else row[4]) or 0),
+                    }
+                )
+
+            return serialized_rows
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
+            raise DocumentDatabaseUnavailableError() from e
+        except SQLAlchemyError as e:
+            raise DocumentDatabaseError() from e
+
+    async def count_company_contracts(self, organization_id: int, query: CompanyContractQueryDTO, chatbot_ready_only: bool = False) -> int:
+        """Cuenta contratos COMPANY aplicando filtros estructurados."""
         try:
             statement = select(func.count()).select_from(DocumentTable)
-            statement = self._apply_contract_filters(
+            statement = self._apply_company_contract_filters(
+                statement=statement,
+                organization_id=organization_id,
+                filters=query,
+            )
+            if chatbot_ready_only:
+                statement = self._apply_chatbot_ready_contract_filters(statement)
+            result = await self.session.exec(statement=statement)
+            count = result.one()
+            return int(count or 0)
+        except (SQLAlchemyTimeoutError, OperationalError) as e:
+            raise DocumentDatabaseUnavailableError() from e
+        except SQLAlchemyError as e:
+            raise DocumentDatabaseError() from e
+
+    async def count_labor_contracts(self, organization_id: int, query: LaborContractQueryDTO, chatbot_ready_only: bool = False) -> int:
+        """Cuenta contratos LABOR aplicando filtros estructurados."""
+        try:
+            statement = select(func.count()).select_from(DocumentTable)
+            statement = self._apply_labor_contract_filters(
                 statement=statement,
                 organization_id=organization_id,
                 filters=query,
@@ -674,9 +869,13 @@ class SQLModelDocumentQueryRepository(
                 .subquery()
             )
 
-            stmt = select(labor_subq.c.document_id, labor_subq.c.salary_value, labor_subq.c.salary_currency).outerjoin(
-                company_subq, col(labor_subq.c.document_id) == company_subq.c.document_id
-            )
+            stmt = select(
+                labor_subq.c.document_id,
+                labor_subq.c.salary_value,
+                labor_subq.c.salary_currency,
+                company_subq.c.total_value,
+                company_subq.c.currency,
+            ).outerjoin(company_subq, col(labor_subq.c.document_id) == company_subq.c.document_id)
 
             result = await self.session.exec(statement=stmt)
             context: dict[int, dict[str, Any]] = {}
@@ -725,3 +924,56 @@ class SQLModelDocumentQueryRepository(
             raise DocumentDatabaseUnavailableError() from e
         except SQLAlchemyError as e:
             raise DocumentDatabaseError() from e
+
+    async def search_contracts(
+        self,
+        organization_id: int,
+        query: Union[CompanyContractQueryDTO, LaborContractQueryDTO],
+        limit: int | None = None,
+        chatbot_ready_only: bool = False,
+    ) -> Sequence[DocumentTable]:
+        if isinstance(query, CompanyContractQueryDTO):
+            return await self.search_company_contracts(
+                organization_id=organization_id,
+                query=query,
+                limit=limit,
+                chatbot_ready_only=chatbot_ready_only,
+            )
+        return await self.search_labor_contracts(
+            organization_id=organization_id,
+            query=query,
+            limit=limit,
+            chatbot_ready_only=chatbot_ready_only,
+        )
+
+    async def count_contracts(
+        self,
+        organization_id: int,
+        query: Union[CompanyContractQueryDTO, LaborContractQueryDTO],
+        chatbot_ready_only: bool = False,
+    ) -> int:
+        if isinstance(query, CompanyContractQueryDTO):
+            return await self.count_company_contracts(
+                organization_id=organization_id,
+                query=query,
+                chatbot_ready_only=chatbot_ready_only,
+            )
+        return await self.count_labor_contracts(
+            organization_id=organization_id,
+            query=query,
+            chatbot_ready_only=chatbot_ready_only,
+        )
+
+    async def rank_contracts_by_client(
+        self,
+        organization_id: int,
+        query: CompanyContractQueryDTO,
+        limit: int | None = None,
+        chatbot_ready_only: bool = False,
+    ) -> Sequence[dict[str, Any]]:
+        return await self.rank_company_contracts_by_client(
+            organization_id=organization_id,
+            query=query,
+            limit=limit,
+            chatbot_ready_only=chatbot_ready_only,
+        )

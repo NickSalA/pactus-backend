@@ -21,7 +21,8 @@ from ..infrastructure.agent import (
     ContractAgentGraph,
     LangGraphLLMAdapter,
     build_bc_tool,
-    build_contracts_query_tool,
+    build_company_contracts_query_tool,
+    build_labor_contracts_query_tool,
     build_party_lookup_tool,
     get_llm,
 )
@@ -84,13 +85,22 @@ async def get_llm_provider(
         document_ids_by_state=document_ids_by_state,
     )
     party_lookup_tool = build_party_lookup_tool(repo=contract_repo, organization_id=current_user.organization_id)
-    contracts_query_tool = build_contracts_query_tool(
+    company_contracts_query_tool = build_company_contracts_query_tool(
+        service=contract_query_service,
+        organization_id=current_user.organization_id,
+        user_role=current_user.role,
+    )
+    labor_contracts_query_tool = build_labor_contracts_query_tool(
         service=contract_query_service,
         organization_id=current_user.organization_id,
         user_role=current_user.role,
     )
 
-    graph_builder = ContractAgentGraph(tools=[contracts_query_tool, bc_tool], permission_tools=[party_lookup_tool], llm=get_llm())
+    graph_builder = ContractAgentGraph(
+        tools=[company_contracts_query_tool, labor_contracts_query_tool, bc_tool],
+        permission_tools=[party_lookup_tool],
+        llm=get_llm(),
+    )
     compiled_graph = graph_builder.build_graph(checkpointer=checkpointer)
 
     return LangGraphLLMAdapter(compiled_graph=compiled_graph)
