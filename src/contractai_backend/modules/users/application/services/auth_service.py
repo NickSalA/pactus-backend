@@ -35,7 +35,7 @@ class AuthService:
             user.full_name = auth_user.full_name
             needs_update = True
 
-        if auth_user.avatar_url != user.avatar_url:
+        if auth_user.avatar_url is not None and auth_user.avatar_url != user.avatar_url:
             user.avatar_url = auth_user.avatar_url
             needs_update = True
 
