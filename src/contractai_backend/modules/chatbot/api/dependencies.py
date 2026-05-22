@@ -21,7 +21,8 @@ from ..infrastructure.agent import (
     ContractAgentGraph,
     LangGraphLLMAdapter,
     build_bc_tool,
-    build_contracts_query_tool,
+    build_company_contracts_query_tool,
+    build_labor_contracts_query_tool,
     build_party_lookup_tool,
     get_llm,
 )
@@ -53,25 +54,29 @@ async def get_llm_provider(
     readable_document_types = get_readable_document_types(current_user.role)
     document_filters = {"organization_id": current_user.organization_id}
     documents = await contract_repo.get_all(filters=document_filters)
+    document_ids = [document.id for document in documents if document.id is not None]
+    document_kinds = await contract_repo.get_contract_kinds_by_document_ids(document_ids=document_ids)
+
+    documents_with_children = [
+        document
+        for document in documents
+        if document.id is not None and document_kinds.get(document.id) is not None
+    ]
+
     if readable_document_types is not None:
-        document_ids = [document.id for document in documents if document.id is not None]
-        document_kinds = await contract_repo.get_contract_kinds_by_document_ids(document_ids=document_ids)
-        documents = [
-            document
-            for document in documents
-            if document.id is not None
-            and document_kinds.get(document.id) is not None
-            and DocumentType(document_kinds[document.id]) in readable_document_types
+        documents_with_children = [
+            doc for doc in documents_with_children if DocumentType(document_kinds[doc.id]) in readable_document_types
         ]
 
-    default_document_ids = {
-        document.id for document in documents if document.id is not None and ContractQueryService.is_chatbot_visible_contract(document=document)
-    }
+    visible_documents = [
+        doc for doc in documents_with_children if ContractQueryService.is_chatbot_visible_contract(doc)
+    ]
+
+    default_document_ids = {document.id for document in visible_documents if document.id is not None}
     document_ids_by_state: dict[DocumentState, set[int]] = {}
-    for document in documents:
-        if document.id is None or document.state is None or not ContractQueryService.has_required_chatbot_contract_data(document=document):
-            continue
-        document_ids_by_state.setdefault(DocumentState(document.state), set()).add(document.id)
+    for document in visible_documents:
+        if document.id is not None and document.state is not None:
+            document_ids_by_state.setdefault(DocumentState(document.state), set()).add(document.id)
 
     bc_tool = build_bc_tool(
         repo=vector_repo,
@@ -80,13 +85,22 @@ async def get_llm_provider(
         document_ids_by_state=document_ids_by_state,
     )
     party_lookup_tool = build_party_lookup_tool(repo=contract_repo, organization_id=current_user.organization_id)
-    contracts_query_tool = build_contracts_query_tool(
+    company_contracts_query_tool = build_company_contracts_query_tool(
+        service=contract_query_service,
+        organization_id=current_user.organization_id,
+        user_role=current_user.role,
+    )
+    labor_contracts_query_tool = build_labor_contracts_query_tool(
         service=contract_query_service,
         organization_id=current_user.organization_id,
         user_role=current_user.role,
     )
 
-    graph_builder = ContractAgentGraph(tools=[contracts_query_tool, bc_tool], permission_tools=[party_lookup_tool], llm=get_llm())
+    graph_builder = ContractAgentGraph(
+        tools=[company_contracts_query_tool, labor_contracts_query_tool, bc_tool],
+        permission_tools=[party_lookup_tool],
+        llm=get_llm(),
+    )
     compiled_graph = graph_builder.build_graph(checkpointer=checkpointer)
 
     return LangGraphLLMAdapter(compiled_graph=compiled_graph)

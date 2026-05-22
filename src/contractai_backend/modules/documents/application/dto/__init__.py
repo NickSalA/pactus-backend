@@ -1,4 +1,4 @@
-from .contract_query_dto import ContractQueryDTO
+from .contract_query_dto import CompanyContractQueryDTO, LaborContractQueryDTO
 from .document_schemas import (
     CompanyContractBase,
     CompanyContractRequest,
@@ -23,9 +23,9 @@ from .extracted_document_data import ExtractedDocumentData, ExtractedDocumentFor
 
 __all__ = [
     "CompanyContractBase",
+    "CompanyContractQueryDTO",
     "CompanyContractRequest",
     "CompanyContractResponse",
-    "ContractQueryDTO",
     "CreateDocumentDraftRequest",
     "CreateDocumentRequest",
     "DocumentBase",
@@ -41,6 +41,7 @@ __all__ = [
     "ExtractedDocumentServiceItem",
     "FileRequest",
     "LaborContractBase",
+    "LaborContractQueryDTO",
     "LaborContractRequest",
     "LaborContractResponse",
     "UpdateDocumentRequest",
