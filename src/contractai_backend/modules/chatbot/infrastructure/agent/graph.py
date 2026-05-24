@@ -154,10 +154,7 @@ async def _resolve_named_party_access(
         denied_matches = [match for match in normalized_matches if match["document_type"] not in allowed_document_types]
 
     if not allowed_matches:
-        if denied_matches:
-            return {"kind": "deny"}
-        return {"kind": "no_match"}
-
+        return {"kind": "deny"} if denied_matches else {"kind": "no_match"}
     if len(allowed_matches) == 1:
         return {
             "kind": "allow",
@@ -298,9 +295,9 @@ def build_terminal_response(state_key: str):
 
 async def call_model(state: AgentState, llm: Runnable):
     """A3: run the conversational agent with tool access."""
-    system_message = SystemMessage(content=get_conversation_agent_prompt())
     user_context = state.get("user_context") or {}
     allowed_document_types = user_context.get("allowed_document_types")
+    system_message = SystemMessage(content=get_conversation_agent_prompt(allowed_document_types=allowed_document_types))
     access_scope = "all document types" if allowed_document_types is None else ", ".join(allowed_document_types)
     access_message = SystemMessage(
         content=(
