@@ -31,7 +31,7 @@ class CompanyContractTable(BaseTable, table=True):
     def validate_optional_text(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        cleaned = value.strip()
-        if not cleaned:
+        if cleaned := value.strip():
+            return cleaned
+        else:
             raise ValueError("Field cannot be empty.")
-        return cleaned

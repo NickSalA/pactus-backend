@@ -47,10 +47,10 @@ class DocumentTable(BaseTable, table=True):
         """Rejects blank type values while allowing nulls during draft imports."""
         if value is None:
             return None
-        cleaned = value.strip()
-        if not cleaned:
+        if cleaned := value.strip():
+            return cleaned
+        else:
             raise ValueError("Field cannot be empty.")
-        return cleaned
 
     @field_validator("end_date")
     @classmethod

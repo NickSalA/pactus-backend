@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from .....core.application.validation import format_pydantic_validation_error
 from ....documents.application.dto import CompanyContractQueryDTO, LaborContractQueryDTO
 from ....documents.application.services import ContractQueryService
-from ....documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
+from ....documents.domain.value_objs import CurrencyType, DocumentState
 from ....users.domain.value_objs import UserRole
 from ...application.repositories import VectorRepository
 from .access import ROLE_PERMISSION_DENIED_RESPONSE, evaluate_document_access
@@ -42,10 +42,14 @@ STATE_PATTERNS: tuple[tuple[DocumentState, tuple[str, ...]], ...] = (
 
 def resolve_requested_document_state(message: str) -> DocumentState | None:
     normalized = unicodedata.normalize("NFKD", message or "").encode("ascii", "ignore").decode("ascii").lower()
-    for document_state, patterns in STATE_PATTERNS:
-        if any(re.search(pattern, normalized) for pattern in patterns):
-            return document_state
-    return None
+    return next(
+        (
+            document_state
+            for document_state, patterns in STATE_PATTERNS
+            if any(re.search(pattern, normalized) for pattern in patterns)
+        ),
+        None,
+    )
 
 
 def _resolve_scoped_document_ids(document_ids: list[int] | None, allowed_document_ids: frozenset[int] | None) -> list[int] | None:
@@ -148,7 +152,7 @@ def build_party_lookup_tool(repo: CounterpartyLookupRepository, organization_id:
     return party_lookup_tool
 
 
-def build_company_contracts_query_tool(service: ContractQueryService, organization_id: int, user_role: UserRole | None):
+def build_company_contracts_query_tool(service: ContractQueryService, organization_id: int):
     """Construye una herramienta para consultas estructuradas de contratos COMPANY."""
 
     @tool(
@@ -217,7 +221,7 @@ def build_company_contracts_query_tool(service: ContractQueryService, organizati
     return company_contracts_query_tool
 
 
-def build_labor_contracts_query_tool(service: ContractQueryService, organization_id: int, user_role: UserRole | None):
+def build_labor_contracts_query_tool(service: ContractQueryService, organization_id: int):
     """Construye una herramienta para consultas estructuradas de contratos LABOR."""
 
     @tool(
