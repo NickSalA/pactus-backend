@@ -1,9 +1,6 @@
 """API schemas for organizations."""
 
 from ..application.dto import (
-    OrganizationCreateRequest as ApplicationOrganizationCreateRequest,
-)
-from ..application.dto import (
     OrganizationMemberCreateRequest as ApplicationOrganizationMemberCreateRequest,
 )
 from ..application.dto import (
@@ -16,6 +13,9 @@ from ..application.dto import (
     OrganizationMemberRoleUpdateRequest as ApplicationOrganizationMemberRoleUpdateRequest,
 )
 from ..application.dto import (
+    OrganizationProvisionRequest as ApplicationOrganizationProvisionRequest,
+)
+from ..application.dto import (
     OrganizationResponse as ApplicationOrganizationResponse,
 )
 from ..application.dto import (
@@ -23,8 +23,8 @@ from ..application.dto import (
 )
 
 
-class OrganizationCreateRequest(ApplicationOrganizationCreateRequest):
-    """HTTP request body for creating an organization."""
+class OrganizationProvisionRequest(ApplicationOrganizationProvisionRequest):
+    """HTTP request body for provisioning an organization by a superadmin."""
 
 
 class OrganizationUpdateRequest(ApplicationOrganizationUpdateRequest):
@@ -51,11 +51,11 @@ class OrganizationMemberResponse(ApplicationOrganizationMemberResponse):
     """HTTP response schema for organization members."""
 
 __all__ = [
-    "OrganizationCreateRequest",
     "OrganizationMemberCreateRequest",
     "OrganizationMemberNotificationsUpdateRequest",
     "OrganizationMemberResponse",
     "OrganizationMemberRoleUpdateRequest",
+    "OrganizationProvisionRequest",
     "OrganizationResponse",
     "OrganizationUpdateRequest",
 ]

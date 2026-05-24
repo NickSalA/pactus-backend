@@ -13,3 +13,8 @@ class OrganizationRepository(BaseRepository[OrganizationTable]):
     async def get_by_name(self, name: str) -> OrganizationTable | None:
         """Retrieve an organization by its name."""
         pass
+
+    @abstractmethod
+    async def get_by_ruc(self, ruc: str) -> OrganizationTable | None:
+        """Retrieve an organization by its RUC."""
+        pass
