@@ -7,7 +7,9 @@ from .alerts import DashboardAlertQueriesMixin
 from .charts import DashboardChartQueriesMixin
 from .contracts import DashboardContractQueriesMixin
 from .helpers import DashboardRepositoryHelpers
+from .origin import DashboardOriginQueriesMixin
 from .rankings import DashboardRankingQueriesMixin
+from .retention import DashboardRetentionQueriesMixin
 
 
 class SQLModelDashboardRepository(
@@ -15,6 +17,8 @@ class SQLModelDashboardRepository(
     DashboardAlertQueriesMixin,
     DashboardContractQueriesMixin,
     DashboardRankingQueriesMixin,
+    DashboardRetentionQueriesMixin,
+    DashboardOriginQueriesMixin,
     DashboardRepositoryHelpers,
     DashboardRepository,
 ):

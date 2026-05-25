@@ -25,7 +25,13 @@ from ..application.dto import (
     AreaChartYAxis as ApplicationAreaChartYAxis,
 )
 from ..application.dto import (
+    ContractOriginResponse as ApplicationContractOriginResponse,
+)
+from ..application.dto import (
     RecentContractResponse as ApplicationRecentContractResponse,
+)
+from ..application.dto import (
+    RetentionDashboardResponse as ApplicationRetentionDashboardResponse,
 )
 from ..application.dto import (
     TopCompanyResponse as ApplicationTopCompanyResponse,
@@ -78,6 +84,15 @@ class TopCompanyResponse(ApplicationTopCompanyResponse):
 class TopServiceResponse(ApplicationTopServiceResponse):
     """HTTP response schema for top service rows."""
 
+
+class RetentionDashboardResponse(ApplicationRetentionDashboardResponse):
+    """HTTP response schema for worker retention dashboard."""
+
+
+class ContractOriginResponse(ApplicationContractOriginResponse):
+    """HTTP response schema for contract origin dashboard."""
+
+
 __all__ = [
     "AlertCategory",
     "AlertColor",
@@ -87,7 +102,9 @@ __all__ = [
     "AreaChartResponse",
     "AreaChartSeries",
     "AreaChartYAxis",
+    "ContractOriginResponse",
     "RecentContractResponse",
+    "RetentionDashboardResponse",
     "TopCompanyResponse",
     "TopServiceResponse",
 ]

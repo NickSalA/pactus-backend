@@ -94,3 +94,61 @@ class TopServiceResponse(BaseModel):
     name: str
     quantity: int
     amount: float
+
+
+class RetentionKPIs(BaseModel):
+    """KPI metrics for worker retention."""
+
+    active_retention_rate: float
+    total_unique_workers: int
+    avg_contracts_per_worker: float
+
+
+class TenureDistributionPoint(BaseModel):
+    """Distribution of workers by number of contracts."""
+
+    contracts_count: int
+    workers_count: int
+
+
+class MonthlyRenewalPoint(BaseModel):
+    """Aggregated renewal rate for one specific month."""
+
+    month: str
+    renewal_rate: float
+    total_expired: int
+    total_renewed: int
+
+
+class WorkerRetentionDetail(BaseModel):
+    """Metadata and history details for one specific worker."""
+
+    worker_name: str
+    worker_document_number: str | None
+    contracts_count: int
+    first_contract_start: str | None
+    latest_contract_end: str | None
+
+
+class RetentionDashboardResponse(BaseModel):
+    """Complete response payload for the worker retention dashboard."""
+
+    kpis: RetentionKPIs
+    tenure_distribution: list[TenureDistributionPoint]
+    renewal_trend: list[MonthlyRenewalPoint]
+    details: list[WorkerRetentionDetail]
+
+
+class OriginDistributionPoint(BaseModel):
+    """Contract distribution by creation type or source."""
+
+    origin_type: str
+    count: int
+    percentage: float
+
+
+class ContractOriginResponse(BaseModel):
+    """Complete response payload for the contract origin dashboard."""
+
+    distribution: list[OriginDistributionPoint]
+    total_contracts: int
