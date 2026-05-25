@@ -152,3 +152,46 @@ class ContractOriginResponse(BaseModel):
 
     distribution: list[OriginDistributionPoint]
     total_contracts: int
+
+
+class ClientLoyaltyKPIs(BaseModel):
+    """KPI metrics for B2B client loyalty."""
+
+    active_retention_rate: float
+    total_unique_clients: int
+    avg_contracts_per_client: float
+
+
+class ClientTenureDistributionPoint(BaseModel):
+    """Distribution of B2B clients by number of contracts."""
+
+    contracts_count: int
+    clients_count: int
+
+
+class ClientMonthlyRenewalPoint(BaseModel):
+    """Aggregated B2B client renewal rate for one specific month."""
+
+    month: str
+    renewal_rate: float
+    total_expired: int
+    total_renewed: int
+
+
+class ClientLoyaltyDetail(BaseModel):
+    """Metadata and history details for one specific B2B client."""
+
+    client_name: str
+    ruc: str | None
+    contracts_count: int
+    first_contract_start: str | None
+    latest_contract_end: str | None
+
+
+class CompanyLoyaltyDashboardResponse(BaseModel):
+    """Complete response payload for the B2B client loyalty dashboard."""
+
+    kpis: ClientLoyaltyKPIs
+    tenure_distribution: list[ClientTenureDistributionPoint]
+    renewal_trend: list[ClientMonthlyRenewalPoint]
+    details: list[ClientLoyaltyDetail]

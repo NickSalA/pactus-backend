@@ -25,6 +25,9 @@ from ..application.dto import (
     AreaChartYAxis as ApplicationAreaChartYAxis,
 )
 from ..application.dto import (
+    CompanyLoyaltyDashboardResponse as ApplicationCompanyLoyaltyDashboardResponse,
+)
+from ..application.dto import (
     ContractOriginResponse as ApplicationContractOriginResponse,
 )
 from ..application.dto import (
@@ -93,6 +96,10 @@ class ContractOriginResponse(ApplicationContractOriginResponse):
     """HTTP response schema for contract origin dashboard."""
 
 
+class CompanyLoyaltyDashboardResponse(ApplicationCompanyLoyaltyDashboardResponse):
+    """HTTP response schema for B2B client loyalty dashboard."""
+
+
 __all__ = [
     "AlertCategory",
     "AlertColor",
@@ -102,6 +109,7 @@ __all__ = [
     "AreaChartResponse",
     "AreaChartSeries",
     "AreaChartYAxis",
+    "CompanyLoyaltyDashboardResponse",
     "ContractOriginResponse",
     "RecentContractResponse",
     "RetentionDashboardResponse",

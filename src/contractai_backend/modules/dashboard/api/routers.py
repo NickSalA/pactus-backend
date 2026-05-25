@@ -13,6 +13,7 @@ from .dependencies import get_dashboard_service
 from .schemas import (
     AlertCategory,
     AreaChartResponse,
+    CompanyLoyaltyDashboardResponse,
     ContractOriginResponse,
     RecentContractResponse,
     RetentionDashboardResponse,
@@ -117,3 +118,13 @@ async def get_labor_origin_dashboard(
     """Returns the labor contract origin distribution dashboard for HR users."""
     response = await service.get_labor_origin_dashboard(current_user=current_user)
     return ContractOriginResponse.model_validate(response, from_attributes=True)
+
+
+@router.get(path="/loyalty/company", response_model=CompanyLoyaltyDashboardResponse)
+async def get_company_loyalty_dashboard(
+    service: DashboardServiceDep,
+    current_user: CurrentUserDep,
+) -> CompanyLoyaltyDashboardResponse:
+    """Returns the company B2B client loyalty dashboard for manager and worker roles."""
+    response = await service.get_company_loyalty_dashboard(current_user=current_user)
+    return CompanyLoyaltyDashboardResponse.model_validate(response, from_attributes=True)

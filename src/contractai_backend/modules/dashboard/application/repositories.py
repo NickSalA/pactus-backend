@@ -189,3 +189,36 @@ class DashboardRepository(ABC):
     ) -> list[dict[str, Any]]:
         """Queries and aggregates counts of labor contracts by their creation origin type."""
         pass
+
+    @abstractmethod
+    async def get_company_loyalty_kpi_data(
+        self,
+        organization_id: int,
+    ) -> dict[str, Any]:
+        """Computes key client loyalty KPIs: unique clients, contract count and recurrence rate."""
+        pass
+
+    @abstractmethod
+    async def get_company_tenure_distribution(
+        self,
+        organization_id: int,
+    ) -> list[dict[str, int]]:
+        """Returns the distribution of B2B clients grouped by signed contracts count."""
+        pass
+
+    @abstractmethod
+    async def get_company_monthly_renewal_trend(
+        self,
+        organization_id: int,
+        months: int = 6,
+    ) -> list[dict[str, Any]]:
+        """Returns monthly B2B client cohort renewal rates for clients whose contracts expired in each of the past 6 months."""
+        pass
+
+    @abstractmethod
+    async def get_company_loyalty_details(
+        self,
+        organization_id: int,
+    ) -> list[dict[str, Any]]:
+        """Returns details for each unique client, including contract count and employment date ranges."""
+        pass
