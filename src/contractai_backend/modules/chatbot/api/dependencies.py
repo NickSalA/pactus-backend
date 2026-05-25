@@ -9,7 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from ....modules.catalog.composition import build_default_service_repository
 from ....modules.documents.application.services import ContractQueryService
 from ....modules.documents.composition import build_default_document_repository
-from ....modules.documents.domain.access_policy import get_readable_document_types
+from ....modules.documents.domain.access_policy import can_read_document_type, get_readable_document_types
 from ....modules.documents.domain.value_objs import DocumentState, DocumentType
 from ....modules.users.domain.entities import UserTable
 from ....shared.api.dependencies.security import get_current_user
@@ -57,20 +57,12 @@ async def get_llm_provider(
     document_ids = [document.id for document in documents if document.id is not None]
     document_kinds = await contract_repo.get_contract_kinds_by_document_ids(document_ids=document_ids)
 
-    documents_with_children = [
-        document
-        for document in documents
-        if document.id is not None and document_kinds.get(document.id) is not None
-    ]
+    documents_with_children = [document for document in documents if document.id is not None and document_kinds.get(document.id) is not None]
 
     if readable_document_types is not None:
-        documents_with_children = [
-            doc for doc in documents_with_children if DocumentType(document_kinds[doc.id]) in readable_document_types
-        ]
+        documents_with_children = [doc for doc in documents_with_children if DocumentType(document_kinds[doc.id]) in readable_document_types]
 
-    visible_documents = [
-        doc for doc in documents_with_children if ContractQueryService.is_chatbot_visible_contract(doc)
-    ]
+    visible_documents = [doc for doc in documents_with_children if ContractQueryService.is_chatbot_visible_contract(doc)]
 
     default_document_ids = {document.id for document in visible_documents if document.id is not None}
     document_ids_by_state: dict[DocumentState, set[int]] = {}
@@ -85,19 +77,28 @@ async def get_llm_provider(
         document_ids_by_state=document_ids_by_state,
     )
     party_lookup_tool = build_party_lookup_tool(repo=contract_repo, organization_id=current_user.organization_id)
-    company_contracts_query_tool = build_company_contracts_query_tool(
-        service=contract_query_service,
-        organization_id=current_user.organization_id,
-        user_role=current_user.role,
-    )
-    labor_contracts_query_tool = build_labor_contracts_query_tool(
-        service=contract_query_service,
-        organization_id=current_user.organization_id,
-        user_role=current_user.role,
-    )
+
+    agent_tools = [bc_tool]
+
+    # Inyectar tools condicionalmente usando las políticas de dominio (access_policy.py)
+    if can_read_document_type(current_user.role, DocumentType.COMPANY):
+        agent_tools.append(
+            build_company_contracts_query_tool(
+                service=contract_query_service,
+                organization_id=current_user.organization_id,
+            )
+        )
+
+    if can_read_document_type(current_user.role, DocumentType.LABOR):
+        agent_tools.append(
+            build_labor_contracts_query_tool(
+                service=contract_query_service,
+                organization_id=current_user.organization_id,
+            )
+        )
 
     graph_builder = ContractAgentGraph(
-        tools=[company_contracts_query_tool, labor_contracts_query_tool, bc_tool],
+        tools=agent_tools,
         permission_tools=[party_lookup_tool],
         llm=get_llm(),
     )

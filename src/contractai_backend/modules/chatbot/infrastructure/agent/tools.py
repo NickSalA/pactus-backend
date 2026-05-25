@@ -1,8 +1,6 @@
 """Tools personalizados para el agente de chatbot, integrando la búsqueda en la base de conocimientos contractual."""
 
 import json
-import re
-import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from typing import Any, Protocol
@@ -13,10 +11,11 @@ from pydantic import ValidationError
 from .....core.application.validation import format_pydantic_validation_error
 from ....documents.application.dto import CompanyContractQueryDTO, LaborContractQueryDTO
 from ....documents.application.services import ContractQueryService
-from ....documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
+from ....documents.domain.value_objs import CurrencyType, DocumentState
 from ....users.domain.value_objs import UserRole
 from ...application.repositories import VectorRepository
 from .access import ROLE_PERMISSION_DENIED_RESPONSE, evaluate_document_access
+from .patterns import resolve_requested_document_state
 
 
 class CounterpartyLookupRepository(Protocol):
@@ -28,24 +27,6 @@ class CounterpartyLookupRepository(Protocol):
         chatbot_ready_only: bool = False,
         state: str | None = None,
     ) -> Sequence[dict[str, Any]]: ...
-
-
-STATE_PATTERNS: tuple[tuple[DocumentState, tuple[str, ...]], ...] = (
-    (DocumentState.PENDING_SIGNATURE, (r"\bpendiente(?:s)? de firma\b", r"\bpor firmar\b", r"\bpending signature\b")),
-    (DocumentState.EXPIRING_SOON, (r"\bpor vencer\b", r"\bpor vencerse\b", r"\bexpira(?:n)? pronto\b", r"\bexpiring soon\b")),
-    (DocumentState.EXPIRED, (r"\bvencid(?:o|a|os|as)\b", r"\bexpirad(?:o|a|os|as)\b", r"\bexpired\b")),
-    (DocumentState.TERMINATED, (r"\bterminad(?:o|a|os|as)\b", r"\bresuelt(?:o|a|os|as)\b", r"\bterminated\b")),
-    (DocumentState.DRAFT, (r"\bborrador(?:es)?\b", r"\bdrafts?\b")),
-    (DocumentState.ACTIVE, (r"\bactive\b", r"\bactiv(?:o|a|os|as)\b", r"\bvigente(?:s)?\b")),
-)
-
-
-def resolve_requested_document_state(message: str) -> DocumentState | None:
-    normalized = unicodedata.normalize("NFKD", message or "").encode("ascii", "ignore").decode("ascii").lower()
-    for document_state, patterns in STATE_PATTERNS:
-        if any(re.search(pattern, normalized) for pattern in patterns):
-            return document_state
-    return None
 
 
 def _resolve_scoped_document_ids(document_ids: list[int] | None, allowed_document_ids: frozenset[int] | None) -> list[int] | None:
@@ -148,7 +129,7 @@ def build_party_lookup_tool(repo: CounterpartyLookupRepository, organization_id:
     return party_lookup_tool
 
 
-def build_company_contracts_query_tool(service: ContractQueryService, organization_id: int, user_role: UserRole | None):
+def build_company_contracts_query_tool(service: ContractQueryService, organization_id: int):
     """Construye una herramienta para consultas estructuradas de contratos COMPANY."""
 
     @tool(
@@ -217,7 +198,7 @@ def build_company_contracts_query_tool(service: ContractQueryService, organizati
     return company_contracts_query_tool
 
 
-def build_labor_contracts_query_tool(service: ContractQueryService, organization_id: int, user_role: UserRole | None):
+def build_labor_contracts_query_tool(service: ContractQueryService, organization_id: int):
     """Construye una herramienta para consultas estructuradas de contratos LABOR."""
 
     @tool(

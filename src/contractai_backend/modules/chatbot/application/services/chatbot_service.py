@@ -4,7 +4,7 @@ from typing import Any
 
 from ....documents.domain.access_policy import get_readable_document_types
 from ...application.repositories.base_llm import ILLMProvider
-from ...domain.entities import Message
+from ...domain.entities import ConversationTable, Message
 from ...domain.exceptions import ConversationNotFoundError
 from .conversation_service import ConversationService
 
@@ -32,44 +32,70 @@ class ChatbotService:
             else [document_type.value for document_type in sorted(readable_document_types, key=lambda value: value.value)],
         }
 
-    async def process_user_message(self, message: str, thread_id: int | None, current_user) -> tuple[str, int]:
-        """Procesa un mensaje del usuario, obtiene la respuesta del LLM y actualiza la conversación en la base de datos."""
-        user_message = Message(role="user", content=message).as_record()
+    async def _create_conversation_with_initial_message(
+        self,
+        message: str,
+        current_user,
+        user_message: dict[str, Any],
+    ) -> tuple[int, dict[str, Any]]:
+        """Crea una nueva conversación y guarda el primer mensaje del usuario."""
+        generated_title: str = f"{message[:LIMIT_TITLE]}..." if len(message) > LIMIT_TITLE else message
+        saved_conv: ConversationTable = await self.conv_service.create_conversation(
+            organization_id=current_user.organization_id,
+            user_id=current_user.id,
+            title=generated_title,
+            initial_messages=[user_message],
+        )
+        return saved_conv.id, user_message
+
+    async def _append_user_message_to_conversation(
+        self,
+        thread_id: int,
+        current_user,
+        user_message: dict[str, Any],
+    ) -> tuple[int, dict[str, Any]]:
+        """Añade un mensaje de usuario a una conversación existente."""
+        updated_conversation: ConversationTable | None = await self.conv_service.append_messages(
+            conversation_id=thread_id,
+            organization_id=current_user.organization_id,
+            user_id=current_user.id,
+            new_messages=[user_message],
+        )
+        if not updated_conversation:
+            raise ConversationNotFoundError(message=f"No se pudo sincronizar el historial. El thread_id {thread_id} no existe en la base de datos.")
+
+        return thread_id, user_message
+
+    async def _ensure_conversation_with_user_message(
+        self,
+        message: str,
+        thread_id: int | None,
+        current_user,
+    ) -> tuple[int, dict[str, Any]]:
+        """Garantiza que exista una conversación y añade el mensaje del usuario al historial.
+
+        Si no existe una conversación, crea una nueva con un título generado a partir del mensaje.
+        """
+        user_message: dict[str, Any] = Message(role="user", content=message).as_record()
 
         if thread_id is None:
-            generated_title: str = (
-                f"{message[:LIMIT_TITLE]}..."
-                if len(message) > LIMIT_TITLE
-                else message
-            )
-            saved_conv = await self.conv_service.create_conversation(
-                organization_id=current_user.organization_id,
-                user_id=current_user.id,
-                title=generated_title,
-                initial_messages=[user_message],
-            )
-            thread_id: int = saved_conv.id
-        else:
-            updated_conversation = await self.conv_service.append_messages(
-                conversation_id=thread_id,
-                organization_id=current_user.organization_id,
-                user_id=current_user.id,
-                new_messages=[user_message],
-            )
-            if not updated_conversation:
-                raise ConversationNotFoundError(
-                    message=f"No se pudo sincronizar el historial. El thread_id {thread_id} no existe en la base de datos."
-                )
+            return await self._create_conversation_with_initial_message(message=message, current_user=current_user, user_message=user_message)
 
-        response_text, actual_thread_id = await self.llm_provider.invoke(
-            message=message,
-            thread_id=thread_id,
-            user_context=self._build_user_context(current_user),
-        )
+        return await self._append_user_message_to_conversation(thread_id=thread_id, current_user=current_user, user_message=user_message)
 
-        bot_message = Message(role="bot", content=response_text).as_record()
+    async def _append_bot_message(
+        self,
+        response_text: str,
+        actual_thread_id: int,
+        current_user,
+    ) -> None:
+        """Agrega el mensaje del bot al historial de la conversación.
 
-        updated_conversation = await self.conv_service.append_messages(
+        Lanza un error si la conversación objetivo no existe en la base de datos.
+        """
+        bot_message: dict[str, Any] = Message(role="bot", content=response_text).as_record()
+
+        updated_conversation: ConversationTable | None = await self.conv_service.append_messages(
             conversation_id=actual_thread_id,
             organization_id=current_user.organization_id,
             user_id=current_user.id,
@@ -80,5 +106,21 @@ class ChatbotService:
             raise ConversationNotFoundError(
                 message=f"No se pudo sincronizar el historial. El thread_id {actual_thread_id} no existe en la base de datos."
             )
+
+    async def process_user_message(self, message: str, thread_id: int | None, current_user) -> tuple[str, int]:
+        """Procesa un mensaje del usuario, obtiene la respuesta del LLM y actualiza la conversación en la base de datos."""
+        thread_id, _ = await self._ensure_conversation_with_user_message(
+            message=message,
+            thread_id=thread_id,
+            current_user=current_user,
+        )
+
+        response_text, actual_thread_id = await self.llm_provider.invoke(
+            message=message,
+            thread_id=thread_id,
+            user_context=self._build_user_context(current_user),
+        )
+
+        await self._append_bot_message(response_text=response_text, actual_thread_id=actual_thread_id, current_user=current_user)
 
         return response_text, actual_thread_id

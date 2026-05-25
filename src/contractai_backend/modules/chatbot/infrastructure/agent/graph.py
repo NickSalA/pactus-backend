@@ -1,9 +1,8 @@
 """Graph definition for the ContractAI chatbot agent."""
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from functools import partial
-from typing import Any
 
 from langchain.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -12,17 +11,21 @@ from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
-from .access import ROLE_PERMISSION_DENIED_RESPONSE, evaluate_document_access, extract_contract_party_candidate
+from ....users.domain.value_objs import UserRole
+from .access import (
+    ROLE_PERMISSION_DENIED_RESPONSE,
+    _format_contract_candidate,
+    evaluate_document_access,
+    resolve_named_party_access,
+)
 from .decisions import ContextAgentDecision, coerce_content_to_text, parse_structured_decision
 from .llm import bind_tools_for_llm
 from .prompts import get_context_agent_prompt, get_conversation_agent_prompt
 from .state import AgentState
-from .tools import resolve_requested_document_state
 
 DEFAULT_PERMISSION_DENIED_RESPONSE = (
     "No tengo un contexto de permisos valido para atender esta consulta. Por favor vuelve a iniciar sesion o contacta a un administrador."
 )
-VALID_PERMISSION_ROLES = {"ADMIN", "HR", "MANAGER", "WORKER"}
 
 
 def _extract_latest_user_message(state: AgentState) -> str:
@@ -31,6 +34,7 @@ def _extract_latest_user_message(state: AgentState) -> str:
         return ""
 
     latest_message = messages[-1]
+
     if isinstance(latest_message, BaseMessage):
         content = latest_message.content
     elif isinstance(latest_message, dict):
@@ -39,7 +43,7 @@ def _extract_latest_user_message(state: AgentState) -> str:
         content = getattr(latest_message, "content", "")
 
     if isinstance(content, list):
-        return "".join(part.get("text", "") for part in content if isinstance(part, dict))
+        return "".join(part.get("text", "") for part in content if isinstance(part, dict) and "text" in part)
 
     return str(content)
 
@@ -50,126 +54,6 @@ async def _invoke_agent(llm: BaseChatModel | Runnable, system_prompt: str, paylo
         HumanMessage(content=json.dumps(payload, ensure_ascii=True)),
     ]
     return await llm.ainvoke(messages)
-
-
-def _get_permission_tool(tools: Sequence[BaseTool], tool_name: str) -> BaseTool | None:
-    return next((tool for tool in tools if tool.name == tool_name), None)
-
-
-def _get_allowed_document_types(user_context: Mapping[str, Any], access_decision) -> set[str] | None:
-    if access_decision.allowed_document_types is not None:
-        return {document_type.value for document_type in access_decision.allowed_document_types}
-
-    raw_allowed_document_types = user_context.get("allowed_document_types")
-    if raw_allowed_document_types is None:
-        return None
-
-    return {str(document_type) for document_type in raw_allowed_document_types}
-
-
-def _normalize_contract_candidates(matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    normalized_matches: list[dict[str, Any]] = []
-    seen_document_ids: set[int] = set()
-    for match in matches:
-        try:
-            document_id = int(match["document_id"])
-        except (KeyError, TypeError, ValueError):
-            continue
-
-        if document_id in seen_document_ids:
-            continue
-
-        document_type = match.get("document_type")
-        if document_type is None:
-            continue
-
-        seen_document_ids.add(document_id)
-        normalized_matches.append(
-            {
-                "document_id": document_id,
-                "name": match.get("name"),
-                "client": match.get("client"),
-                "document_type": str(document_type),
-                "file_name": match.get("file_name"),
-                "match_score": float(match.get("match_score") or 0.0),
-            }
-        )
-
-    normalized_matches.sort(key=lambda item: (item["match_score"], str(item.get("client") or "")), reverse=True)
-    return normalized_matches
-
-
-def _format_contract_candidate(candidate: dict[str, Any]) -> str:
-    identifier = candidate.get("name") or candidate.get("file_name") or candidate.get("client") or f"Documento {candidate['document_id']}"
-    return (
-        f"{identifier} | Contraparte: {candidate.get('client') or 'Sin nombre'} | "
-        f"Tipo: {candidate.get('document_type')} | Documento: {candidate['document_id']}"
-    )
-
-
-def _build_permission_clarification_response(party_candidate: str, allowed_matches: list[dict[str, Any]]) -> str:
-    options = "\n".join(f"{index}. {_format_contract_candidate(candidate)}" for index, candidate in enumerate(allowed_matches[:3], start=1))
-    return f"Encontre varios contratos a los que si tienes acceso relacionados con '{party_candidate}'. Indica cual necesitas:\n{options}"
-
-
-async def _resolve_named_party_access(
-    message: str,
-    user_context: Mapping[str, Any],
-    access_decision,
-    tools: Sequence[BaseTool],
-) -> dict[str, Any] | None:
-    party_candidate = extract_contract_party_candidate(message)
-    if party_candidate is None:
-        return None
-
-    party_lookup_tool = _get_permission_tool(tools, "party_lookup_tool")
-    if party_lookup_tool is None:
-        return None
-
-    tool_payload: dict[str, Any] = {"party_name": party_candidate, "limit": 10}
-    requested_state = resolve_requested_document_state(message)
-    if requested_state is not None:
-        tool_payload["state"] = requested_state
-
-    raw_result = await party_lookup_tool.ainvoke(tool_payload)
-    try:
-        lookup_result = json.loads(str(raw_result))
-    except json.JSONDecodeError:
-        return None
-
-    matches = lookup_result.get("matches")
-    if not isinstance(matches, list):
-        return None
-
-    normalized_matches = _normalize_contract_candidates(matches)
-    if not normalized_matches:
-        return {"kind": "no_match"}
-
-    allowed_document_types = _get_allowed_document_types(user_context=user_context, access_decision=access_decision)
-    if allowed_document_types is None:
-        allowed_matches = normalized_matches
-        denied_matches: list[dict[str, Any]] = []
-    else:
-        allowed_matches = [match for match in normalized_matches if match["document_type"] in allowed_document_types]
-        denied_matches = [match for match in normalized_matches if match["document_type"] not in allowed_document_types]
-
-    if not allowed_matches:
-        if denied_matches:
-            return {"kind": "deny"}
-        return {"kind": "no_match"}
-
-    if len(allowed_matches) == 1:
-        return {
-            "kind": "allow",
-            "document_ids": [allowed_matches[0]["document_id"]],
-            "candidates": allowed_matches,
-        }
-
-    return {
-        "kind": "clarify",
-        "response": _build_permission_clarification_response(party_candidate=party_candidate, allowed_matches=allowed_matches),
-        "candidates": allowed_matches,
-    }
 
 
 async def run_context_agent(state: AgentState, llm: BaseChatModel):
@@ -209,7 +93,7 @@ async def run_permission_agent(state: AgentState, tools: Sequence[BaseTool]):
     user_context = state.get("user_context") or {}
     role = str(user_context.get("role") or "").upper()
     organization_id = user_context.get("organization_id")
-    if not isinstance(organization_id, int) or organization_id <= 0 or role not in VALID_PERMISSION_ROLES:
+    if not isinstance(organization_id, int) or organization_id <= 0 or role not in {r.value for r in UserRole}:
         return {
             "permission_route": "n2_denied_response",
             "permission_response": DEFAULT_PERMISSION_DENIED_RESPONSE,
@@ -227,7 +111,7 @@ async def run_permission_agent(state: AgentState, tools: Sequence[BaseTool]):
         }
 
     try:
-        named_party_resolution = await _resolve_named_party_access(
+        named_party_resolution = await resolve_named_party_access(
             message=message,
             user_context=user_context,
             access_decision=access_decision,
@@ -298,9 +182,9 @@ def build_terminal_response(state_key: str):
 
 async def call_model(state: AgentState, llm: Runnable):
     """A3: run the conversational agent with tool access."""
-    system_message = SystemMessage(content=get_conversation_agent_prompt())
     user_context = state.get("user_context") or {}
     allowed_document_types = user_context.get("allowed_document_types")
+    system_message = SystemMessage(content=get_conversation_agent_prompt(allowed_document_types=allowed_document_types))
     access_scope = "all document types" if allowed_document_types is None else ", ".join(allowed_document_types)
     access_message = SystemMessage(
         content=(

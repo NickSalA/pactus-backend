@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from typing import Any
 
 from ...documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
 from ..domain.value_objs import TopRankingSortBy
@@ -146,4 +147,78 @@ class DashboardRepository(ABC):
         sort_by: TopRankingSortBy = TopRankingSortBy.VOLUME,
     ) -> Sequence[DashboardServiceRanking]:
         """Lists top services associated with company contracts."""
+        pass
+
+    @abstractmethod
+    async def get_retention_kpi_data(
+        self,
+        organization_id: int,
+    ) -> dict[str, Any]:
+        """Computes key retention KPIs: unique workers, contract count and retention rate."""
+        pass
+
+    @abstractmethod
+    async def get_tenure_distribution(
+        self,
+        organization_id: int,
+    ) -> list[dict[str, int]]:
+        """Returns the distribution of workers grouped by total contracts count."""
+        pass
+
+    @abstractmethod
+    async def get_monthly_renewal_trend(
+        self,
+        organization_id: int,
+        months: int = 6,
+    ) -> list[dict[str, Any]]:
+        """Returns monthly cohort renewal rates for workers whose contracts expired in each of the past 6 months."""
+        pass
+
+    @abstractmethod
+    async def get_worker_retention_details(
+        self,
+        organization_id: int,
+    ) -> list[dict[str, Any]]:
+        """Returns details for each unique worker, including contract count and employment date ranges."""
+        pass
+
+    @abstractmethod
+    async def get_contract_origin_distribution(
+        self,
+        organization_id: int,
+    ) -> list[dict[str, Any]]:
+        """Queries and aggregates counts of labor contracts by their creation origin type."""
+        pass
+
+    @abstractmethod
+    async def get_company_loyalty_kpi_data(
+        self,
+        organization_id: int,
+    ) -> dict[str, Any]:
+        """Computes key client loyalty KPIs: unique clients, contract count and recurrence rate."""
+        pass
+
+    @abstractmethod
+    async def get_company_tenure_distribution(
+        self,
+        organization_id: int,
+    ) -> list[dict[str, int]]:
+        """Returns the distribution of B2B clients grouped by signed contracts count."""
+        pass
+
+    @abstractmethod
+    async def get_company_monthly_renewal_trend(
+        self,
+        organization_id: int,
+        months: int = 6,
+    ) -> list[dict[str, Any]]:
+        """Returns monthly B2B client cohort renewal rates for clients whose contracts expired in each of the past 6 months."""
+        pass
+
+    @abstractmethod
+    async def get_company_loyalty_details(
+        self,
+        organization_id: int,
+    ) -> list[dict[str, Any]]:
+        """Returns details for each unique client, including contract count and employment date ranges."""
         pass
