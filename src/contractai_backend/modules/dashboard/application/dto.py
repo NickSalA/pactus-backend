@@ -23,7 +23,6 @@ class AreaChartPoint(BaseModel):
 class AreaChartSeries(BaseModel):
     """One chart series."""
 
-
     currency: str
     name: str
     data: list[AreaChartPoint]
@@ -43,7 +42,6 @@ class AreaChartResponse(BaseModel):
     """Response for area chart use cases."""
 
     props: AreaChartProps
-
 
 
 class AlertColor(BaseModel):
