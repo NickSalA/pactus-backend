@@ -1,8 +1,6 @@
 """Tools personalizados para el agente de chatbot, integrando la búsqueda en la base de conocimientos contractual."""
 
 import json
-import re
-import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from typing import Any, Protocol
@@ -17,6 +15,7 @@ from ....documents.domain.value_objs import CurrencyType, DocumentState
 from ....users.domain.value_objs import UserRole
 from ...application.repositories import VectorRepository
 from .access import ROLE_PERMISSION_DENIED_RESPONSE, evaluate_document_access
+from .patterns import resolve_requested_document_state
 
 
 class CounterpartyLookupRepository(Protocol):
@@ -28,28 +27,6 @@ class CounterpartyLookupRepository(Protocol):
         chatbot_ready_only: bool = False,
         state: str | None = None,
     ) -> Sequence[dict[str, Any]]: ...
-
-
-STATE_PATTERNS: tuple[tuple[DocumentState, tuple[str, ...]], ...] = (
-    (DocumentState.PENDING_SIGNATURE, (r"\bpendiente(?:s)? de firma\b", r"\bpor firmar\b", r"\bpending signature\b")),
-    (DocumentState.EXPIRING_SOON, (r"\bpor vencer\b", r"\bpor vencerse\b", r"\bexpira(?:n)? pronto\b", r"\bexpiring soon\b")),
-    (DocumentState.EXPIRED, (r"\bvencid(?:o|a|os|as)\b", r"\bexpirad(?:o|a|os|as)\b", r"\bexpired\b")),
-    (DocumentState.TERMINATED, (r"\bterminad(?:o|a|os|as)\b", r"\bresuelt(?:o|a|os|as)\b", r"\bterminated\b")),
-    (DocumentState.DRAFT, (r"\bborrador(?:es)?\b", r"\bdrafts?\b")),
-    (DocumentState.ACTIVE, (r"\bactive\b", r"\bactiv(?:o|a|os|as)\b", r"\bvigente(?:s)?\b")),
-)
-
-
-def resolve_requested_document_state(message: str) -> DocumentState | None:
-    normalized = unicodedata.normalize("NFKD", message or "").encode("ascii", "ignore").decode("ascii").lower()
-    return next(
-        (
-            document_state
-            for document_state, patterns in STATE_PATTERNS
-            if any(re.search(pattern, normalized) for pattern in patterns)
-        ),
-        None,
-    )
 
 
 def _resolve_scoped_document_ids(document_ids: list[int] | None, allowed_document_ids: frozenset[int] | None) -> list[int] | None:
