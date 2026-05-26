@@ -1,8 +1,6 @@
 """Tools personalizados para el agente de chatbot, integrando la búsqueda en la base de conocimientos contractual."""
 
 import json
-import re
-import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from typing import Any, Protocol
@@ -11,12 +9,13 @@ from langchain_core.tools import tool
 from pydantic import ValidationError
 
 from .....core.application.validation import format_pydantic_validation_error
-from ....documents.application.dto import ContractQueryDTO
+from ....documents.application.dto import CompanyContractQueryDTO, LaborContractQueryDTO
 from ....documents.application.services import ContractQueryService
-from ....documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
+from ....documents.domain.value_objs import CurrencyType, DocumentState
 from ....users.domain.value_objs import UserRole
 from ...application.repositories import VectorRepository
 from .access import ROLE_PERMISSION_DENIED_RESPONSE, evaluate_document_access
+from .patterns import resolve_requested_document_state
 
 
 class CounterpartyLookupRepository(Protocol):
@@ -28,24 +27,6 @@ class CounterpartyLookupRepository(Protocol):
         chatbot_ready_only: bool = False,
         state: str | None = None,
     ) -> Sequence[dict[str, Any]]: ...
-
-
-STATE_PATTERNS: tuple[tuple[DocumentState, tuple[str, ...]], ...] = (
-    (DocumentState.PENDING_SIGNATURE, (r"\bpendiente(?:s)? de firma\b", r"\bpor firmar\b", r"\bpending signature\b")),
-    (DocumentState.EXPIRING_SOON, (r"\bpor vencer\b", r"\bpor vencerse\b", r"\bexpira(?:n)? pronto\b", r"\bexpiring soon\b")),
-    (DocumentState.EXPIRED, (r"\bvencid(?:o|a|os|as)\b", r"\bexpirad(?:o|a|os|as)\b", r"\bexpired\b")),
-    (DocumentState.TERMINATED, (r"\bterminad(?:o|a|os|as)\b", r"\bresuelt(?:o|a|os|as)\b", r"\bterminated\b")),
-    (DocumentState.DRAFT, (r"\bborrador(?:es)?\b", r"\bdrafts?\b")),
-    (DocumentState.ACTIVE, (r"\bactive\b", r"\bactiv(?:o|a|os|as)\b", r"\bvigente(?:s)?\b")),
-)
-
-
-def resolve_requested_document_state(message: str) -> DocumentState | None:
-    normalized = unicodedata.normalize("NFKD", message or "").encode("ascii", "ignore").decode("ascii").lower()
-    for document_state, patterns in STATE_PATTERNS:
-        if any(re.search(pattern, normalized) for pattern in patterns):
-            return document_state
-    return None
 
 
 def _resolve_scoped_document_ids(document_ids: list[int] | None, allowed_document_ids: frozenset[int] | None) -> list[int] | None:
@@ -148,22 +129,27 @@ def build_party_lookup_tool(repo: CounterpartyLookupRepository, organization_id:
     return party_lookup_tool
 
 
-def build_contracts_query_tool(service: ContractQueryService, organization_id: int, user_role: UserRole | None):
-    """Construye una herramienta para consultas estructuradas de contratos."""
+def build_company_contracts_query_tool(service: ContractQueryService, organization_id: int):
+    """Construye una herramienta para consultas estructuradas de contratos COMPANY."""
 
     @tool(
-        name_or_callable="contracts_query_tool",
+        name_or_callable="company_contracts_query_tool",
         description=(
-            "Usala para contar, listar, ordenar y rankear contratos como registros por cliente, nombre, valor total, moneda, "
-            "estado, tipo, servicios asociados y rangos de fechas. Tambien sirve para identificar contratos vigentes hoy, "
-            "filtrar por service_id o service_name y devolver sus servicios asociados. "
-            "No es para extraer nombres de firmantes u otros datos textuales internos del contrato. Si el usuario pide montos sin moneda, "
-            "esta herramienta indicara que se debe pedir aclaracion."
+            "Usala para contar, listar, ordenar y rankear contratos COMPANY. "
+            " operation='count': cuenta contratos COMPANY. "
+            " operation='list': lista y ordena contratos COMPANY por cliente, nombre, valor, moneda, estado, servicios, fechas. "
+            " operation='ranking': ranking de clientes por cantidad de contratos COMPANY. "
+            " operation='services_ranking': ranking de servicios por monto total contratado (suma de valores en cada moneda). "
+            " operation='client_services_ranking': ranking de clientes por cantidad de servicios contratados. "
+            " Filtros: client, ruc, contract_name, service_name, service_id, min_value, max_value, currency, state, period_start, period_end, date_mode, currently_active, sort_by, sort_direction, limit. "
+            " Si el usuario pide montos sin moneda, pedira aclaracion. "
+            " No es para extraer firmantes u otros datos textuales internos del contrato."
         ),
     )
-    async def contracts_query_tool(
+    async def company_contracts_query_tool(
         operation: str,
         client: str | None = None,
+        ruc: str | None = None,
         contract_name: str | None = None,
         service_name: str | None = None,
         service_id: int | None = None,
@@ -171,7 +157,6 @@ def build_contracts_query_tool(service: ContractQueryService, organization_id: i
         max_value: float | None = None,
         currency: CurrencyType | None = None,
         state: DocumentState | None = None,
-        document_type: DocumentType | None = None,
         period_start: datetime | None = None,
         period_end: datetime | None = None,
         date_mode: str = "overlap",
@@ -181,9 +166,10 @@ def build_contracts_query_tool(service: ContractQueryService, organization_id: i
         limit: int = 20,
     ) -> str:
         try:
-            query = ContractQueryDTO(
+            query = CompanyContractQueryDTO(
                 operation=operation,
                 client=client,
+                ruc=ruc,
                 contract_name=contract_name,
                 service_name=service_name,
                 service_id=service_id,
@@ -191,7 +177,6 @@ def build_contracts_query_tool(service: ContractQueryService, organization_id: i
                 max_value=max_value,
                 currency=currency,
                 state=state,
-                document_type=document_type,
                 period_start=period_start,
                 period_end=period_end,
                 date_mode=date_mode,
@@ -207,7 +192,76 @@ def build_contracts_query_tool(service: ContractQueryService, organization_id: i
             }
             return json.dumps(result, ensure_ascii=True)
 
-        result = await service.run_query(organization_id=organization_id, query=query, user_role=user_role)
+        result = await service.run_company_query(organization_id=organization_id, query=query)
         return json.dumps(result, ensure_ascii=True)
 
-    return contracts_query_tool
+    return company_contracts_query_tool
+
+
+def build_labor_contracts_query_tool(service: ContractQueryService, organization_id: int):
+    """Construye una herramienta para consultas estructuradas de contratos LABOR."""
+
+    @tool(
+        name_or_callable="labor_contracts_query_tool",
+        description=(
+            "Usala para contar y listar contratos LABOR. "
+            " operation='count': cuenta contratos LABOR. "
+            " operation='list': lista y ordena contratos LABOR por trabajador, posicion, nombre, modalidad, periodicidad, monto, moneda, estado, fechas. "
+            " operation='ranking': NO DISPONIBLE para contratos LABOR (un trabajador no puede tener múltiples contratos activos). "
+            " Filtros: worker_name, worker_document_number, position, contract_name, contract_modality, salary_periodicity, min_value, max_value, currency, state, period_start, period_end, date_mode, currently_active, sort_by, sort_direction, limit. "
+            " Si el usuario pide montos sin moneda, pedira aclaracion. "
+            " No es para extraer firmantes u otros datos textuales internos del contrato."
+        ),
+    )
+    async def labor_contracts_query_tool(
+        operation: str,
+        worker_name: str | None = None,
+        worker_document_number: str | None = None,
+        position: str | None = None,
+        contract_name: str | None = None,
+        contract_modality: str | None = None,
+        salary_periodicity: str | None = None,
+        min_value: float | None = None,
+        max_value: float | None = None,
+        currency: CurrencyType | None = None,
+        state: DocumentState | None = None,
+        period_start: datetime | None = None,
+        period_end: datetime | None = None,
+        date_mode: str = "overlap",
+        currently_active: bool | None = None,
+        sort_by: str | None = None,
+        sort_direction: str = "asc",
+        limit: int = 20,
+    ) -> str:
+        try:
+            query = LaborContractQueryDTO(
+                operation=operation,
+                worker_name=worker_name,
+                worker_document_number=worker_document_number,
+                position=position,
+                contract_name=contract_name,
+                contract_modality=contract_modality,
+                salary_periodicity=salary_periodicity,
+                min_value=min_value,
+                max_value=max_value,
+                currency=currency,
+                state=state,
+                period_start=period_start,
+                period_end=period_end,
+                date_mode=date_mode,
+                currently_active=currently_active,
+                sort_by=sort_by,
+                sort_direction=sort_direction,
+                limit=limit,
+            )
+        except ValidationError as exc:
+            result = {
+                "status": "invalid_request",
+                "message": f"No se pudo interpretar uno de los filtros proporcionados: {format_pydantic_validation_error(exc)}",
+            }
+            return json.dumps(result, ensure_ascii=True)
+
+        result = await service.run_labor_query(organization_id=organization_id, query=query)
+        return json.dumps(result, ensure_ascii=True)
+
+    return labor_contracts_query_tool

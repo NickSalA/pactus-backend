@@ -9,6 +9,7 @@ from contractai_backend.modules.templates.api.schemas import GenerateTemplateDra
 from contractai_backend.modules.templates.application.services.template_authoring_service import TemplateAuthoringService
 from contractai_backend.modules.templates.domain.entities import TemplateContent, TemplateField, TemplateFormatTable, TemplateTable
 from contractai_backend.modules.templates.domain.value_objs import TemplateGenerationMode, TemplateState
+from contractai_backend.modules.templates.domain.exceptions import TemplateValidationError
 from contractai_backend.modules.users.domain.value_objs import UserRole
 
 
@@ -385,7 +386,7 @@ class TestGenerateDraftFromPrompt:
             draft_generator=draft_generator,
         )
 
-        with pytest.raises(ValueError, match="generation_mode='adaptive'"):
+        with pytest.raises(TemplateValidationError, match="generation_mode='adaptive'"):
             await service.generate_draft_from_prompt(
                 request=GenerateTemplateDraftRequest(
                     format_code="base_company",
@@ -1056,7 +1057,7 @@ class TestPublishTemplate:
         template_format_repo.get_by_document_type_and_code.return_value = _make_format()
         service = _make_authoring_service(template_repo=template_repo, template_format_repo=template_format_repo)
 
-        with pytest.raises(ValueError, match="mapeo de vigencia del contrato"):
+        with pytest.raises(TemplateValidationError, match="mapeo de vigencia del contrato"):
             await service.publish_template(template_id=1, organization_id=1, user_role=UserRole.MANAGER)
 
         template_repo.publish.assert_not_called()

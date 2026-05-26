@@ -2,7 +2,8 @@
 
 from ..users.application.repositories.user_repo import IUserRepository
 from .application.repositories.base_organization import OrganizationRepository
-from .application.services import OrganizationMemberService, OrganizationService
+from .application.repositories.provisioning import OrganizationProvisioningRepository
+from .application.services import OrganizationMemberService, OrganizationProvisioningService, OrganizationService
 
 
 def build_organization_service(repository: OrganizationRepository) -> OrganizationService:
@@ -13,3 +14,16 @@ def build_organization_service(repository: OrganizationRepository) -> Organizati
 def build_organization_member_service(user_repository: IUserRepository) -> OrganizationMemberService:
     """Builds the organization member service from its user repository port."""
     return OrganizationMemberService(user_repository=user_repository)
+
+
+def build_organization_provisioning_service(
+    organization_repository: OrganizationRepository,
+    user_repository: IUserRepository,
+    provisioning_repository: OrganizationProvisioningRepository,
+) -> OrganizationProvisioningService:
+    """Builds the provisioning service used by superadmins."""
+    return OrganizationProvisioningService(
+        organization_repository=organization_repository,
+        user_repository=user_repository,
+        provisioning_repository=provisioning_repository,
+    )

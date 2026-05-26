@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     ALLOWED_FILE_TYPES: list[str] = Field(default=["application/pdf", "text/plain"])
     MAX_FILE_SIZE: int = Field(default=5)
     MAX_NUM_PAGES: int = Field(default=10)
+    MAX_ORGANIZATIONS_LIMIT: int = Field(default=50)
 
     DATABASE_NAME: str | None = Field(default="postgres")
     DATABASE_PASSWORD: str | None = Field(default=None)

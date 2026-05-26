@@ -6,9 +6,21 @@ from fastapi import Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from contractai_backend.modules.organizations.application.repositories.base_organization import OrganizationRepository
-from contractai_backend.modules.organizations.application.services import OrganizationMemberService, OrganizationService
-from contractai_backend.modules.organizations.composition import build_organization_member_service, build_organization_service
-from contractai_backend.modules.organizations.infrastructure.postgres_repo import SQLModelOrganizationRepository
+from contractai_backend.modules.organizations.application.repositories.provisioning import OrganizationProvisioningRepository
+from contractai_backend.modules.organizations.application.services import (
+    OrganizationMemberService,
+    OrganizationProvisioningService,
+    OrganizationService,
+)
+from contractai_backend.modules.organizations.composition import (
+    build_organization_member_service,
+    build_organization_provisioning_service,
+    build_organization_service,
+)
+from contractai_backend.modules.organizations.infrastructure.postgres_repo import (
+    SQLModelOrganizationProvisioningRepository,
+    SQLModelOrganizationRepository,
+)
 from contractai_backend.modules.users.application.repositories.user_repo import IUserRepository
 from contractai_backend.modules.users.infrastructure.postgres_repo import SQLModelUserRepository
 from contractai_backend.shared.infrastructure.database import get_session
@@ -26,6 +38,11 @@ async def get_organization_service(
     return build_organization_service(repository=repository)
 
 
+async def get_organization_provisioning_repository(session: Annotated[AsyncSession, Depends(get_session)]) -> OrganizationProvisioningRepository:
+    """Provide the transactional repository for provisioning organizations."""
+    return SQLModelOrganizationProvisioningRepository(session=session)
+
+
 async def get_user_repository(session: Annotated[AsyncSession, Depends(get_session)]) -> IUserRepository:
     """Provide the concrete user repository required for member operations."""
     return SQLModelUserRepository(session=session)
@@ -36,3 +53,16 @@ async def get_organization_member_service(
 ) -> OrganizationMemberService:
     """Provide the organization member application service."""
     return build_organization_member_service(user_repository=user_repository)
+
+
+async def get_organization_provisioning_service(
+    organization_repository: Annotated[OrganizationRepository, Depends(get_organization_repository)],
+    user_repository: Annotated[IUserRepository, Depends(get_user_repository)],
+    provisioning_repository: Annotated[OrganizationProvisioningRepository, Depends(get_organization_provisioning_repository)],
+) -> OrganizationProvisioningService:
+    """Provide the superadmin organization provisioning service."""
+    return build_organization_provisioning_service(
+        organization_repository=organization_repository,
+        user_repository=user_repository,
+        provisioning_repository=provisioning_repository,
+    )

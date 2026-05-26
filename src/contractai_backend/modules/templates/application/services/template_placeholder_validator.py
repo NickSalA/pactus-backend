@@ -8,6 +8,7 @@ from typing import ClassVar
 
 from ....documents.domain import DocumentType
 from ...domain.entities import TemplateContent
+from ...domain.exceptions import TemplateValidationError
 
 EXPRESSION_PATTERN = re.compile(r"{{\s*(.*?)\s*}}")
 SIMPLE_PLACEHOLDER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -99,7 +100,7 @@ class TemplatePlaceholderValidator:
                 if extract_supported_placeholder_key(expression) is None
             }
         ):
-            raise ValueError(f"Expresiones Jinja no soportadas: {', '.join(unsupported_expressions)}")
+            raise TemplateValidationError(f"Expresiones Jinja no soportadas: {', '.join(unsupported_expressions)}")
 
         placeholders = {key for expression in expressions if (key := extract_supported_placeholder_key(expression)) is not None}
         field_keys = {field.key for field in content.fields}
@@ -110,7 +111,7 @@ class TemplatePlaceholderValidator:
         unused = sorted(field_keys - placeholders)
 
         if unknown:
-            raise ValueError(f"Placeholders no soportados: {', '.join(unknown)}")
+            raise TemplateValidationError(f"Placeholders no soportados: {', '.join(unknown)}")
 
         warnings: list[str] = []
         if unused:
@@ -137,7 +138,7 @@ class TemplatePlaceholderValidator:
         mapping = content.contract_date_mapping
         if mapping is None:
             if document_type == DocumentType.COMPANY and require_contract_date_mapping:
-                raise ValueError(self.MISSING_CONTRACT_DATE_MAPPING_WARNING)
+                raise TemplateValidationError(self.MISSING_CONTRACT_DATE_MAPPING_WARNING)
             else:
                 return (
                     [self.MISSING_CONTRACT_DATE_MAPPING_WARNING]
@@ -149,7 +150,7 @@ class TemplatePlaceholderValidator:
             for field_key in (mapping.start_date_field, mapping.end_date_field)
             if field_key not in all_field_keys
         ]:
-            raise ValueError("El mapeo de vigencia del contrato referencia campos inexistentes: " + ", ".join(sorted(missing_fields)))
+            raise TemplateValidationError("El mapeo de vigencia del contrato referencia campos inexistentes: " + ", ".join(sorted(missing_fields)))
         return []
 
     def validate_against_reference(self, body_md: str, reference_clause_sequence: Sequence[str]) -> list[str]:

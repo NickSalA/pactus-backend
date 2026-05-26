@@ -1,37 +1,61 @@
 """API schemas for organizations."""
 
-from datetime import datetime
-
-from pydantic import BaseModel, ConfigDict
-
-from contractai_backend.modules.users.api.schemas import UserResponse
-from contractai_backend.modules.users.domain.value_objs import UserRole
-
-
-class OrganizationResponse(BaseModel):
-    """Read model for organization responses."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    name: str
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
-
-
-class OrganizationMemberCreateRequest(BaseModel):
-    email: str
-    role: UserRole
+from ..application.dto import (
+    OrganizationMemberCreateRequest as ApplicationOrganizationMemberCreateRequest,
+)
+from ..application.dto import (
+    OrganizationMemberNotificationsUpdateRequest as ApplicationOrganizationMemberNotificationsUpdateRequest,
+)
+from ..application.dto import (
+    OrganizationMemberResponse as ApplicationOrganizationMemberResponse,
+)
+from ..application.dto import (
+    OrganizationMemberRoleUpdateRequest as ApplicationOrganizationMemberRoleUpdateRequest,
+)
+from ..application.dto import (
+    OrganizationProvisionRequest as ApplicationOrganizationProvisionRequest,
+)
+from ..application.dto import (
+    OrganizationResponse as ApplicationOrganizationResponse,
+)
+from ..application.dto import (
+    OrganizationUpdateRequest as ApplicationOrganizationUpdateRequest,
+)
 
 
-class OrganizationMemberRoleUpdateRequest(BaseModel):
-    role: UserRole
+class OrganizationProvisionRequest(ApplicationOrganizationProvisionRequest):
+    """HTTP request body for provisioning an organization by a superadmin."""
 
 
-class OrganizationMemberNotificationsUpdateRequest(BaseModel):
-    receives_notifications: bool
+class OrganizationUpdateRequest(ApplicationOrganizationUpdateRequest):
+    """HTTP request body for updating an organization."""
 
 
-class OrganizationMemberResponse(UserResponse):
-    """HTTP response body for organization members."""
+class OrganizationResponse(ApplicationOrganizationResponse):
+    """HTTP response schema for an organization."""
+
+
+class OrganizationMemberCreateRequest(ApplicationOrganizationMemberCreateRequest):
+    """HTTP request body for creating a member."""
+
+
+class OrganizationMemberRoleUpdateRequest(ApplicationOrganizationMemberRoleUpdateRequest):
+    """HTTP request body for updating a member's role."""
+
+
+class OrganizationMemberNotificationsUpdateRequest(ApplicationOrganizationMemberNotificationsUpdateRequest):
+    """HTTP request body for updating a member's notifications."""
+
+
+class OrganizationMemberResponse(ApplicationOrganizationMemberResponse):
+    """HTTP response schema for organization members."""
+
+__all__ = [
+    "OrganizationMemberCreateRequest",
+    "OrganizationMemberNotificationsUpdateRequest",
+    "OrganizationMemberResponse",
+    "OrganizationMemberRoleUpdateRequest",
+    "OrganizationProvisionRequest",
+    "OrganizationResponse",
+    "OrganizationUpdateRequest",
+]

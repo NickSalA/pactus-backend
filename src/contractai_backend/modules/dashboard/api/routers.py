@@ -10,7 +10,16 @@ from ...documents.domain.value_objs import CurrencyType, DocumentType
 from ..application.services import DashboardService
 from ..domain.value_objs import TopRankingSortBy
 from .dependencies import get_dashboard_service
-from .schemas import AlertCategory, AreaChartResponse, RecentContractResponse, TopCompanyResponse, TopServiceResponse
+from .schemas import (
+    AlertCategory,
+    AreaChartResponse,
+    CompanyLoyaltyDashboardResponse,
+    ContractOriginResponse,
+    RecentContractResponse,
+    RetentionDashboardResponse,
+    TopCompanyResponse,
+    TopServiceResponse,
+)
 
 router = APIRouter()
 
@@ -89,3 +98,33 @@ async def get_top_services(
     """Returns top company services for managers."""
     response = await service.get_top_services(current_user=current_user, currency=currency, sort_by=sort_by)
     return [TopServiceResponse.model_validate(item, from_attributes=True) for item in response]
+
+
+@router.get(path="/retention/labor", response_model=RetentionDashboardResponse)
+async def get_labor_retention_dashboard(
+    service: DashboardServiceDep,
+    current_user: CurrentUserDep,
+) -> RetentionDashboardResponse:
+    """Returns the labor contract retention dashboard for HR users."""
+    response = await service.get_labor_retention_dashboard(current_user=current_user)
+    return RetentionDashboardResponse.model_validate(response, from_attributes=True)
+
+
+@router.get(path="/origin/labor", response_model=ContractOriginResponse)
+async def get_labor_origin_dashboard(
+    service: DashboardServiceDep,
+    current_user: CurrentUserDep,
+) -> ContractOriginResponse:
+    """Returns the labor contract origin distribution dashboard for HR users."""
+    response = await service.get_labor_origin_dashboard(current_user=current_user)
+    return ContractOriginResponse.model_validate(response, from_attributes=True)
+
+
+@router.get(path="/loyalty/company", response_model=CompanyLoyaltyDashboardResponse)
+async def get_company_loyalty_dashboard(
+    service: DashboardServiceDep,
+    current_user: CurrentUserDep,
+) -> CompanyLoyaltyDashboardResponse:
+    """Returns the company B2B client loyalty dashboard for manager and worker roles."""
+    response = await service.get_company_loyalty_dashboard(current_user=current_user)
+    return CompanyLoyaltyDashboardResponse.model_validate(response, from_attributes=True)

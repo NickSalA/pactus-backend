@@ -28,10 +28,10 @@ class ServiceCreateRequest(BaseModel):
     @classmethod
     def validate_name(cls, value: str) -> str:
         """Rejects blank service names."""
-        cleaned = value.strip()
-        if not cleaned:
+        if cleaned := value.strip():
+            return cleaned
+        else:
             raise ValueError("Field cannot be empty.")
-        return cleaned
 
 
 class ServiceUpdateRequest(BaseModel):
@@ -46,10 +46,10 @@ class ServiceUpdateRequest(BaseModel):
         """Rejects blank service names when provided."""
         if value is None:
             return None
-        cleaned = value.strip()
-        if not cleaned:
+        if cleaned := value.strip():
+            return cleaned
+        else:
             raise ValueError("Field cannot be empty.")
-        return cleaned
 
     @model_validator(mode="after")
     def validate_non_empty_patch(self) -> "ServiceUpdateRequest":

@@ -4,11 +4,11 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from .....core.exceptions.base import ForbiddenError, ValidationError
 from ....documents.domain import DocumentType
 from ....documents.domain.access_policy import can_write_document_type
 from ....users.domain.value_objs import UserRole
 from ...domain.entities import TemplateContent, TemplateFormatTable, TemplateTable
+from ...domain.exceptions import TemplateAccessDeniedError, TemplateNotFoundError, TemplateStateError, TemplateValidationError
 from ...domain.formats import normalize_format_code
 from ...domain.value_objs import TemplateState
 from ..dto import TemplateResponse, build_template_response
@@ -103,11 +103,11 @@ class TemplateService:
     async def _get_and_validate_template(self, template_id: int, organization_id: int, user_role: UserRole | None) -> TemplateTable:
         template = await self.template_repo.get_template_by_id(template_id=template_id, organization_id=organization_id)
         if not template:
-            raise ValueError("Template not found or does not belong to the organization.")
+            raise TemplateNotFoundError()
         if template.state != TemplateState.PUBLISHED:
-            raise ValueError("Solo se pueden generar documentos desde plantillas en estado PUBLISHED.")
+            raise TemplateStateError("Solo se pueden generar documentos desde plantillas en estado PUBLISHED.")
         if not can_write_document_type(user_role=user_role, document_type=template.document_type):
-            raise ForbiddenError("No tiene permisos para generar contratos con esta plantilla")
+            raise TemplateAccessDeniedError("No tiene permisos para generar contratos con esta plantilla")
         return template
 
     def _extract_specific_contract_data(
@@ -176,7 +176,7 @@ class TemplateService:
         templates = list(await self.template_repo.list_by_organization(organization_id=organization_id))
         if user_role not in (None, UserRole.ADMIN):
             if document_type is not None and not can_write_document_type(user_role=user_role, document_type=document_type):
-                raise ForbiddenError(f"No tiene permisos para listar plantillas de tipo {document_type.value}.")
+                raise TemplateAccessDeniedError(f"No tiene permisos para listar plantillas de tipo {document_type.value}.")
             templates = [template for template in templates if can_write_document_type(user_role=user_role, document_type=template.document_type)]
 
         if document_type is not None:
@@ -257,7 +257,7 @@ class TemplateService:
                 if mapping is not None
                 else "Verifica que la plantilla exponga y mapee los campos de inicio y fin del contrato."
             )
-            raise ValidationError(f"No se pudieron resolver las fechas de vigencia del contrato desde la plantilla. {mapping_hint}")
+            raise TemplateValidationError(f"No se pudieron resolver las fechas de vigencia del contrato desde la plantilla. {mapping_hint}")
         fallback = now.date().isoformat()
         return start_date or fallback, end_date or fallback
 
@@ -278,7 +278,7 @@ class TemplateService:
             for field in template_content.fields + template_content.operational_fields
             if field.required and self._is_empty_value(payload.get(field.key))
         ]:
-            raise ValidationError("Faltan campos obligatorios para generar el contrato: " + ", ".join(missing_fields))
+            raise TemplateValidationError("Faltan campos obligatorios para generar el contrato: " + ", ".join(missing_fields))
 
     @staticmethod
     def _is_empty_value(value: Any) -> bool:

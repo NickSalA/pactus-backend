@@ -30,7 +30,7 @@ class ServiceTable(BaseTable, table=True):
     @classmethod
     def validate_name(cls, value: str) -> str:
         """Rejects blank service names."""
-        cleaned = value.strip()
-        if not cleaned:
+        if cleaned := value.strip():
+            return cleaned
+        else:
             raise ValueError("Service name cannot be empty.")
-        return cleaned

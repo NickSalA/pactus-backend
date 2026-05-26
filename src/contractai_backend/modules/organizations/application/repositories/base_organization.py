@@ -1,7 +1,6 @@
 """Organization repository contracts."""
 
 from abc import abstractmethod
-from collections.abc import Sequence
 
 from contractai_backend.core.application.base import BaseRepository
 from contractai_backend.modules.organizations.domain.entities import OrganizationTable
@@ -16,6 +15,6 @@ class OrganizationRepository(BaseRepository[OrganizationTable]):
         pass
 
     @abstractmethod
-    async def get_active(self) -> Sequence[OrganizationTable]:
-        """Retrieve active organizations."""
+    async def get_by_ruc(self, ruc: str) -> OrganizationTable | None:
+        """Retrieve an organization by its RUC."""
         pass

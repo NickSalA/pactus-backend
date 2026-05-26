@@ -2,10 +2,10 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Union
 
 from ...domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable, LaborContractTable
-from ..dto import ContractQueryDTO
+from ..dto import CompanyContractQueryDTO, LaborContractQueryDTO
 
 
 class DocumentQueryRepository(ABC):
@@ -60,37 +60,120 @@ class DocumentQueryRepository(ABC):
     async def search_contracts(
         self,
         organization_id: int,
-        query: ContractQueryDTO,
+        query: Union[CompanyContractQueryDTO, LaborContractQueryDTO],
         limit: int | None = None,
         chatbot_ready_only: bool = False,
     ) -> Sequence[DocumentTable]:
-        """Lists contracts matching structured filters."""
+        """Lists contracts matching structured filters. DEPRECATED: use search_company_contracts or search_labor_contracts."""
+        pass
+
+    @abstractmethod
+    async def search_company_contracts(
+        self,
+        organization_id: int,
+        query: CompanyContractQueryDTO,
+        limit: int | None = None,
+        chatbot_ready_only: bool = False,
+    ) -> Sequence[DocumentTable]:
+        """Lists COMPANY contracts matching structured filters."""
+        pass
+
+    @abstractmethod
+    async def search_labor_contracts(
+        self,
+        organization_id: int,
+        query: LaborContractQueryDTO,
+        limit: int | None = None,
+        chatbot_ready_only: bool = False,
+    ) -> Sequence[DocumentTable]:
+        """Lists LABOR contracts matching structured filters."""
         pass
 
     @abstractmethod
     async def count_contracts(
         self,
         organization_id: int,
-        query: ContractQueryDTO,
+        query: Union[CompanyContractQueryDTO, LaborContractQueryDTO],
         chatbot_ready_only: bool = False,
     ) -> int:
-        """Counts contracts matching structured filters."""
+        """Counts contracts matching structured filters. DEPRECATED: use count_company_contracts or count_labor_contracts."""
+        pass
+
+    @abstractmethod
+    async def count_company_contracts(
+        self,
+        organization_id: int,
+        query: CompanyContractQueryDTO,
+        chatbot_ready_only: bool = False,
+    ) -> int:
+        """Counts COMPANY contracts matching structured filters."""
+        pass
+
+    @abstractmethod
+    async def count_labor_contracts(
+        self,
+        organization_id: int,
+        query: LaborContractQueryDTO,
+        chatbot_ready_only: bool = False,
+    ) -> int:
+        """Counts LABOR contracts matching structured filters."""
         pass
 
     @abstractmethod
     async def rank_contracts_by_client(
         self,
         organization_id: int,
-        query: ContractQueryDTO,
+        query: CompanyContractQueryDTO,
         limit: int | None = None,
         chatbot_ready_only: bool = False,
     ) -> Sequence[dict[str, Any]]:
-        """Returns a client ranking based on filtered contracts."""
+        """Returns a client ranking based on filtered COMPANY contracts. DEPRECATED: use rank_company_contracts_by_client."""
+        pass
+
+    @abstractmethod
+    async def rank_company_contracts_by_client(
+        self,
+        organization_id: int,
+        query: CompanyContractQueryDTO,
+        limit: int | None = None,
+        chatbot_ready_only: bool = False,
+    ) -> Sequence[dict[str, Any]]:
+        """Returns a client ranking based on filtered COMPANY contracts."""
+        pass
+
+    @abstractmethod
+    async def rank_company_contracts_by_services(
+        self,
+        organization_id: int,
+        query: CompanyContractQueryDTO,
+        limit: int | None = None,
+        chatbot_ready_only: bool = False,
+    ) -> Sequence[dict[str, Any]]:
+        """Returns a client ranking based on filtered COMPANY contracts, ordered by total services contracted."""
+        pass
+
+    @abstractmethod
+    async def get_all_document_ids_with_chatbot_ready(self, organization_id: int) -> Sequence[int]:
+        """Returns all chatbot-ready document IDs for an organization."""
         pass
 
     @abstractmethod
     async def sync_contract_states(self, organization_id: int) -> int:
         """Synchronizes persisted document states for one organization."""
+        pass
+
+    @abstractmethod
+    async def get_contract_value_context(
+        self, document_ids: Sequence[int]
+    ) -> dict[int, dict[str, Any]]:
+        """Returns labor values and company totals for documents."""
+        pass
+
+    @abstractmethod
+    async def get_contract_party_context(
+        self, document_ids: Sequence[int]
+    ) -> dict[int, str | None]:
+        """Returns client/worker_name for documents."""
         pass
 
 

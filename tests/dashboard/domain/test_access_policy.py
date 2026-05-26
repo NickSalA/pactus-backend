@@ -31,8 +31,17 @@ def test_hr_cannot_access_company_dashboard():
         ensure_dashboard_access(current_user=_make_user(UserRole.HR), document_type=DocumentType.COMPANY)
 
 
-@pytest.mark.parametrize("role", [UserRole.ADMIN, UserRole.WORKER])
-@pytest.mark.parametrize("document_type", [DocumentType.COMPANY, DocumentType.LABOR])
-def test_admin_and_worker_cannot_access_dashboard(role: UserRole, document_type: DocumentType):
+def test_worker_can_access_company_dashboard():
+    ensure_dashboard_access(current_user=_make_user(UserRole.WORKER), document_type=DocumentType.COMPANY)
+
+
+def test_worker_cannot_access_labor_dashboard():
     with pytest.raises(ForbiddenError):
-        ensure_dashboard_access(current_user=_make_user(role), document_type=document_type)
+        ensure_dashboard_access(current_user=_make_user(UserRole.WORKER), document_type=DocumentType.LABOR)
+
+
+@pytest.mark.parametrize("document_type", [DocumentType.COMPANY, DocumentType.LABOR])
+def test_admin_cannot_access_dashboard(document_type: DocumentType):
+    with pytest.raises(ForbiddenError):
+        ensure_dashboard_access(current_user=_make_user(UserRole.ADMIN), document_type=document_type)
+
