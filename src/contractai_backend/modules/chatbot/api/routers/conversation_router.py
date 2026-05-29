@@ -15,16 +15,6 @@ router = APIRouter()
 ConversationServiceDep = Annotated[ConversationService, Depends(get_conversation_service)]
 
 
-@router.get(path="", response_model=list[ConversationList])
-async def list_conversations(service: ConversationServiceDep, current_user: CurrentUserDep):
-    """Endpoint para listar las conversaciones del usuario autenticado."""
-    conversations = await service.list_user_conversations(
-        organization_id=current_user.organization_id,
-        user_id=current_user.id,
-    )
-    return [ConversationList.model_validate(conversation) for conversation in conversations]
-
-
 @router.post(path="", response_model=ConversationRead, status_code=status.HTTP_201_CREATED)
 async def create_conversation(payload: ConversationCreate, service: ConversationServiceDep, current_user: CurrentUserDep):
     """Endpoint para crear una conversación vacía para el usuario autenticado."""
