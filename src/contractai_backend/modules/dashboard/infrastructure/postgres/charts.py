@@ -8,10 +8,10 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col, select
 
-from .....core.exceptions.base import InternalServerError, ServiceUnavailableError
 from ....documents.domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable, LaborContractTable
 from ....documents.domain.value_objs import CurrencyType, DocumentType
 from ...application.repositories import DashboardMonthlyAmount
+from ...domain.exceptions import DashboardDatabaseError, DashboardDatabaseUnavailableError
 from .helpers import DashboardRepositoryProtocol
 
 
@@ -71,6 +71,6 @@ class DashboardChartQueriesMixin:
                 current_month = next_month
             return results
         except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise ServiceUnavailableError("La base de datos no esta disponible") from e
+            raise DashboardDatabaseUnavailableError("La base de datos no esta disponible") from e
         except SQLAlchemyError as e:
-            raise InternalServerError("Error al consultar montos mensuales del dashboard") from e
+            raise DashboardDatabaseError("Error al consultar montos mensuales del dashboard") from e

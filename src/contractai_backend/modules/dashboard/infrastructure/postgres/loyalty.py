@@ -10,7 +10,7 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col, select
 
-from .....core.exceptions.base import InternalServerError, ServiceUnavailableError
+from ...domain.exceptions import DashboardDatabaseError, DashboardDatabaseUnavailableError
 from ....documents.domain import CompanyContractTable, DocumentTable
 from .helpers import ACTIVE_DASHBOARD_STATES, DashboardRepositoryProtocol
 
@@ -71,9 +71,9 @@ class DashboardCompanyLoyaltyQueriesMixin:
             }
 
         except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise ServiceUnavailableError("El servicio de base de datos no está disponible.") from e
+            raise DashboardDatabaseUnavailableError("El servicio de base de datos no está disponible.") from e
         except SQLAlchemyError as e:
-            raise InternalServerError("Error interno al procesar los KPIs de fidelidad de clientes.") from e
+            raise DashboardDatabaseError("Error interno al procesar los KPIs de fidelidad de clientes.") from e
 
     async def get_company_tenure_distribution(
         self: DashboardRepositoryProtocol,
@@ -130,9 +130,9 @@ class DashboardCompanyLoyaltyQueriesMixin:
             ]
 
         except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise ServiceUnavailableError("El servicio de base de datos no está disponible.") from e
+            raise DashboardDatabaseUnavailableError("El servicio de base de datos no está disponible.") from e
         except SQLAlchemyError as e:
-            raise InternalServerError("Error interno al procesar la distribución de permanencia de clientes.") from e
+            raise DashboardDatabaseError("Error interno al procesar la distribución de permanencia de clientes.") from e
 
     async def get_company_monthly_renewal_trend(
         self: DashboardRepositoryProtocol,
@@ -220,9 +220,9 @@ class DashboardCompanyLoyaltyQueriesMixin:
             return cohort_results
 
         except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise ServiceUnavailableError("El servicio de base de datos no está disponible.") from e
+            raise DashboardDatabaseUnavailableError("El servicio de base de datos no está disponible.") from e
         except SQLAlchemyError as e:
-            raise InternalServerError("Error interno al procesar la tendencia de renovación mensual de clientes.") from e
+            raise DashboardDatabaseError("Error interno al procesar la tendencia de renovación mensual de clientes.") from e
 
     async def get_company_loyalty_details(
         self: DashboardRepositoryProtocol,
@@ -263,6 +263,6 @@ class DashboardCompanyLoyaltyQueriesMixin:
             ]
 
         except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise ServiceUnavailableError("El servicio de base de datos no está disponible.") from e
+            raise DashboardDatabaseUnavailableError("El servicio de base de datos no está disponible.") from e
         except SQLAlchemyError as e:
-            raise InternalServerError("Error interno al procesar los detalles de fidelidad de clientes.") from e
+            raise DashboardDatabaseError("Error interno al procesar los detalles de fidelidad de clientes.") from e

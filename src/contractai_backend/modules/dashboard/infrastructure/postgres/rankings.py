@@ -9,11 +9,11 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col, select
 
-from .....core.exceptions.base import InternalServerError, ServiceUnavailableError
 from ....catalog.domain.entities import ServiceTable
 from ....documents.domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable
 from ....documents.domain.value_objs import CurrencyType
 from ...application.repositories import DashboardClientRanking, DashboardServiceRanking
+from ...domain.exceptions import DashboardDatabaseError, DashboardDatabaseUnavailableError
 from ...domain.value_objs import TopRankingSortBy
 from .helpers import DashboardRepositoryProtocol
 
@@ -66,9 +66,9 @@ class DashboardRankingQueriesMixin:
                 )
             return rankings
         except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise ServiceUnavailableError("La base de datos no esta disponible") from e
+            raise DashboardDatabaseUnavailableError("La base de datos no esta disponible") from e
         except SQLAlchemyError as e:
-            raise InternalServerError("Error al listar empresas principales") from e
+            raise DashboardDatabaseError("Error al listar empresas principales") from e
 
     async def list_top_services(
         self: DashboardRepositoryProtocol,
@@ -119,6 +119,6 @@ class DashboardRankingQueriesMixin:
                 )
             return rankings
         except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise ServiceUnavailableError("La base de datos no esta disponible") from e
+            raise DashboardDatabaseUnavailableError("La base de datos no esta disponible") from e
         except SQLAlchemyError as e:
-            raise InternalServerError("Error al listar servicios principales") from e
+            raise DashboardDatabaseError("Error al listar servicios principales") from e
