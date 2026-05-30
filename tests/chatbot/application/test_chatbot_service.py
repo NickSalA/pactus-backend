@@ -44,10 +44,11 @@ class TestProcessUserMessage:
         llm.invoke.return_value = _make_llm_result(response="Respuesta del bot", thread_id=5)
 
         service = _make_service(llm=llm, conv_service=conv_service)
-        response, thread_id = await service.process_user_message("Hola", thread_id=None, current_user=_make_user())
+        response, thread_id, chart = await service.process_user_message("Hola", thread_id=None, current_user=_make_user())
 
         assert response == "Respuesta del bot"
         assert thread_id == 5
+        assert chart is None
         conv_service.create_conversation.assert_called_once()
         conv_service.append_messages.assert_awaited_once()
         llm.invoke.assert_awaited_once_with(message="Hola", thread_id=5, user_context=ANY)
@@ -62,9 +63,10 @@ class TestProcessUserMessage:
         llm.invoke.return_value = _make_llm_result(response="Respuesta", thread_id=10)
 
         service = _make_service(llm=llm, conv_service=conv_service)
-        response, thread_id = await service.process_user_message("Hola", thread_id=10, current_user=_make_user())
+        response, thread_id, chart = await service.process_user_message("Hola", thread_id=10, current_user=_make_user())
 
         assert thread_id == 10
+        assert chart is None
         conv_service.create_conversation.assert_not_called()
         assert conv_service.append_messages.await_count == 2
 

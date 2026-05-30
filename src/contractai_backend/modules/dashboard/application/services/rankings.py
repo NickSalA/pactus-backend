@@ -18,13 +18,14 @@ class DashboardRankingServiceMixin:
         current_user: UserTable,
         currency: CurrencyType | None = None,
         sort_by: TopRankingSortBy = TopRankingSortBy.VOLUME,
+        limit: int | None = None,
     ) -> Sequence[TopCompanyResponse]:
         """Returns the top company counterparties for managers."""
         ensure_dashboard_access(current_user=current_user, document_type=DocumentType.COMPANY)
         await self.repository.sync_contract_states(organization_id=current_user.organization_id)
         rows = await self.repository.list_top_companies(
             organization_id=current_user.organization_id,
-            limit=TOP_RANKING_LIMIT,
+            limit=limit or TOP_RANKING_LIMIT,
             currency=currency,
             sort_by=sort_by,
         )
@@ -42,13 +43,14 @@ class DashboardRankingServiceMixin:
         current_user: UserTable,
         currency: CurrencyType | None = None,
         sort_by: TopRankingSortBy = TopRankingSortBy.VOLUME,
+        limit: int | None = None,
     ) -> Sequence[TopServiceResponse]:
         """Returns the top services for company contracts and managers."""
         ensure_dashboard_access(current_user=current_user, document_type=DocumentType.COMPANY)
         await self.repository.sync_contract_states(organization_id=current_user.organization_id)
         rows = await self.repository.list_top_services(
             organization_id=current_user.organization_id,
-            limit=TOP_RANKING_LIMIT,
+            limit=limit or TOP_RANKING_LIMIT,
             currency=currency,
             sort_by=sort_by,
         )

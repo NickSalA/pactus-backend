@@ -1,14 +1,54 @@
 """Application DTOs for the chatbot module."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import Literal
+
+from pydantic import BaseModel
 
 from ...documents.domain.value_objs import DocumentType
+
+# ---------------------------------------------------------------------------
+# Chart DTOs (Pydantic — serializable for JSONB and API responses)
+# ---------------------------------------------------------------------------
+
+
+class ChartSeriesConfig(BaseModel):
+    """One series definition for the frontend chart."""
+
+    dataKey: str  # noqa: N815
+    name: str
+    color: str | None = None
+
+
+class ChartConfig(BaseModel):
+    """Axis and series configuration consumed by the frontend chart."""
+
+    categoryKey: str  # noqa: N815
+    series: list[ChartSeriesConfig]
+
+
+class ChartData(BaseModel):
+    """Complete payload the frontend needs to render a chart (Recharts-compatible)."""
+
+    type: Literal["bar", "line", "pie"]
+    layout: Literal["vertical", "horizontal", "centric"]
+    title: str
+    config: ChartConfig
+    data: list[dict[str, str | int | float]]
+
+
+# ---------------------------------------------------------------------------
+# LLM / internal DTOs (dataclass — lightweight, not serialized to API)
+# ---------------------------------------------------------------------------
 
 
 @dataclass
 class LLMResult:
     response: str
     thread_id: int
+    chart: ChartData | None = None
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0

@@ -7,6 +7,8 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....modules.catalog.composition import build_default_service_repository
+from ....modules.dashboard.application.services import DashboardService
+from ....modules.dashboard.infrastructure import SQLModelDashboardRepository
 from ....modules.documents.application.services import ContractQueryService
 from ....modules.documents.composition import build_default_document_repository
 from ....modules.documents.domain.access_policy import can_read_document_type, get_readable_document_types
@@ -22,6 +24,7 @@ from ..infrastructure.agent import (
     LangGraphLLMAdapter,
     build_bc_tool,
     build_company_contracts_query_tool,
+    build_dashboard_chart_tool,
     build_labor_contracts_query_tool,
     build_party_lookup_tool,
     get_llm,
@@ -101,6 +104,16 @@ async def get_llm_provider(
                 organization_id=current_user.organization_id,
             )
         )
+
+    # Dashboard chart tool
+    dashboard_repo = SQLModelDashboardRepository(session=session)
+    dashboard_service = DashboardService(repository=dashboard_repo)
+    agent_tools.append(
+        build_dashboard_chart_tool(
+            service=dashboard_service,
+            user=current_user,
+        )
+    )
 
     graph_builder = ContractAgentGraph(
         tools=agent_tools,

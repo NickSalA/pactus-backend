@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..application.dto import ChartData
+
 
 class ChatRequest(BaseModel):
     message: str = Field(..., description="The user's message to the chatbot.")
@@ -15,6 +17,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str = Field(..., description="The chatbot's response to the user's message.")
     thread_id: int = Field(..., description="ID de la conversación.")
+    chart: ChartData | None = Field(default=None, description="Datos de gráfica opcionales para renderizar en el frontend.")
 
 
 class ConversationCreate(BaseModel):

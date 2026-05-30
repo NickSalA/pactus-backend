@@ -34,11 +34,12 @@ class ChatbotTokenUsage(BaseTable, table=True):
 class Message(BaseModel):
     role: str
     content: str
+    chart: dict[str, Any] | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(tz=UTC))
 
     def as_record(self) -> dict[str, Any]:
         """Serialize the message into the JSON-compatible payload stored in the DB."""
-        return self.model_dump(mode="json")
+        return self.model_dump(mode="json", exclude_none=True)
 
 
 class ConversationTable(BaseTable, table=True):

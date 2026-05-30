@@ -2,8 +2,10 @@
 
 from typing import Any
 
+from loguru import logger
+
 from ....documents.domain.access_policy import get_readable_document_types
-from ...application.dto import LLMResult
+from ...application.dto import ChartData, LLMResult
 from ...application.repositories.base_llm import ILLMProvider
 from ...domain.entities import ChatbotTokenUsage, ConversationTable, Message
 from ...domain.exceptions import ConversationNotFoundError
@@ -98,12 +100,14 @@ class ChatbotService:
         response_text: str,
         actual_thread_id: int,
         current_user,
+        chart: ChartData | None = None,
     ) -> None:
         """Agrega el mensaje del bot al historial de la conversación.
 
         Lanza un error si la conversación objetivo no existe en la base de datos.
         """
-        bot_message: dict[str, Any] = Message(role="bot", content=response_text).as_record()
+        chart_dict = chart.model_dump(mode="json") if chart else None
+        bot_message: dict[str, Any] = Message(role="bot", content=response_text, chart=chart_dict).as_record()
 
         updated_conversation: ConversationTable | None = await self.conv_service.append_messages(
             conversation_id=actual_thread_id,
@@ -143,8 +147,17 @@ class ChatbotService:
             model_used=cost.model_used,
         )
         await self.token_usage_repo.save(token_usage)
+        logger.info(
+            "Persisted token usage for conversation_id %s: Input: %s, Output: %s, Total: %s, Cost: $%s USD using model %s",
+            conversation_id,
+            cost.input_tokens,
+            cost.output_tokens,
+            cost.total_tokens,
+            cost.total_cost_usd,
+            cost.model_used,
+        )
 
-    async def process_user_message(self, message: str, thread_id: int | None, current_user) -> tuple[str, int]:
+    async def process_user_message(self, message: str, thread_id: int | None, current_user) -> tuple[str, int, ChartData | None]:
         """Procesa un mensaje del usuario, obtiene la respuesta del LLM y actualiza la conversación en la base de datos."""
         thread_id, _ = await self._ensure_conversation_with_user_message(
             message=message,
@@ -165,6 +178,11 @@ class ChatbotService:
             message_index=message_index,
         )
 
-        await self._append_bot_message(response_text=llm_result.response, actual_thread_id=llm_result.thread_id, current_user=current_user)
+        await self._append_bot_message(
+            response_text=llm_result.response,
+            actual_thread_id=llm_result.thread_id,
+            current_user=current_user,
+            chart=llm_result.chart,
+        )
 
-        return llm_result.response, llm_result.thread_id
+        return llm_result.response, llm_result.thread_id, llm_result.chart

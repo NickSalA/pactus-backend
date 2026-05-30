@@ -19,6 +19,6 @@ CurrentUserDep = Annotated[UserTable, Depends(get_current_user)]
 @router.post("/", response_model=ChatResponse)
 async def send_chat_message(request: ChatRequest, service: ChatbotServiceDep, current_user: CurrentUserDep) -> ChatResponse:
     """Endpoint para enviar un mensaje al chatbot. Procesa el mensaje, obtiene la respuesta y actualiza la conversación."""
-    respuesta, thread_id = await service.process_user_message(message=request.message, thread_id=request.thread_id, current_user=current_user)
+    respuesta, thread_id, chart = await service.process_user_message(message=request.message, thread_id=request.thread_id, current_user=current_user)
 
-    return ChatResponse(response=respuesta, thread_id=thread_id)
+    return ChatResponse(response=respuesta, thread_id=thread_id, chart=chart)
