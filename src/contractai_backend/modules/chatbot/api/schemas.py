@@ -6,7 +6,27 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..application.dto import ChartData
+from ..application.dto import (
+    ChartConfig as ApplicationChartConfig,
+)
+from ..application.dto import (
+    ChartData as ApplicationChartData,
+)
+from ..application.dto import (
+    ChartSeriesConfig as ApplicationChartSeriesConfig,
+)
+
+
+class ChartSeriesConfig(ApplicationChartSeriesConfig):
+    """HTTP response schema for chart series configuration."""
+
+
+class ChartConfig(ApplicationChartConfig):
+    """HTTP response schema for chart configuration."""
+
+
+class ChartData(ApplicationChartData):
+    """HTTP response schema for chart data."""
 
 
 class ChatRequest(BaseModel):

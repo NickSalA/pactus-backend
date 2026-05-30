@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from .....modules.users.domain.entities import UserTable
 from .....shared.api.dependencies.security import get_current_user
 from ...api.dependencies import get_chatbot_service
-from ...api.schemas import ChatRequest, ChatResponse
+from ...api.schemas import ChartData, ChatRequest, ChatResponse
 from ...application.services import ChatbotService
 
 router = APIRouter()
@@ -21,4 +21,5 @@ async def send_chat_message(request: ChatRequest, service: ChatbotServiceDep, cu
     """Endpoint para enviar un mensaje al chatbot. Procesa el mensaje, obtiene la respuesta y actualiza la conversación."""
     respuesta, thread_id, chart = await service.process_user_message(message=request.message, thread_id=request.thread_id, current_user=current_user)
 
-    return ChatResponse(response=respuesta, thread_id=thread_id, chart=chart)
+    chart_schema = ChartData.model_validate(chart, from_attributes=True) if chart else None
+    return ChatResponse(response=respuesta, thread_id=thread_id, chart=chart_schema)
