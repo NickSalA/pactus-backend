@@ -3,15 +3,17 @@ from typing import Any
 from langchain_core.messages import HumanMessage
 from langgraph.graph.state import CompiledStateGraph, RunnableConfig
 
-from contractai_backend.modules.chatbot.application.repositories import ILLMProvider
+from contractai_backend.modules.chatbot.application.dto import LLMResult
+from contractai_backend.modules.chatbot.application.repositories.base_llm import ILLMProvider
 from contractai_backend.modules.chatbot.domain import LLMExecutionError, LLMQuotaExceededError
+from contractai_backend.shared.config import settings
 
 
 class LangGraphLLMAdapter(ILLMProvider):
     def __init__(self, compiled_graph: CompiledStateGraph):
         self.graph = compiled_graph
 
-    async def invoke(self, message: str, thread_id: int, user_context: dict[str, Any]) -> tuple[str, int]:
+    async def invoke(self, message: str, thread_id: int, user_context: dict[str, Any]) -> LLMResult:
         config: RunnableConfig = {"configurable": {"thread_id": str(thread_id)}}
 
         try:
@@ -34,11 +36,17 @@ class LangGraphLLMAdapter(ILLMProvider):
 
         input_tokens = 0
         output_tokens = 0
+        model_used = settings.GEMINI_MODEL_NAME
 
         if hasattr(last_message, "usage_metadata") and last_message.usage_metadata:
             input_tokens = last_message.usage_metadata.get("input_tokens", 0)
             output_tokens = last_message.usage_metadata.get("output_tokens", 0)
 
-        output_message += f"\n\n---\n📊 Tokens de entrada: {input_tokens} | Tokens de salida: {output_tokens}"
-
-        return output_message, thread_id
+        return LLMResult(
+            response=output_message,
+            thread_id=thread_id,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=input_tokens + output_tokens,
+            model_used=model_used,
+        )

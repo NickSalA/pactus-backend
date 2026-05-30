@@ -16,7 +16,7 @@ from ....shared.api.dependencies.security import get_current_user
 from ....shared.config import settings
 from ....shared.infrastructure.database import get_aclient, get_session
 from ..application import ChatbotService, ConversationService, ILLMProvider
-from ..infrastructure import ConversationRepository, QdrantVectorRepository
+from ..infrastructure import ConversationRepository, QdrantVectorRepository, TokenUsageRepository
 from ..infrastructure.agent import (
     ContractAgentGraph,
     LangGraphLLMAdapter,
@@ -32,6 +32,11 @@ async def get_conversation_service(session: Annotated[AsyncSession, Depends(get_
     """Construye el servicio de conversación, inyectando el repositorio necesario."""
     repo = ConversationRepository(session=session)
     return ConversationService(repository=repo)
+
+
+async def get_token_usage_repository(session: Annotated[AsyncSession, Depends(get_session)]) -> TokenUsageRepository:
+    """Construye el repositorio de token usage."""
+    return TokenUsageRepository(session=session)
 
 
 async def get_llm_provider(
@@ -108,7 +113,9 @@ async def get_llm_provider(
 
 
 async def get_chatbot_service(
-    llm_provider: Annotated[ILLMProvider, Depends(get_llm_provider)], conv_service: Annotated[ConversationService, Depends(get_conversation_service)]
+    llm_provider: Annotated[ILLMProvider, Depends(get_llm_provider)],
+    conv_service: Annotated[ConversationService, Depends(get_conversation_service)],
+    token_usage_repo: Annotated[TokenUsageRepository, Depends(get_token_usage_repository)],
 ) -> ChatbotService:
     """Construye el servicio principal del chatbot, inyectando el LLM y el servicio de conversaciones."""
-    return ChatbotService(llm_provider=llm_provider, conv_service=conv_service)
+    return ChatbotService(llm_provider=llm_provider, conv_service=conv_service, token_usage_repo=token_usage_repo)

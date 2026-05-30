@@ -1,6 +1,7 @@
 """Schemas for the chatbot API endpoints."""
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -42,3 +43,29 @@ class ConversationList(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TokenUsageRead(BaseModel):
+    id: int
+    conversation_id: int
+    message_index: int
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    input_cost_usd: Decimal
+    output_cost_usd: Decimal
+    total_cost_usd: Decimal
+    model_used: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TokenUsageSummary(BaseModel):
+    total_input_tokens: int
+    total_output_tokens: int
+    total_tokens: int
+    total_input_cost_usd: Decimal
+    total_output_cost_usd: Decimal
+    total_cost_usd: Decimal
+    usage_count: int

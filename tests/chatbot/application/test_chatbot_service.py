@@ -4,6 +4,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 
+from contractai_backend.modules.chatbot.application.repositories.base_llm import LLMResult
 from contractai_backend.modules.chatbot.application.services.chatbot_service import ChatbotService
 from contractai_backend.modules.chatbot.domain.entities import ConversationTable
 from contractai_backend.modules.chatbot.domain.exceptions import ConversationNotFoundError
@@ -23,6 +24,10 @@ def _make_conv(id: int = 5) -> ConversationTable:
     return ConversationTable(id=id, organization_id=1, user_id=1, title="Test", content=[])
 
 
+def _make_llm_result(response: str = "Respuesta del bot", thread_id: int = 5) -> LLMResult:
+    return LLMResult(response=response, thread_id=thread_id, input_tokens=100, output_tokens=50, total_tokens=150, model_used="gemini-2.5-flash")
+
+
 def _make_service(llm=None, conv_service=None) -> ChatbotService:
     return ChatbotService(llm_provider=llm or AsyncMock(), conv_service=conv_service or AsyncMock())
 
@@ -36,7 +41,7 @@ class TestProcessUserMessage:
         conv_service.append_messages.return_value = conv
 
         llm = AsyncMock()
-        llm.invoke.return_value = ("Respuesta del bot", 5)
+        llm.invoke.return_value = _make_llm_result(response="Respuesta del bot", thread_id=5)
 
         service = _make_service(llm=llm, conv_service=conv_service)
         response, thread_id = await service.process_user_message("Hola", thread_id=None, current_user=_make_user())
@@ -54,7 +59,7 @@ class TestProcessUserMessage:
         conv_service.append_messages.side_effect = [conv, conv]
 
         llm = AsyncMock()
-        llm.invoke.return_value = ("Respuesta", 10)
+        llm.invoke.return_value = _make_llm_result(response="Respuesta", thread_id=10)
 
         service = _make_service(llm=llm, conv_service=conv_service)
         response, thread_id = await service.process_user_message("Hola", thread_id=10, current_user=_make_user())
@@ -72,7 +77,7 @@ class TestProcessUserMessage:
         conv_service.append_messages.return_value = conv
 
         llm = AsyncMock()
-        llm.invoke.return_value = ("ok", conv.id)
+        llm.invoke.return_value = _make_llm_result(response="ok", thread_id=conv.id)
 
         service = _make_service(llm=llm, conv_service=conv_service)
         await service.process_user_message(long_message, thread_id=None, current_user=_make_user())
@@ -101,7 +106,7 @@ class TestProcessUserMessage:
         conv_service.append_messages.return_value = None
 
         llm = AsyncMock()
-        llm.invoke.return_value = ("ok", conv.id)
+        llm.invoke.return_value = _make_llm_result(response="ok", thread_id=conv.id)
 
         service = _make_service(llm=llm, conv_service=conv_service)
         with pytest.raises(ConversationNotFoundError):

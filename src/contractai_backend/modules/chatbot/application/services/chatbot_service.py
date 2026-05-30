@@ -3,18 +3,28 @@
 from typing import Any
 
 from ....documents.domain.access_policy import get_readable_document_types
+from ...application.dto import LLMResult
 from ...application.repositories.base_llm import ILLMProvider
-from ...domain.entities import ConversationTable, Message
+from ...domain.entities import ChatbotTokenUsage, ConversationTable, Message
 from ...domain.exceptions import ConversationNotFoundError
+from ...infrastructure.token_cost_calculator import TokenCostCalculator
+from ...infrastructure.token_usage_repo import TokenUsageRepository
 from .conversation_service import ConversationService
 
 LIMIT_TITLE = 30
 
 
 class ChatbotService:
-    def __init__(self, llm_provider: ILLMProvider, conv_service: ConversationService):
+    def __init__(
+        self,
+        llm_provider: ILLMProvider,
+        conv_service: ConversationService,
+        token_usage_repo: TokenUsageRepository | None = None,
+    ):
         self.llm_provider: ILLMProvider = llm_provider
         self.conv_service: ConversationService = conv_service
+        self.token_usage_repo: TokenUsageRepository | None = token_usage_repo
+        self._cost_calculator = TokenCostCalculator()
 
     @staticmethod
     def _build_user_context(current_user: Any) -> dict[str, Any]:
@@ -107,6 +117,33 @@ class ChatbotService:
                 message=f"No se pudo sincronizar el historial. El thread_id {actual_thread_id} no existe en la base de datos."
             )
 
+    async def _persist_token_usage(
+        self,
+        conversation_id: int,
+        llm_result: LLMResult,
+        message_index: int,
+    ) -> None:
+        if self.token_usage_repo is None:
+            return
+
+        cost = self._cost_calculator.calculate(
+            input_tokens=llm_result.input_tokens,
+            output_tokens=llm_result.output_tokens,
+        )
+
+        token_usage = ChatbotTokenUsage(
+            conversation_id=conversation_id,
+            message_index=message_index,
+            input_tokens=cost.input_tokens,
+            output_tokens=cost.output_tokens,
+            total_tokens=cost.total_tokens,
+            input_cost_usd=cost.input_cost_usd,
+            output_cost_usd=cost.output_cost_usd,
+            total_cost_usd=cost.total_cost_usd,
+            model_used=cost.model_used,
+        )
+        await self.token_usage_repo.save(token_usage)
+
     async def process_user_message(self, message: str, thread_id: int | None, current_user) -> tuple[str, int]:
         """Procesa un mensaje del usuario, obtiene la respuesta del LLM y actualiza la conversación en la base de datos."""
         thread_id, _ = await self._ensure_conversation_with_user_message(
@@ -115,12 +152,19 @@ class ChatbotService:
             current_user=current_user,
         )
 
-        response_text, actual_thread_id = await self.llm_provider.invoke(
+        llm_result = await self.llm_provider.invoke(
             message=message,
             thread_id=thread_id,
             user_context=self._build_user_context(current_user),
         )
 
-        await self._append_bot_message(response_text=response_text, actual_thread_id=actual_thread_id, current_user=current_user)
+        message_index = 1 if thread_id else 0
+        await self._persist_token_usage(
+            conversation_id=thread_id,
+            llm_result=llm_result,
+            message_index=message_index,
+        )
 
-        return response_text, actual_thread_id
+        await self._append_bot_message(response_text=llm_result.response, actual_thread_id=llm_result.thread_id, current_user=current_user)
+
+        return llm_result.response, llm_result.thread_id

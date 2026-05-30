@@ -6,7 +6,6 @@ import json
 import logging
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from typing import Any
 
 from langchain_core.tools import BaseTool
@@ -14,6 +13,7 @@ from langchain_core.tools import BaseTool
 from ....documents.domain.access_policy import get_readable_document_types
 from ....documents.domain.value_objs import DocumentType
 from ....users.domain.value_objs import UserRole
+from ...application.dto import DocumentAccessDecision
 from .patterns import (
     EXPLICIT_DOCUMENT_TYPE_PATTERNS,
     NAMED_PARTY_PATTERNS,
@@ -25,31 +25,6 @@ from .patterns import (
 logger = logging.getLogger(__name__)
 
 ROLE_PERMISSION_DENIED_RESPONSE = "No tienes permisos para acceder a esa informacion."
-
-
-@dataclass(frozen=True)
-class DocumentAccessDecision:
-    allowed_document_types: frozenset[DocumentType] | None
-    requested_document_types: frozenset[DocumentType]
-    denied_document_types: frozenset[DocumentType]
-
-    @property
-    def is_denied(self) -> bool:
-        return bool(self.denied_document_types)
-
-    @staticmethod
-    def _serialize_types(doc_types: frozenset[DocumentType] | None) -> list[str] | None:
-        if doc_types is None:
-            return None
-        return [dt.value for dt in sorted(doc_types, key=lambda x: x.value)]
-
-    def to_prompt_payload(self) -> dict[str, object]:
-        return {
-            "allowed_document_types": self._serialize_types(self.allowed_document_types),
-            "requested_document_types": self._serialize_types(self.requested_document_types) or [],
-            "denied_document_types": self._serialize_types(self.denied_document_types) or [],
-            "must_deny": self.is_denied,
-        }
 
 
 def coerce_user_role(user_role: UserRole | str | None) -> UserRole | None:

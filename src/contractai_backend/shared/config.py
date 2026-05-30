@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # MODEL_SECOND_API_KEY: str = Field(default="your-second-model-api-key")
     MODEL_TEMPERATURE: float = Field(default=0.7)
 
+    GEMINI_INPUT_PRICE_PER_M: float = Field(default=0.00125)
+    GEMINI_OUTPUT_PRICE_PER_M: float = Field(default=0.005)
+
     AZURE_OPENAI_ENDPOINT: str = Field(default="https://your-resource.openai.azure.com/")
     AZURE_OPENAI_API_VERSION: str = Field(default="2024-10-21")
     AZURE_OPENAI_DEPLOYMENT: str = Field(default="your-agent-model")

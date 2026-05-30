@@ -6,10 +6,10 @@ from collections import defaultdict
 from collections.abc import Sequence
 from datetime import date
 from difflib import SequenceMatcher
-from typing import Any, Union
+from typing import Any
 from typing import cast as type_cast
 
-from sqlalchemy import Float, asc, case, cast, desc, func, or_, text
+from sqlalchemy import asc, case, desc, func, or_, text
 from sqlalchemy import select as sa_select
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
@@ -91,7 +91,7 @@ class SQLModelDocumentQueryRepository(
             col(LaborContractTable.document_id) == col(DocumentTable.id),
         )
 
-    def _apply_period_filters(self, statement, filters: Union[CompanyContractQueryDTO, LaborContractQueryDTO]):
+    def _apply_period_filters(self, statement, filters: CompanyContractQueryDTO | LaborContractQueryDTO):
         if not (filters.period_start or filters.period_end):
             return statement
 
@@ -111,7 +111,7 @@ class SQLModelDocumentQueryRepository(
             statement = statement.where(period_end_column <= filters.period_end)
         return statement
 
-    def _apply_current_activity_filter(self, statement, filters: Union[CompanyContractQueryDTO, LaborContractQueryDTO]):
+    def _apply_current_activity_filter(self, statement, filters: CompanyContractQueryDTO | LaborContractQueryDTO):
         if filters.currently_active is None:
             return statement
 
@@ -206,7 +206,7 @@ class SQLModelDocumentQueryRepository(
             return ordered_expression.nulls_last()
         return ordered_expression.nulls_first()
 
-    def _apply_contract_sorting(self, statement, query: Union[CompanyContractQueryDTO, LaborContractQueryDTO]):
+    def _apply_contract_sorting(self, statement, query: CompanyContractQueryDTO | LaborContractQueryDTO):
         if isinstance(query, CompanyContractQueryDTO):
             sort_mapping = {
                 "client": self._build_party_expression(),
@@ -928,7 +928,7 @@ class SQLModelDocumentQueryRepository(
     async def search_contracts(
         self,
         organization_id: int,
-        query: Union[CompanyContractQueryDTO, LaborContractQueryDTO],
+        query: CompanyContractQueryDTO | LaborContractQueryDTO,
         limit: int | None = None,
         chatbot_ready_only: bool = False,
     ) -> Sequence[DocumentTable]:
@@ -949,7 +949,7 @@ class SQLModelDocumentQueryRepository(
     async def count_contracts(
         self,
         organization_id: int,
-        query: Union[CompanyContractQueryDTO, LaborContractQueryDTO],
+        query: CompanyContractQueryDTO | LaborContractQueryDTO,
         chatbot_ready_only: bool = False,
     ) -> int:
         if isinstance(query, CompanyContractQueryDTO):

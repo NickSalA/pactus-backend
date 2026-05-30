@@ -7,8 +7,8 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col, select
 
-from ...domain.exceptions import DashboardDatabaseError, DashboardDatabaseUnavailableError
 from ....documents.domain import DocumentTable, LaborContractTable
+from ...domain.exceptions import DashboardDatabaseError, DashboardDatabaseUnavailableError
 from .helpers import DashboardRepositoryProtocol
 
 
