@@ -16,19 +16,6 @@ class ChatResponse(BaseModel):
     thread_id: int = Field(..., description="ID de la conversación.")
 
 
-class ConversationCreate(BaseModel):
-    title: str = Field(..., min_length=1, pattern=r".*\S.*", description="Conversation title.")
-
-    @field_validator("title")
-    @classmethod
-    def validate_title(cls, value: str) -> str:
-        """Reject blank conversation titles."""
-        cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("Field cannot be empty.")
-        return cleaned
-
-
 class ConversationUpdate(BaseModel):
     title: str = Field(..., min_length=1, pattern=r".*\S.*", description="Conversation title.")
 

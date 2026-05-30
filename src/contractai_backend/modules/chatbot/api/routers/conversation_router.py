@@ -7,23 +7,12 @@ from fastapi import APIRouter, Depends, Response, status
 from .....core.exceptions.base import ForbiddenError
 from .....shared.api.dependencies.security import CurrentUserDep
 from ...api.dependencies import get_conversation_service
-from ...api.schemas import ConversationCreate, ConversationList, ConversationRead, ConversationUpdate
+from ...api.schemas import ConversationList, ConversationRead, ConversationUpdate
 from ...application import ConversationService
 from ...domain import ConversationNotFoundError
 
 router = APIRouter()
 ConversationServiceDep = Annotated[ConversationService, Depends(get_conversation_service)]
-
-
-@router.post(path="", response_model=ConversationRead, status_code=status.HTTP_201_CREATED)
-async def create_conversation(payload: ConversationCreate, service: ConversationServiceDep, current_user: CurrentUserDep):
-    """Endpoint para crear una conversación vacía para el usuario autenticado."""
-    conversation = await service.create_conversation(
-        organization_id=current_user.organization_id,
-        user_id=current_user.id,
-        title=payload.title,
-    )
-    return ConversationRead.model_validate(conversation)
 
 
 @router.get(path="/user/{user_id}", response_model=list[ConversationList])
