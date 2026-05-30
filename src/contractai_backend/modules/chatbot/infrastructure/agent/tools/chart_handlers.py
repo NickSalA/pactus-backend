@@ -2,9 +2,9 @@
 
 import json
 
-from ....dashboard.application.services import DashboardService
-from ....documents.domain.value_objs import CurrencyType
-from ....users.domain.entities import UserTable
+from .....dashboard.application.services import DashboardService
+from .....documents.domain.value_objs import CurrencyType
+from .....users.domain.entities import UserTable
 
 
 async def handle_top_services(service: DashboardService, user: UserTable, currency: str | None, limit: int | None) -> str:

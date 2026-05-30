@@ -10,10 +10,10 @@ from typing import Any
 
 from langchain_core.tools import BaseTool
 
-from ....documents.domain.access_policy import get_readable_document_types
-from ....documents.domain.value_objs import DocumentType
-from ....users.domain.value_objs import UserRole
-from ...application.dto import DocumentAccessDecision
+from .....documents.domain.access_policy import get_readable_document_types
+from .....documents.domain.value_objs import DocumentType
+from .....users.domain.value_objs import UserRole
+from ....application.dto import DocumentAccessDecision
 from .patterns import (
     EXPLICIT_DOCUMENT_TYPE_PATTERNS,
     NAMED_PARTY_PATTERNS,

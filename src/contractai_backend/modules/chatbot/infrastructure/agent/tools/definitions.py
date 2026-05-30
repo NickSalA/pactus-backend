@@ -8,15 +8,15 @@ from typing import Any, Protocol
 from langchain_core.tools import tool
 from pydantic import ValidationError
 
-from .....core.application.validation import format_pydantic_validation_error
-from ....dashboard.application.services import DashboardService
-from ....dashboard.domain.access_policy import ALLOWED_DASHBOARD_TYPES_BY_ROLE
-from ....documents.application.dto import CompanyContractQueryDTO, LaborContractQueryDTO
-from ....documents.application.services import ContractQueryService
-from ....documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
-from ....users.domain.entities import UserTable
-from ....users.domain.value_objs import UserRole
-from ...application.repositories import VectorRepository
+from ......core.application.validation import format_pydantic_validation_error
+from .....dashboard.application.services import DashboardService
+from .....dashboard.domain.access_policy import ALLOWED_DASHBOARD_TYPES_BY_ROLE
+from .....documents.application.dto import CompanyContractQueryDTO, LaborContractQueryDTO
+from .....documents.application.services import ContractQueryService
+from .....documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
+from .....users.domain.entities import UserTable
+from .....users.domain.value_objs import UserRole
+from ....application.repositories import VectorRepository
 from .access import ROLE_PERMISSION_DENIED_RESPONSE, evaluate_document_access
 from .chart_handlers import handle_loyalty, handle_origin, handle_retention, handle_top_companies, handle_top_services
 from .patterns import resolve_requested_document_state
