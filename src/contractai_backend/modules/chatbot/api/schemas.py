@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..application.dto import (
     ChartConfig as ApplicationChartConfig,
@@ -40,10 +40,17 @@ class ChatResponse(BaseModel):
     chart: ChartData | None = Field(default=None, description="Datos de gráfica opcionales para renderizar en el frontend.")
 
 
-class ConversationCreate(BaseModel):
-    title: str
-    organization_id: int
-    user_id: int
+class ConversationUpdate(BaseModel):
+    title: str = Field(..., min_length=1, pattern=r".*\S.*", description="Conversation title.")
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        """Reject blank conversation titles."""
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Field cannot be empty.")
+        return cleaned
 
 
 class ConversationRead(BaseModel):
@@ -64,6 +71,7 @@ class ConversationList(BaseModel):
     organization_id: int
     user_id: int
     created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

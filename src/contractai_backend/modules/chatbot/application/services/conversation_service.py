@@ -60,3 +60,30 @@ class ConversationService:
         if not updated_conv:
             return None
         return ConversationTable.model_validate(obj=updated_conv)
+
+    async def update_conversation_title(
+        self,
+        *,
+        conversation_id: int,
+        organization_id: int,
+        user_id: int,
+        title: str,
+    ) -> ConversationTable | None:
+        """Updates the title of a visible conversation. Returns None if it is not found."""
+        updated_conv = await self.repository.update_title(
+            conversation_id=conversation_id,
+            organization_id=organization_id,
+            user_id=user_id,
+            title=title,
+        )
+        if not updated_conv:
+            return None
+        return ConversationTable.model_validate(obj=updated_conv)
+
+    async def delete_conversation(self, *, conversation_id: int, organization_id: int, user_id: int) -> bool:
+        """Deletes a visible conversation."""
+        return await self.repository.delete_visible_by_id(
+            conversation_id=conversation_id,
+            organization_id=organization_id,
+            user_id=user_id,
+        )
