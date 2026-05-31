@@ -16,6 +16,7 @@ from ....shared.api.dependencies.security import get_current_user
 from ....shared.config import settings
 from ....shared.infrastructure.database import get_aclient, get_session
 from ..application import ChatbotService, ConversationService, ILLMProvider
+from ..composition import build_conversation_service
 from ..infrastructure import ConversationRepository, QdrantVectorRepository
 from ..infrastructure.agent import (
     ContractAgentGraph,
@@ -31,7 +32,7 @@ from ..infrastructure.agent import (
 async def get_conversation_service(session: Annotated[AsyncSession, Depends(get_session)]) -> ConversationService:
     """Construye el servicio de conversación, inyectando el repositorio necesario."""
     repo = ConversationRepository(session=session)
-    return ConversationService(repository=repo)
+    return build_conversation_service(repository=repo)
 
 
 async def get_llm_provider(

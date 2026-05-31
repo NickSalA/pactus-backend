@@ -29,3 +29,13 @@ class IConversationRepository(BaseRepository[ConversationTable]):
     async def get_visible_by_id(self, conversation_id: int, user_id: int, organization_id: int) -> ConversationTable | None:
         """Returns a conversation only when it belongs to the given user and organization."""
         pass
+
+    @abstractmethod
+    async def update_title(self, conversation_id: int, organization_id: int, user_id: int, title: str) -> ConversationTable | None:
+        """Updates a conversation title when it belongs to the given user and organization."""
+        pass
+
+    @abstractmethod
+    async def delete_visible_by_id(self, conversation_id: int, organization_id: int, user_id: int) -> bool:
+        """Deletes a conversation only when it belongs to the given user and organization."""
+        pass
