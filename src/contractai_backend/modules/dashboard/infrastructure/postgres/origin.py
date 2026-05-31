@@ -7,8 +7,8 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col, select
 
-from .....core.exceptions.base import InternalServerError, ServiceUnavailableError
 from ....documents.domain import DocumentTable, LaborContractTable
+from ...domain.exceptions import DashboardDatabaseError, DashboardDatabaseUnavailableError
 from .helpers import DashboardRepositoryProtocol
 
 
@@ -58,9 +58,9 @@ class DashboardOriginQueriesMixin:
             ]
 
         except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise ServiceUnavailableError("El servicio de base de datos no está disponible.") from e
+            raise DashboardDatabaseUnavailableError("El servicio de base de datos no está disponible.") from e
         except SQLAlchemyError as e:
-            raise InternalServerError("Error interno al procesar la distribución de origen de contratos.") from e
+            raise DashboardDatabaseError("Error interno al procesar la distribución de origen de contratos.") from e
 
     @staticmethod
     def _map_origin_label(raw_type: str | None) -> str:

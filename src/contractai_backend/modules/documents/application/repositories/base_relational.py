@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from typing import Any, Union
+from typing import Any
 
 from ...domain import CompanyContractServiceTable, CompanyContractTable, DocumentTable, LaborContractTable
 from ..dto import CompanyContractQueryDTO, LaborContractQueryDTO
@@ -60,7 +60,7 @@ class DocumentQueryRepository(ABC):
     async def search_contracts(
         self,
         organization_id: int,
-        query: Union[CompanyContractQueryDTO, LaborContractQueryDTO],
+        query: CompanyContractQueryDTO | LaborContractQueryDTO,
         limit: int | None = None,
         chatbot_ready_only: bool = False,
     ) -> Sequence[DocumentTable]:
@@ -93,7 +93,7 @@ class DocumentQueryRepository(ABC):
     async def count_contracts(
         self,
         organization_id: int,
-        query: Union[CompanyContractQueryDTO, LaborContractQueryDTO],
+        query: CompanyContractQueryDTO | LaborContractQueryDTO,
         chatbot_ready_only: bool = False,
     ) -> int:
         """Counts contracts matching structured filters. DEPRECATED: use count_company_contracts or count_labor_contracts."""

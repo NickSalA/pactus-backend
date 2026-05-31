@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from ....documents.domain.value_objs import DocumentState
+from .....documents.domain.value_objs import DocumentState
 
 
 def normalize_access_text(value: str) -> str:

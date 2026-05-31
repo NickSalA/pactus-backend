@@ -14,7 +14,7 @@ from contractai_backend.modules.organizations.api import organizations_router
 
 from .core.exceptions.base import AppError
 from .modules.catalog.api.routers import router as services_router
-from .modules.chatbot.api import chat_router, conversation_router
+from .modules.chatbot.api import chat_router, conversation_router, usage_router
 from .modules.chatbot.infrastructure.agent import init_checkpointer
 from .modules.dashboard.api import dashboard_router
 from .modules.documents.api.routers import router as documents_router
@@ -55,6 +55,7 @@ def create() -> FastAPI:
     app.include_router(router=users_router, prefix="/user", tags=["Usuarios"])
     app.include_router(router=chat_router, prefix="/chatbot", tags=["Chatbot"])
     app.include_router(router=conversation_router, prefix="/conversations", tags=["Conversaciones"])
+    app.include_router(router=usage_router, prefix="/chatbot/usage", tags=["Chatbot Usage"])
     app.include_router(router=dashboard_router, prefix="/dashboard", tags=["Dashboard"])
     app.include_router(router=integrations_router, prefix="/integrations", tags=["Integraciones"])
     app.include_router(router=organizations_router, prefix="/organizations", tags=["Organizaciones"])

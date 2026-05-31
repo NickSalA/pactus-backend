@@ -1,6 +1,6 @@
 """Tests for chatbot access helpers."""
 
-from contractai_backend.modules.chatbot.infrastructure.agent.access import (
+from contractai_backend.modules.chatbot.infrastructure.agent.tools.access import (
     ROLE_PERMISSION_DENIED_RESPONSE,
     evaluate_document_access,
     extract_contract_party_candidate,

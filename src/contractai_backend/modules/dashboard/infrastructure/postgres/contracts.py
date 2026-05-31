@@ -9,10 +9,10 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col
 
-from .....core.exceptions.base import InternalServerError, ServiceUnavailableError
 from ....documents.domain import DocumentTable
 from ....documents.domain.value_objs import DocumentType
 from ...application.repositories import DashboardContractSummary
+from ...domain.exceptions import DashboardDatabaseError, DashboardDatabaseUnavailableError
 from .helpers import DashboardRepositoryProtocol
 
 
@@ -28,9 +28,9 @@ class DashboardContractQueriesMixin:
             )
             return self._read_scalar_result(result.one())
         except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise ServiceUnavailableError("La base de datos no esta disponible") from e
+            raise DashboardDatabaseUnavailableError("La base de datos no esta disponible") from e
         except SQLAlchemyError as e:
-            raise InternalServerError("Error al sincronizar estados de contratos") from e
+            raise DashboardDatabaseError("Error al sincronizar estados de contratos") from e
 
     async def list_recent_contracts(
         self: DashboardRepositoryProtocol,
@@ -49,6 +49,6 @@ class DashboardContractQueriesMixin:
             result = await self.session.exec(statement=statement)
             return [self._serialize_contract_row(row) for row in result.all()]
         except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise ServiceUnavailableError("La base de datos no esta disponible") from e
+            raise DashboardDatabaseUnavailableError("La base de datos no esta disponible") from e
         except SQLAlchemyError as e:
-            raise InternalServerError("Error al listar contratos recientes") from e
+            raise DashboardDatabaseError("Error al listar contratos recientes") from e

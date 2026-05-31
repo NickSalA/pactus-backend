@@ -63,6 +63,7 @@ class ContractDetailFactory:
             document_id=document_id,
             ruc=cls.first_text_value(
                 getattr(company_contract, "ruc", None),
+                extracted_data.ruc if extracted_data is not None else None,
                 form_data.get("gerente_ruc"),
                 form_data.get("contratista_ruc"),
                 form_data.get("proveedor_ruc"),
@@ -103,6 +104,7 @@ class ContractDetailFactory:
             ),
             worker_document_number=cls.first_text_value(
                 getattr(labor_contract, "worker_document_number", None),
+                extracted_data.worker_document_number if extracted_data is not None else None,
                 form_data.get("trabajador_dni"),
                 form_data.get("dni_trabajador"),
                 form_data.get("numero_documento_trabajador"),
@@ -110,6 +112,7 @@ class ContractDetailFactory:
             ),
             position=cls.first_text_value(
                 getattr(labor_contract, "position", None),
+                extracted_data.position if extracted_data is not None else None,
                 form_data.get("position"),
                 form_data.get("puesto_trabajo"),
                 form_data.get("cargo"),
@@ -125,12 +128,14 @@ class ContractDetailFactory:
             salary_currency=salary_currency,
             salary_periodicity=cls.first_text_value(
                 getattr(labor_contract, "salary_periodicity", None),
+                extracted_data.salary_periodicity if extracted_data is not None else None,
                 form_data.get("periodicidad_remuneracion"),
                 form_data.get("frecuencia_pago"),
                 form_data.get("periodicidad_pago"),
             ),
             contract_modality=cls.first_text_value(
                 getattr(labor_contract, "contract_modality", None),
+                extracted_data.contract_modality if extracted_data is not None else None,
                 form_data.get("modalidad_contrato"),
                 form_data.get("modalidad_contrato_tipo"),
                 form_data.get("forma_contratacion"),

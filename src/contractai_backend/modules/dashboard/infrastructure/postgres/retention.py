@@ -10,8 +10,8 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col, select
 
-from .....core.exceptions.base import InternalServerError, ServiceUnavailableError
 from ....documents.domain import DocumentTable, LaborContractTable
+from ...domain.exceptions import DashboardDatabaseError, DashboardDatabaseUnavailableError
 from .helpers import ACTIVE_DASHBOARD_STATES, DashboardRepositoryProtocol
 
 
@@ -131,9 +131,9 @@ class DashboardRetentionQueriesMixin:
             }
 
         except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise ServiceUnavailableError("El servicio de base de datos no está disponible.") from e
+            raise DashboardDatabaseUnavailableError("El servicio de base de datos no está disponible.") from e
         except SQLAlchemyError as e:
-            raise InternalServerError("Error interno al procesar los KPIs de retención.") from e
+            raise DashboardDatabaseError("Error interno al procesar los KPIs de retención.") from e
 
     async def get_tenure_distribution(
         self: DashboardRepositoryProtocol,
@@ -190,9 +190,9 @@ class DashboardRetentionQueriesMixin:
             ]
 
         except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise ServiceUnavailableError("El servicio de base de datos no está disponible.") from e
+            raise DashboardDatabaseUnavailableError("El servicio de base de datos no está disponible.") from e
         except SQLAlchemyError as e:
-            raise InternalServerError("Error interno al procesar la distribución de permanencia.") from e
+            raise DashboardDatabaseError("Error interno al procesar la distribución de permanencia.") from e
 
     async def get_monthly_renewal_trend(
         self: DashboardRepositoryProtocol,
@@ -225,9 +225,9 @@ class DashboardRetentionQueriesMixin:
             return _calculate_cohort_results(worker_contracts, month_cohorts)
 
         except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise ServiceUnavailableError("El servicio de base de datos no está disponible.") from e
+            raise DashboardDatabaseUnavailableError("El servicio de base de datos no está disponible.") from e
         except SQLAlchemyError as e:
-            raise InternalServerError("Error interno al procesar la tendencia de renovación mensual.") from e
+            raise DashboardDatabaseError("Error interno al procesar la tendencia de renovación mensual.") from e
 
     async def get_worker_retention_details(
         self: DashboardRepositoryProtocol,
@@ -268,6 +268,6 @@ class DashboardRetentionQueriesMixin:
             ]
 
         except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise ServiceUnavailableError("El servicio de base de datos no está disponible.") from e
+            raise DashboardDatabaseUnavailableError("El servicio de base de datos no está disponible.") from e
         except SQLAlchemyError as e:
-            raise InternalServerError("Error interno al procesar los detalles de retención.") from e
+            raise DashboardDatabaseError("Error interno al procesar los detalles de retención.") from e

@@ -5,10 +5,7 @@ from datetime import date
 from typing import Any, cast
 
 from ....catalog.application.repositories import ServiceRepository
-from ....users.domain.value_objs import UserRole
 from ...domain import CompanyContractServiceTable, DocumentTable
-from ...domain.access_policy import get_readable_document_types
-from ...domain.value_objs import DocumentState, DocumentType
 from ..dto import CompanyContractQueryDTO, LaborContractQueryDTO
 from ..repositories import DocumentQueryRepository
 
