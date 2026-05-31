@@ -47,10 +47,10 @@ class ConversationUpdate(BaseModel):
     @classmethod
     def validate_title(cls, value: str) -> str:
         """Reject blank conversation titles."""
-        cleaned = value.strip()
-        if not cleaned:
+        if cleaned := value.strip():
+            return cleaned
+        else:
             raise ValueError("Field cannot be empty.")
-        return cleaned
 
 
 class ConversationRead(BaseModel):

@@ -3,10 +3,9 @@ from .routers import chat_router, conversation_router, usage_router
 from .schemas import (
     ChatRequest,
     ChatResponse,
-    ConversationCreate,
     ConversationList,
-    ConversationUpdate,
     ConversationRead,
+    ConversationUpdate,
     TokenUsageRead,
     TokenUsageSummary,
 )
@@ -16,9 +15,9 @@ __all__ = [
     "ChatResponse",
     "ConversationList",
     "ConversationRead",
+    "ConversationUpdate",
     "TokenUsageRead",
     "TokenUsageSummary",
-    "ConversationUpdate",
     "chat_router",
     "conversation_router",
     "get_chatbot_service",

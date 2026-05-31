@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel
@@ -39,11 +40,6 @@ class ChartData(BaseModel):
     data: list[dict[str, str | int | float]]
 
 
-# ---------------------------------------------------------------------------
-# LLM / internal DTOs (dataclass — lightweight, not serialized to API)
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class LLMResult:
     response: str
@@ -64,6 +60,17 @@ class TokenCostResult:
     output_cost_usd: float
     total_cost_usd: float
     model_used: str
+
+
+@dataclass
+class TokenUsageSummaryDTO:
+    total_input_tokens: int
+    total_output_tokens: int
+    total_tokens: int
+    total_input_cost_usd: Decimal
+    total_output_cost_usd: Decimal
+    total_cost_usd: Decimal
+    usage_count: int
 
 
 @dataclass(frozen=True)

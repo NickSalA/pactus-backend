@@ -17,9 +17,9 @@ from ....modules.users.domain.entities import UserTable
 from ....shared.api.dependencies.security import get_current_user
 from ....shared.config import settings
 from ....shared.infrastructure.database import get_aclient, get_session
-from ..application import ChatbotService, ConversationService, ILLMProvider
-from ..infrastructure import ConversationRepository, QdrantVectorRepository, TokenUsageRepository
+from ..application import ChatbotService, ConversationService, ILLMProvider, TokenUsageService
 from ..composition import build_conversation_service
+from ..infrastructure import ConversationRepository, QdrantVectorRepository, TokenUsageRepository
 from ..infrastructure.agent import (
     ContractAgentGraph,
     LangGraphLLMAdapter,
@@ -41,6 +41,15 @@ async def get_conversation_service(session: Annotated[AsyncSession, Depends(get_
 async def get_token_usage_repository(session: Annotated[AsyncSession, Depends(get_session)]) -> TokenUsageRepository:
     """Construye el repositorio de token usage."""
     return TokenUsageRepository(session=session)
+
+
+async def get_token_usage_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> TokenUsageService:
+    """Construye el servicio de token usage."""
+    usage_repo = TokenUsageRepository(session=session)
+    conv_repo = ConversationRepository(session=session)
+    return TokenUsageService(usage_repo=usage_repo, conv_repo=conv_repo)
 
 
 async def get_llm_provider(
@@ -106,7 +115,6 @@ async def get_llm_provider(
             )
         )
 
-    # Dashboard chart tool
     dashboard_repo = SQLModelDashboardRepository(session=session)
     dashboard_service = DashboardService(repository=dashboard_repo)
     agent_tools.append(
