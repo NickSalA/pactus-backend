@@ -1,16 +1,25 @@
 """HTTP endpoints for third-party integrations."""
 
+import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from fastapi.responses import StreamingResponse
+from loguru import logger
 
 from contractai_backend.modules.documents.domain.access_policy import can_write_document_type
 from contractai_backend.modules.integrations.application import IntegrationService
 from contractai_backend.shared.api.dependencies.security import CurrentUserDep
 from contractai_backend.shared.config import settings
 
-from .dependencies import get_integration_service, process_drive_import_in_background
-from .schemas import AuthURLResponse, DriveRequest, ImportRequest, ImportResponse, TokenResponse
+from .dependencies import (
+    create_job,
+    get_integration_service,
+    get_job,
+    get_user_active_job,
+    process_drive_import_in_background,
+)
+from .schemas import AuthURLResponse, DriveRequest, ImportEvent, ImportRequest, ImportResponse, TokenResponse
 
 router = APIRouter(prefix="/drive")
 IntegrationServiceDep = Annotated[IntegrationService, Depends(get_integration_service)]
@@ -50,10 +59,76 @@ async def import_drive_files(request: ImportRequest, background_tasks: Backgroun
             detail="No tiene permisos para importar este tipo de contrato",
         )
 
+    active_job = get_user_active_job(current_user.id)
+    if active_job:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ya existe una importación en progreso. Espere a que termine.",
+        )
+
     files_payload = [file_item.model_dump(mode="python", exclude_unset=True, exclude_none=True) for file_item in request.files]
-    background_tasks.add_task(process_drive_import_in_background, request.token, files_payload, current_user.organization_id, current_user.id)
+    tracker = create_job(files_payload, current_user.organization_id, current_user.id)
+
+    background_tasks.add_task(
+        process_drive_import_in_background,
+        tracker.job_id,
+        request.token,
+        files_payload,
+        current_user.organization_id,
+        current_user.id,
+    )
+
     return ImportResponse(
         message="La importación ha comenzado en segundo plano.",
         queued_files=len(request.files),
         index_name=settings.DRIVE_INDEX_NAME,
+        job_id=tracker.job_id,
+    )
+
+
+@router.get("/import/{job_id}/events")
+async def stream_import_events(job_id: str, current_user: CurrentUserDep):
+    """SSE endpoint for tracking import progress."""
+    tracker = get_job(job_id)
+    if not tracker:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Trabajo no encontrado.",
+        )
+
+    if tracker.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tiene acceso a este trabajo.",
+        )
+
+    async def event_generator():
+        initial_event = ImportEvent(
+            type="initial_state",
+            job_id=tracker.job_id,
+            status=tracker.status,
+            files=list(tracker.files.values()),
+        )
+        yield f"event: {initial_event.type}\ndata: {initial_event.model_dump_json(exclude={'type'})}\n\n"
+
+        while True:
+            try:
+                event = await asyncio.wait_for(tracker.event_queue.get(), timeout=30)
+                yield f"event: {event.type}\ndata: {event.model_dump_json(exclude={'type'})}\n\n"
+                if event.type == "job_complete":
+                    break
+            except TimeoutError:
+                yield "event: ping\ndata: null\n\n"
+            except Exception as e:
+                logger.error(f"Error in SSE generator: {e}")
+                break
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
