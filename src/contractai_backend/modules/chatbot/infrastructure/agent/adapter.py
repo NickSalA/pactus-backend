@@ -61,6 +61,9 @@ class LangGraphLLMAdapter(ILLMProvider):
     def _extract_chart_from_messages(messages: list[BaseMessage]) -> ChartData | None:
         """Walk messages in reverse looking for a successful dashboard_chart_tool call."""
         for msg in reversed(messages):
+            if isinstance(msg, HumanMessage):
+                break
+
             if not isinstance(msg, ToolMessage):
                 continue
             if msg.name != _CHART_TOOL_NAME:
