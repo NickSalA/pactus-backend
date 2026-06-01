@@ -1,11 +1,9 @@
 """HTTP endpoints for third-party integrations."""
 
-import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
-from loguru import logger
 
 from contractai_backend.modules.documents.domain.access_policy import can_write_document_type
 from contractai_backend.modules.integrations.application import IntegrationService
@@ -14,12 +12,13 @@ from contractai_backend.shared.config import settings
 
 from .dependencies import (
     create_job,
+    generate_import_sse_events,
     get_integration_service,
     get_job,
     get_user_active_job,
     process_drive_import_in_background,
 )
-from .schemas import AuthURLResponse, DriveRequest, ImportEvent, ImportRequest, ImportResponse, TokenResponse
+from .schemas import AuthURLResponse, DriveRequest, ImportRequest, ImportResponse, TokenResponse
 
 router = APIRouter(prefix="/drive")
 IntegrationServiceDep = Annotated[IntegrationService, Depends(get_integration_service)]
@@ -102,29 +101,8 @@ async def stream_import_events(job_id: str, current_user: CurrentUserDep):
             detail="No tiene acceso a este trabajo.",
         )
 
-    async def event_generator():
-        initial_event = ImportEvent(
-            type="initial_state",
-            job_id=tracker.job_id,
-            status=tracker.status,
-            files=list(tracker.files.values()),
-        )
-        yield f"event: {initial_event.type}\ndata: {initial_event.model_dump_json(exclude={'type'})}\n\n"
-
-        while True:
-            try:
-                event = await asyncio.wait_for(tracker.event_queue.get(), timeout=30)
-                yield f"event: {event.type}\ndata: {event.model_dump_json(exclude={'type'})}\n\n"
-                if event.type == "job_complete":
-                    break
-            except TimeoutError:
-                yield "event: ping\ndata: null\n\n"
-            except Exception as e:
-                logger.error(f"Error in SSE generator: {e}")
-                break
-
     return StreamingResponse(
-        event_generator(),
+        generate_import_sse_events(tracker),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
