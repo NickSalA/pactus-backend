@@ -25,23 +25,22 @@ class TestListOrganizations:
         repo.get_all.return_value = orgs
 
         service = _make_service(repo)
-        result = await service.list_organizations(active_only=False)
+        result = await service.list_organizations()
 
         assert result == orgs
-        repo.get_all.assert_called_once()
+        repo.get_all.assert_awaited_once_with(filters=None, limit=None, offset=None)
 
     @pytest.mark.asyncio
     async def test_returns_active_only(self):
         orgs = [_make_org(1)]
         repo = AsyncMock()
-        repo.get_active.return_value = orgs
+        repo.get_all.return_value = orgs
 
         service = _make_service(repo)
-        result = await service.list_organizations(active_only=True)
+        result = await service.list_organizations(is_active=True)
 
         assert result == orgs
-        repo.get_active.assert_called_once()
-        repo.get_all.assert_not_called()
+        repo.get_all.assert_awaited_once_with(filters={"is_active": True}, limit=None, offset=None)
 
 
 class TestGetOrganization:

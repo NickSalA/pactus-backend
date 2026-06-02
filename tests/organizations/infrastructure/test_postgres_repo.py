@@ -41,7 +41,30 @@ class TestGetByName:
         assert result is None
 
 
-class TestGetActive:
+class TestGetByRuc:
+    @pytest.mark.asyncio
+    async def test_returns_organization_by_ruc(self):
+        org = _make_org()
+        repo, session = _make_repo()
+        result_mock = MagicMock()
+        result_mock.first.return_value = org
+        session.exec.return_value = result_mock
+
+        result = await repo.get_by_ruc("123456789")
+        assert result == org
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_ruc_not_found(self):
+        repo, session = _make_repo()
+        result_mock = MagicMock()
+        result_mock.first.return_value = None
+        session.exec.return_value = result_mock
+
+        result = await repo.get_by_ruc("000000000")
+        assert result is None
+
+
+class TestGetAll:
     @pytest.mark.asyncio
     async def test_returns_active_organizations(self):
         orgs = [_make_org(1), _make_org(2)]
@@ -50,7 +73,7 @@ class TestGetActive:
         result_mock.all.return_value = orgs
         session.exec.return_value = result_mock
 
-        result = await repo.get_active()
+        result = await repo.get_all(filters={"is_active": True})
         assert result == orgs
 
     @pytest.mark.asyncio
@@ -60,5 +83,5 @@ class TestGetActive:
         result_mock.all.return_value = []
         session.exec.return_value = result_mock
 
-        result = await repo.get_active()
+        result = await repo.get_all(filters={"is_active": True})
         assert result == []

@@ -68,3 +68,81 @@ class TestGetConversation:
 
         assert response.status_code == 404
         service.get_conversation.assert_awaited_once_with(conversation_id=99, organization_id=1, user_id=1)
+
+    @pytest.mark.asyncio
+    async def test_returns_conversation_data(self):
+        conv = _make_conv(id=1)
+        service = AsyncMock()
+        service.get_conversation.return_value = conv
+        current_user = SimpleNamespace(id=1, organization_id=1)
+        app = _make_app(current_user=current_user, service=service)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/conversations/1")
+
+        assert response.status_code == 200
+        assert response.json()["id"] == 1
+        assert response.json()["title"] == "Test"
+        service.get_conversation.assert_awaited_once_with(conversation_id=1, organization_id=1, user_id=1)
+
+
+class TestUpdateConversation:
+    @pytest.mark.asyncio
+    async def test_updates_conversation_title(self):
+        conv = _make_conv(id=1)
+        service = AsyncMock()
+        service.update_conversation_title.return_value = conv
+        current_user = SimpleNamespace(id=1, organization_id=1)
+        app = _make_app(current_user=current_user, service=service)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.patch("/conversations/1", json={"title": "Nuevo titulo"})
+
+        assert response.status_code == 200
+        assert response.json()["title"] == "Test"
+        service.update_conversation_title.assert_awaited_once_with(
+            conversation_id=1,
+            organization_id=1,
+            user_id=1,
+            title="Nuevo titulo",
+        )
+
+    @pytest.mark.asyncio
+    async def test_returns_404_when_updating_nonexistent_conversation(self):
+        service = AsyncMock()
+        service.update_conversation_title.return_value = None
+        current_user = SimpleNamespace(id=1, organization_id=1)
+        app = _make_app(current_user=current_user, service=service)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.patch("/conversations/99", json={"title": "Nuevo titulo"})
+
+        assert response.status_code == 404
+
+
+class TestDeleteConversation:
+    @pytest.mark.asyncio
+    async def test_deletes_conversation(self):
+        service = AsyncMock()
+        service.delete_conversation.return_value = True
+        current_user = SimpleNamespace(id=1, organization_id=1)
+        app = _make_app(current_user=current_user, service=service)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.delete("/conversations/1")
+
+        assert response.status_code == 204
+        assert response.content == b""
+        service.delete_conversation.assert_awaited_once_with(conversation_id=1, organization_id=1, user_id=1)
+
+    @pytest.mark.asyncio
+    async def test_returns_404_when_deleting_nonexistent_conversation(self):
+        service = AsyncMock()
+        service.delete_conversation.return_value = False
+        current_user = SimpleNamespace(id=1, organization_id=1)
+        app = _make_app(current_user=current_user, service=service)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.delete("/conversations/99")
+
+        assert response.status_code == 404
