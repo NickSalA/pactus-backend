@@ -16,7 +16,7 @@ from contractai_backend.shared.config import settings
 from contractai_backend.shared.api.dependencies.security import get_current_user
 
 
-def _make_app(mock_service) -> FastAPI:
+def _make_app(mock_service, role: UserRole = UserRole.ADMIN) -> FastAPI:
     app = FastAPI()
     app.include_router(router, prefix="/organizations")
     app.dependency_overrides[get_current_user] = lambda: UserTable(
@@ -24,7 +24,7 @@ def _make_app(mock_service) -> FastAPI:
         organization_id=1,
         email="admin@example.com",
         full_name="Admin User",
-        role=UserRole.ADMIN,
+        role=role,
         is_active=True,
     )
     app.dependency_overrides[get_organization_service] = lambda: mock_service
@@ -41,7 +41,7 @@ class TestOrganizationRouter:
     async def test_list_organizations_accepts_valid_pagination(self):
         service = AsyncMock()
         service.list_organizations.return_value = [_organization_response()]
-        app = _make_app(service)
+        app = _make_app(service, role=UserRole.SUPERADMIN)
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/organizations?limit=25&offset=10")
