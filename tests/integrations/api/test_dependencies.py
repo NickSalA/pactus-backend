@@ -6,8 +6,11 @@ import pytest
 
 from contractai_backend.modules.integrations.api.dependencies import (
     build_background_integration_service,
+    create_job,
+    job_registry,
     process_drive_import_in_background,
 )
+from contractai_backend.modules.integrations.api.schemas import FilePhase
 
 
 class _AsyncContextManager:
@@ -19,6 +22,15 @@ class _AsyncContextManager:
 
     async def __aexit__(self, exc_type, exc, tb):
         return False
+
+
+@pytest.fixture(autouse=True)
+def clear_job_registry():
+    job_registry._jobs.clear()
+    job_registry._user_jobs.clear()
+    yield
+    job_registry._jobs.clear()
+    job_registry._user_jobs.clear()
 
 
 class TestBuildBackgroundIntegrationService:
@@ -85,14 +97,26 @@ class TestProcessDriveImportInBackground:
         first_file = {"file_id": "file-1", "document": {"name": "Contrato 1"}}
         second_file = {"file_id": "file-2", "document": {"name": "Contrato 2"}}
         files = [first_file, second_file]
+        tracker = create_job(files=files, organization_id=7, user_id=3)
 
-        with patch(
-            "contractai_backend.modules.integrations.api.dependencies.build_background_integration_service",
-            side_effect=[_AsyncContextManager(first_service), _AsyncContextManager(second_service)],
-        ) as mock_builder:
-            await process_drive_import_in_background(token=token, files=files, organization_id=7, imported_by_user_id=3)
+        with (
+            patch(
+                "contractai_backend.modules.integrations.api.dependencies.build_background_integration_service",
+                side_effect=[_AsyncContextManager(first_service), _AsyncContextManager(second_service)],
+            ) as mock_builder,
+            patch.object(job_registry, "schedule_cleanup", new=AsyncMock()) as mock_schedule_cleanup,
+        ):
+            await process_drive_import_in_background(
+                tracker.job_id,
+                token=token,
+                files=files,
+                organization_id=7,
+                imported_by_user_id=3,
+            )
 
         assert mock_builder.call_count == 2
+        mock_schedule_cleanup.assert_awaited_once_with(tracker)
+        assert tracker.status == "COMPLETED"
         first_service.process_import.assert_awaited_once_with(
             token=token,
             files=[first_file],
@@ -115,19 +139,27 @@ class TestProcessDriveImportInBackground:
         token = {"token": "expired"}
         first_file = {"file_id": "file-1", "document": {"name": "Contrato 1"}}
         second_file = {"file_id": "file-2", "document": {"name": "Contrato 2"}}
+        files = [first_file, second_file]
+        tracker = create_job(files=files, organization_id=7, user_id=3)
 
-        with patch(
-            "contractai_backend.modules.integrations.api.dependencies.build_background_integration_service",
-            side_effect=[_AsyncContextManager(first_service), _AsyncContextManager(second_service)],
-        ) as mock_builder:
+        with (
+            patch(
+                "contractai_backend.modules.integrations.api.dependencies.build_background_integration_service",
+                side_effect=[_AsyncContextManager(first_service), _AsyncContextManager(second_service)],
+            ) as mock_builder,
+            patch.object(job_registry, "schedule_cleanup", new=AsyncMock()) as mock_schedule_cleanup,
+        ):
             await process_drive_import_in_background(
+                tracker.job_id,
                 token=token,
-                files=[first_file, second_file],
+                files=files,
                 organization_id=7,
                 imported_by_user_id=3,
             )
 
         assert mock_builder.call_count == 1
+        mock_schedule_cleanup.assert_awaited_once_with(tracker)
+        assert tracker.status == "FAILED"
         first_service.process_import.assert_awaited_once_with(
             token=token,
             files=[first_file],
@@ -135,3 +167,32 @@ class TestProcessDriveImportInBackground:
             imported_by_user_id=3,
         )
         second_service.process_import.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_marks_file_as_failed_when_service_raises(self):
+        service = MagicMock()
+        service.process_import = AsyncMock(side_effect=Exception("Internal error"))
+        token = {"token": "abc"}
+        first_file = {"file_id": "file-1", "document": {"name": "Contrato"}}
+        files = [first_file]
+        tracker = create_job(files=files, organization_id=7, user_id=3)
+
+        with (
+            patch(
+                "contractai_backend.modules.integrations.api.dependencies.build_background_integration_service",
+                side_effect=[_AsyncContextManager(service)],
+            ) as mock_builder,
+            patch.object(job_registry, "schedule_cleanup", new=AsyncMock()) as mock_schedule_cleanup,
+        ):
+            await process_drive_import_in_background(
+                tracker.job_id,
+                token=token,
+                files=files,
+                organization_id=7,
+                imported_by_user_id=3,
+            )
+
+        assert mock_builder.call_count == 1
+        mock_schedule_cleanup.assert_awaited_once_with(tracker)
+        assert tracker.files["file-1"].phase == FilePhase.FAILED
+        assert tracker.files["file-1"].error == "Error al procesar el archivo"

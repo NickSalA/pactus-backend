@@ -119,8 +119,13 @@ class GeminiDocumentStructuredExtractor(DocumentStructuredExtractor):
             "If there are many dates, choose the main contract start/end dates only when explicit. Otherwise use null.\n"
             "If the title is not explicit, name must be null.\n"
             "For COMPANY, client should be the external company/person identified as cliente, contratante or contraparte. If ambiguous, null.\n"
+            "For COMPANY, ruc should be the RUC (Registro Único de Contribuyentes) of the counterparty company. Format: 8 digits. If not explicit, null.\n"
             "For LABOR, client must be the natural person who works under the contract. Never use the employer, institution, company, clinic, school, municipality or any other organization as client. If the worker/person is not explicit, client must be null.\n"
             "For LABOR, worker_name must be the worker/employee/person name only. If the worker/person is not explicit, worker_name must be null.\n"
+            "For LABOR, worker_document_number should be the worker's ID document (DNI, CE, passport). Format: alphanumeric. If not explicit, null.\n"
+            "For LABOR, position should be the worker's job title or role (cargo, puesto). If not explicit, null.\n"
+            "For LABOR, salary_periodicity must be one of: mensual, quincenal, semanal. If not explicit, null.\n"
+            "For LABOR, contract_modality must be one of: Plazo Fijo, Prácticas Pre. If not explicit, null.\n"
             "type should be COMPANY for corporate/commercial/company contracts and LABOR for employment or HR contracts.\n"
             "For COMPANY, form_data.value should be the total contract amount only, not monthly or partial amounts unless the total is explicit.\n"
             "For LABOR, labor_monthly_value and labor_monthly_currency must be the worker's monthly pay/remuneration/salary only when explicit. Never annualize it, never multiply by months, and never use a total contract amount. If monthly pay is not explicit, both must be null.\n"
@@ -134,12 +139,17 @@ class GeminiDocumentStructuredExtractor(DocumentStructuredExtractor):
             "{\n"
             '  "name": string | null,\n'
             '  "client": string | null,\n'
+            '  "ruc": string | null,\n'
             '  "worker_name": string | null,\n'
+            '  "worker_document_number": string | null,\n'
+            '  "position": string | null,\n'
             '  "type": "COMPANY" | "LABOR" | null,\n'
             '  "start_date": "YYYY-MM-DD" | null,\n'
             '  "end_date": "YYYY-MM-DD" | null,\n'
             '  "labor_monthly_value": number | null,\n'
             '  "labor_monthly_currency": "PEN" | "USD" | "EUR" | null,\n'
+            '  "salary_periodicity": "mensual" | "quincenal" | "semanal" | null,\n'
+            '  "contract_modality": "Plazo Fijo" | "Prácticas Pre" | null,\n'
             '  "form_data": {\n'
             '    "value": number | null,\n'
             '    "currency": "PEN" | "USD" | "EUR" | null\n'

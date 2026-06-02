@@ -7,7 +7,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.tools import tool
 
-from contractai_backend.modules.chatbot.infrastructure.agent.access import ROLE_PERMISSION_DENIED_RESPONSE
+from contractai_backend.modules.chatbot.infrastructure.agent.tools.access import ROLE_PERMISSION_DENIED_RESPONSE
 from contractai_backend.modules.chatbot.infrastructure.agent.graph import ContractAgentGraph, DEFAULT_PERMISSION_DENIED_RESPONSE
 
 

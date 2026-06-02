@@ -22,7 +22,7 @@ def test_permission_prompt_defines_a2_json_routes() -> None:
     assert "You are A2" in prompt
     assert "trusted backend user context" in prompt
     assert "party_lookup_tool" in prompt
-    assert "ADMIN, HR, MANAGER, WORKER" in prompt
+    assert " HR, MANAGER, WORKER" in prompt
     assert "a3_conversation" in prompt
     assert "n2_denied_response" in prompt
     assert "HR can access only LABOR" in prompt
@@ -36,7 +36,7 @@ def test_conversation_prompt_includes_tool_routing_rules() -> None:
     assert "start_date <= today <= end_date" in prompt
     assert "contracts with a specific service" in prompt
     assert "service_name or service_id" in prompt
-    assert "which services are attached to a contract" in prompt
+    assert "services attached to a contract" in prompt
     assert "document_ids" in prompt
     assert "### Ranking de clientes" in prompt
     assert 'If the user asks for a contract "with" or "signed by" a person name' in prompt

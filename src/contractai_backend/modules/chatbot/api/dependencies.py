@@ -7,6 +7,8 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....modules.catalog.composition import build_default_service_repository
+from ....modules.dashboard.application.services import DashboardService
+from ....modules.dashboard.infrastructure import SQLModelDashboardRepository
 from ....modules.documents.application.services import ContractQueryService
 from ....modules.documents.composition import build_default_document_repository
 from ....modules.documents.domain.access_policy import can_read_document_type, get_readable_document_types
@@ -15,13 +17,15 @@ from ....modules.users.domain.entities import UserTable
 from ....shared.api.dependencies.security import get_current_user
 from ....shared.config import settings
 from ....shared.infrastructure.database import get_aclient, get_session
-from ..application import ChatbotService, ConversationService, ILLMProvider
-from ..infrastructure import ConversationRepository, QdrantVectorRepository
+from ..application import ChatbotService, ConversationService, ILLMProvider, TokenUsageService
+from ..composition import build_conversation_service
+from ..infrastructure import ConversationRepository, QdrantVectorRepository, TokenUsageRepository
 from ..infrastructure.agent import (
     ContractAgentGraph,
     LangGraphLLMAdapter,
     build_bc_tool,
     build_company_contracts_query_tool,
+    build_dashboard_chart_tool,
     build_labor_contracts_query_tool,
     build_party_lookup_tool,
     get_llm,
@@ -31,7 +35,21 @@ from ..infrastructure.agent import (
 async def get_conversation_service(session: Annotated[AsyncSession, Depends(get_session)]) -> ConversationService:
     """Construye el servicio de conversación, inyectando el repositorio necesario."""
     repo = ConversationRepository(session=session)
-    return ConversationService(repository=repo)
+    return build_conversation_service(repository=repo)
+
+
+async def get_token_usage_repository(session: Annotated[AsyncSession, Depends(get_session)]) -> TokenUsageRepository:
+    """Construye el repositorio de token usage."""
+    return TokenUsageRepository(session=session)
+
+
+async def get_token_usage_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> TokenUsageService:
+    """Construye el servicio de token usage."""
+    usage_repo = TokenUsageRepository(session=session)
+    conv_repo = ConversationRepository(session=session)
+    return TokenUsageService(usage_repo=usage_repo, conv_repo=conv_repo)
 
 
 async def get_llm_provider(
@@ -97,6 +115,15 @@ async def get_llm_provider(
             )
         )
 
+    dashboard_repo = SQLModelDashboardRepository(session=session)
+    dashboard_service = DashboardService(repository=dashboard_repo)
+    agent_tools.append(
+        build_dashboard_chart_tool(
+            service=dashboard_service,
+            user=current_user,
+        )
+    )
+
     graph_builder = ContractAgentGraph(
         tools=agent_tools,
         permission_tools=[party_lookup_tool],
@@ -108,7 +135,9 @@ async def get_llm_provider(
 
 
 async def get_chatbot_service(
-    llm_provider: Annotated[ILLMProvider, Depends(get_llm_provider)], conv_service: Annotated[ConversationService, Depends(get_conversation_service)]
+    llm_provider: Annotated[ILLMProvider, Depends(get_llm_provider)],
+    conv_service: Annotated[ConversationService, Depends(get_conversation_service)],
+    token_usage_repo: Annotated[TokenUsageRepository, Depends(get_token_usage_repository)],
 ) -> ChatbotService:
     """Construye el servicio principal del chatbot, inyectando el LLM y el servicio de conversaciones."""
-    return ChatbotService(llm_provider=llm_provider, conv_service=conv_service)
+    return ChatbotService(llm_provider=llm_provider, conv_service=conv_service, token_usage_repo=token_usage_repo)

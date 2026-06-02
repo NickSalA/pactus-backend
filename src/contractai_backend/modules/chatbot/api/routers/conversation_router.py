@@ -2,12 +2,12 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 
 from .....core.exceptions.base import ForbiddenError
 from .....shared.api.dependencies.security import CurrentUserDep
 from ...api.dependencies import get_conversation_service
-from ...api.schemas import ConversationList, ConversationRead
+from ...api.schemas import ConversationList, ConversationRead, ConversationUpdate
 from ...application import ConversationService
 from ...domain import ConversationNotFoundError
 
@@ -39,3 +39,34 @@ async def get_single_conversation(conversation_id: int, service: ConversationSer
     if not conversation:
         raise ConversationNotFoundError()
     return ConversationRead.model_validate(conversation)
+
+
+@router.patch(path="/{conversation_id}", response_model=ConversationRead)
+async def update_conversation_title(
+    conversation_id: int,
+    payload: ConversationUpdate,
+    service: ConversationServiceDep,
+    current_user: CurrentUserDep,
+):
+    """Endpoint para actualizar el título de una conversación."""
+    conversation = await service.update_conversation_title(
+        conversation_id=conversation_id,
+        organization_id=current_user.organization_id,
+        user_id=current_user.id,
+        title=payload.title,
+    )
+    if not conversation:
+        raise ConversationNotFoundError()
+    return ConversationRead.model_validate(conversation)
+
+
+@router.delete(path="/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+async def delete_conversation(conversation_id: int, service: ConversationServiceDep, current_user: CurrentUserDep) -> None:
+    """Endpoint para eliminar una conversación del usuario autenticado."""
+    deleted = await service.delete_conversation(
+        conversation_id=conversation_id,
+        organization_id=current_user.organization_id,
+        user_id=current_user.id,
+    )
+    if not deleted:
+        raise ConversationNotFoundError()

@@ -8,13 +8,17 @@ from typing import Any, Protocol
 from langchain_core.tools import tool
 from pydantic import ValidationError
 
-from .....core.application.validation import format_pydantic_validation_error
-from ....documents.application.dto import CompanyContractQueryDTO, LaborContractQueryDTO
-from ....documents.application.services import ContractQueryService
-from ....documents.domain.value_objs import CurrencyType, DocumentState
-from ....users.domain.value_objs import UserRole
-from ...application.repositories import VectorRepository
+from ......core.application.validation import format_pydantic_validation_error
+from .....dashboard.application.services import DashboardService
+from .....dashboard.domain.access_policy import ALLOWED_DASHBOARD_TYPES_BY_ROLE
+from .....documents.application.dto import CompanyContractQueryDTO, LaborContractQueryDTO
+from .....documents.application.services import ContractQueryService
+from .....documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
+from .....users.domain.entities import UserTable
+from .....users.domain.value_objs import UserRole
+from ....application.repositories import VectorRepository
 from .access import ROLE_PERMISSION_DENIED_RESPONSE, evaluate_document_access
+from .chart_handlers import handle_loyalty, handle_origin, handle_retention, handle_top_companies, handle_top_services
 from .patterns import resolve_requested_document_state
 
 
@@ -265,3 +269,58 @@ def build_labor_contracts_query_tool(service: ContractQueryService, organization
         return json.dumps(result, ensure_ascii=True)
 
     return labor_contracts_query_tool
+
+
+def build_dashboard_chart_tool(
+    service: DashboardService,
+    user: UserTable,
+):
+    """Builds a tool that queries dashboard analytics and returns structured ChartData."""
+    allowed_types = ALLOWED_DASHBOARD_TYPES_BY_ROLE.get(user.role, frozenset())
+
+    ops_text = ""
+    if DocumentType.COMPANY in allowed_types:
+        ops_text += " - 'top_services': Ranking de los servicios mas contratados por monto total.\n"
+        ops_text += " - 'top_companies': Ranking de los clientes (empresas) con mayor volumen de contratos.\n"
+        ops_text += " - 'loyalty': Tendencia mensual de renovacion de contratos B2B (fidelidad de empresas).\n"
+
+    if DocumentType.LABOR in allowed_types:
+        ops_text += " - 'retention': Tendencia mensual de renovacion de contratos laborales (retencion de trabajadores).\n"
+        ops_text += " - 'origin': Distribucion de contratos laborales por origen o tipo de creacion.\n"
+
+    if not ops_text:
+        ops_text = " - No hay operaciones disponibles para tu rol."
+
+    dynamic_description = (
+        "Usala proactivamente cuando el usuario pida ver graficas, charts, dashboards, visualizaciones, "
+        "tops, rankings, o estadisticas generales (ej: los X mas vendidos/rentables, retencion, fidelidad). "
+        "Operaciones disponibles permitidas para este usuario:\n"
+        f"{ops_text}"
+        "Parametros opcionales: "
+        " - currency: ('PEN' o 'USD'). Aplica solo para top_services y top_companies. "
+        " - limit: entero para limitar los resultados (por defecto 5, max 20). Aplica solo para top_services y top_companies. "
+        "Devuelve un JSON con type, layout, title, config y data listos para renderizar una grafica en el frontend."
+    )
+
+    @tool(
+        name_or_callable="dashboard_chart_tool",
+        description=dynamic_description,
+    )
+    async def dashboard_chart_tool(operation: str, currency: str | None = None, limit: int | None = None) -> str:
+        if operation == "top_services":
+            return await handle_top_services(service, user, currency, limit)
+        elif operation == "top_companies":
+            return await handle_top_companies(service, user, currency, limit)
+        elif operation == "retention":
+            return await handle_retention(service, user)
+        elif operation == "loyalty":
+            return await handle_loyalty(service, user)
+        elif operation == "origin":
+            return await handle_origin(service, user)
+
+        return json.dumps(
+            {"status": "invalid_request", "message": f"Operacion '{operation}' no reconocida. Operaciones validas: top_services."},
+            ensure_ascii=True,
+        )
+
+    return dashboard_chart_tool
