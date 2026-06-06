@@ -1,7 +1,7 @@
 """Document entity for the documents domain."""
 
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import ValidationInfo, field_validator
 from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, Text
@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlmodel import Field
 
 from ....core.domain.base import BaseTable
+from ....core.domain.db_schemas import APP_TYPES_SCHEMA, CONTRACTS_SCHEMA, IDENTITY_SCHEMA
 from .value_objs import DocumentState
 
 
@@ -16,21 +17,40 @@ class DocumentTable(BaseTable, table=True):
     """Represents a stored contract document."""
 
     __tablename__: str = "documents"
+    __table_args__: ClassVar[dict[str, str]] = {"schema": CONTRACTS_SCHEMA}
 
-    organization_id: int = Field(sa_column=Column("organization_id", Integer, nullable=False, index=True))
+    organization_id: int = Field(
+        sa_column=Column(
+            "organization_id",
+            Integer,
+            ForeignKey(f"{IDENTITY_SCHEMA}.organizations.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
     type: str | None = Field(default=None, sa_column=Column("type", String(255), nullable=True, index=True))
     start_date: date | None = Field(default=None, sa_column=Column("start_date", Date, nullable=True))
     end_date: date | None = Field(default=None, sa_column=Column("end_date", Date, nullable=True))
     form_data: dict[str, Any] | None = Field(default_factory=dict, sa_column=Column("form_data", JSONB, nullable=True))
     state: DocumentState | None = Field(
         default=None,
-        sa_column=Column("state", ENUM(DocumentState, name="document_state"), nullable=True),
+        sa_column=Column(
+            "state",
+            ENUM(DocumentState, name="document_state", schema=APP_TYPES_SCHEMA, create_type=False),
+            nullable=True,
+        ),
     )
     file_path: str | None = Field(default=None, sa_column=Column("file_path", Text, nullable=True))
     file_name: str | None = Field(default=None, sa_column=Column("file_name", Text, nullable=True))
     folder_id: int | None = Field(
         default=None,
-        sa_column=Column("folder_id", Integer, ForeignKey("document_folders.id", ondelete="SET NULL"), nullable=True, index=True),
+        sa_column=Column(
+            "folder_id",
+            Integer,
+            ForeignKey(f"{CONTRACTS_SCHEMA}.document_folders.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
