@@ -16,6 +16,8 @@ from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from contractai_backend.core.domain.db_schemas import SYNC_DOCUMENT_STATES_FUNCTION
+
 from ....core.infrastructure.base import PostgresBaseRepository
 from ....core.infrastructure.sqlmodel_utils import RelationalHelpersMixin
 from ...catalog.domain.entities import ServiceTable
@@ -657,7 +659,7 @@ class SQLModelDocumentQueryRepository(
             total_value_expression = func.coalesce(func.sum(contract_value), 0.0).label("total_value")
             contracts_count_expression = func.count(col(DocumentTable.id)).label("contracts_count")
 
-            statement = select(
+            statement = sa_select(
                 client_expression,
                 currency_expression,
                 total_value_expression,
@@ -733,7 +735,7 @@ class SQLModelDocumentQueryRepository(
             contracts_count_expression = func.count(col(DocumentTable.id)).label("contracts_count")
             total_services_expression = func.coalesce(func.sum(service_count_subquery.c.service_count), 0).label("total_services")
 
-            statement = select(
+            statement = sa_select(
                 client_expression,
                 currency_expression,
                 total_value_expression,
@@ -835,7 +837,7 @@ class SQLModelDocumentQueryRepository(
         """Sincroniza estados documentales persistidos según reglas de notificación."""
         try:
             result = await self.session.exec(
-                type_cast(Any, text("select public.sync_document_states(:organization_id)")),
+                type_cast(Any, text(f"select {SYNC_DOCUMENT_STATES_FUNCTION}(:organization_id)")),
                 params={"organization_id": organization_id},
             )
             return self._read_scalar_result(result.one())
@@ -869,7 +871,7 @@ class SQLModelDocumentQueryRepository(
                 .subquery()
             )
 
-            stmt = select(
+            stmt = sa_select(
                 labor_subq.c.document_id,
                 labor_subq.c.salary_value,
                 labor_subq.c.salary_currency,

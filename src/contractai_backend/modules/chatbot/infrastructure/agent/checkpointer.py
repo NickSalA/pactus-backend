@@ -1,7 +1,7 @@
 """Checkpointer module for managing checkpoints in the chatbot agent."""
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-from psycopg import AsyncConnection
+from psycopg import AsyncConnection, sql
 from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool
 
@@ -10,7 +10,8 @@ from contractai_backend.shared.config import settings
 
 async def setup_connection(conn: AsyncConnection[DictRow]) -> None:
     """Configura la conexión a la base de datos para el checkpointer, estableciendo el search_path adecuado."""
-    await conn.execute(query="SET search_path TO checkpoint, public;")
+    query = sql.SQL("SET search_path TO {}, public;").format(sql.Identifier(settings.CHECKPOINTER_SCHEMA))
+    await conn.execute(query)
 
 
 async def init_checkpointer():
