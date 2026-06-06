@@ -42,6 +42,7 @@ def _clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "GMAIL_APP_PASSWORD",
         "CRON_SECRET",
         "DATABASE_SSL_VERIFY",
+        "CHECKPOINTER_SCHEMA",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -77,6 +78,7 @@ class TestSettings:
 
         assert settings.DATABASE_HOST is None
         assert settings.DATABASE_URL == "sqlite:///./test.db"
+        assert settings.CHECKPOINTER_SCHEMA == "checkpoint"
         assert settings.DATABASE_SSL_VERIFY is False
 
     def test_database_ssl_verify_can_be_disabled_explicitly(self, monkeypatch):
