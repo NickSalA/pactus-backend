@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, field_validator
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String
@@ -10,13 +10,21 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field
 
 from contractai_backend.core.domain.base import BaseTable
+from contractai_backend.core.domain.db_schemas import CHATBOT_SCHEMA, IDENTITY_SCHEMA, TELEMETRY_SCHEMA
 
 
 class ChatbotTokenUsage(BaseTable, table=True):
     __tablename__: str = "chatbot_token_usage"
+    __table_args__: ClassVar[dict[str, str]] = {"schema": TELEMETRY_SCHEMA}
 
     conversation_id: int = Field(
-        sa_column=Column("conversation_id", Integer, ForeignKey("conversations.id"), nullable=False, index=True)
+        sa_column=Column(
+            "conversation_id",
+            Integer,
+            ForeignKey(f"{CHATBOT_SCHEMA}.conversations.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
     )
     message_index: int = Field(sa_column=Column("message_index", Integer, nullable=False))
     input_tokens: int = Field(sa_column=Column("input_tokens", Integer, nullable=False, default=0))
@@ -44,9 +52,26 @@ class Message(BaseModel):
 
 class ConversationTable(BaseTable, table=True):
     __tablename__: str = "conversations"
+    __table_args__: ClassVar[dict[str, str]] = {"schema": CHATBOT_SCHEMA}
 
-    organization_id: int = Field(sa_column=Column("organization_id", Integer, nullable=False))
-    user_id: int = Field(sa_column=Column("user_id", Integer, nullable=False))
+    organization_id: int = Field(
+        sa_column=Column(
+            "organization_id",
+            Integer,
+            ForeignKey(f"{IDENTITY_SCHEMA}.organizations.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
+    user_id: int = Field(
+        sa_column=Column(
+            "user_id",
+            Integer,
+            ForeignKey(f"{IDENTITY_SCHEMA}.users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
     title: str = Field(sa_column=Column("title", String, nullable=False))
     content: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column("content", JSONB, nullable=False, server_default="[]"))
     created_at: datetime = Field(

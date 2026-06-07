@@ -3,6 +3,8 @@
 from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from contractai_backend.core.domain.db_schemas import CHECKPOINT_SCHEMA
+
 
 class Settings(BaseSettings):
     """Configuration settings for the application."""
@@ -65,6 +67,7 @@ class Settings(BaseSettings):
     DATABASE_SSL_VERIFY: bool = Field(default=False)
     CHECKPOINTER_POOL_MIN_SIZE: int = Field(default=1)
     CHECKPOINTER_POOL_MAX_SIZE: int = Field(default=2)
+    CHECKPOINTER_SCHEMA: str = Field(default=CHECKPOINT_SCHEMA)
 
     SUPABASE_URL: str = Field(default=...)
     SUPABASE_SECRET_KEY: str = Field(default=...)

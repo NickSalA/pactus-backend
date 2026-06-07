@@ -1,5 +1,10 @@
+from pathlib import Path
+
 from markdown2 import markdown
-from weasyprint import HTML, CSS
+from weasyprint import CSS, HTML
+
+INPUT_PATH = Path("/home/daminin/Documents/Repositorios/ContractAI-Backend/files/CONTRATO_BETA.md")
+OUTPUT_PATH = Path("/home/daminin/Documents/Repositorios/ContractAI-Backend/files/CONTRATO_FINAL.pdf")
 
 
 def generate_legal_pdf(md_content, output_path):
@@ -25,7 +30,7 @@ def generate_legal_pdf(md_content, output_path):
         font-size: 11pt;
     }
     h1 { text-align: center; text-transform: uppercase; font-size: 14pt; }
-    
+
     /* Contenedor de Firmas con Flexbox */
     .signature-container {
         display: flex;
@@ -59,7 +64,7 @@ def generate_legal_pdf(md_content, output_path):
 
 
 # --- PRUEBA CON TU CONTRATO ---
-with open("/home/daminin/Documents/Repositorios/ContractAI-Backend/files/CONTRATO_BETA.md", "r", encoding="utf-8") as f:
+with INPUT_PATH.open(encoding="utf-8") as f:
     contenido_md = f.read()
 
-generate_legal_pdf(contenido_md, "/home/daminin/Documents/Repositorios/ContractAI-Backend/files/CONTRATO_FINAL.pdf")
+generate_legal_pdf(contenido_md, OUTPUT_PATH)

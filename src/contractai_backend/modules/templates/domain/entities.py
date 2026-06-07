@@ -1,14 +1,15 @@
 """Defines the database tables for templates and template formats."""
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, field_validator, model_validator
-from sqlalchemy import Column, DateTime, Integer, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlmodel import Field
 
 from ....core.domain.base import BaseTable
+from ....core.domain.db_schemas import APP_TYPES_SCHEMA, IDENTITY_SCHEMA, TEMPLATES_SCHEMA
 from ...documents.domain import DocumentType
 from .formats import normalize_format_code
 from .value_objs import TemplateState
@@ -65,21 +66,48 @@ class TemplateContent(BaseModel):
 
 class TemplateTable(BaseTable, table=True):
     __tablename__ = "document_templates"
+    __table_args__: ClassVar[dict[str, str]] = {"schema": TEMPLATES_SCHEMA}
 
-    organization_id: int = Field(sa_column=Column("organization_id", Integer, nullable=False, index=True))
+    organization_id: int = Field(
+        sa_column=Column(
+            "organization_id",
+            Integer,
+            ForeignKey(f"{IDENTITY_SCHEMA}.organizations.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
     name: str = Field(sa_column=Column("name", String(length=255), nullable=False))
     description: str | None = Field(default=None, sa_column=Column("description", Text, nullable=True))
     document_type: DocumentType = Field(
-        sa_column=Column("document_type", ENUM(DocumentType, name="document_type", create_type=False), nullable=False)
+        sa_column=Column(
+            "document_type",
+            ENUM(DocumentType, name="document_type", schema=APP_TYPES_SCHEMA, create_type=False),
+            nullable=False,
+        )
     )
     content: dict[str, Any] = Field(sa_column=Column("content", JSONB, nullable=False))
     created_at: datetime | None = Field(
         default_factory=lambda: datetime.now(tz=UTC), sa_column=Column("created_at", DateTime(timezone=True), nullable=False)
     )
     state: TemplateState = Field(
-        default=TemplateState.DRAFT, sa_column=Column("state", ENUM(TemplateState, name="document_template_state"), nullable=False)
+        default=TemplateState.DRAFT,
+        sa_column=Column(
+            "state",
+            ENUM(TemplateState, name="document_template_state", schema=APP_TYPES_SCHEMA, create_type=False),
+            nullable=False,
+        ),
     )
-    template_format_id: int | None = Field(default=None, sa_column=Column("template_format_id", Integer, nullable=True))
+    template_format_id: int | None = Field(
+        default=None,
+        sa_column=Column(
+            "template_format_id",
+            Integer,
+            ForeignKey(f"{TEMPLATES_SCHEMA}.template_formats.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    )
 
     @field_validator("content")
     @classmethod
@@ -111,9 +139,14 @@ class TemplateTable(BaseTable, table=True):
 
 class TemplateFormatTable(BaseTable, table=True):
     __tablename__ = "template_formats"
+    __table_args__: ClassVar[dict[str, str]] = {"schema": TEMPLATES_SCHEMA}
 
     document_type: DocumentType = Field(
-        sa_column=Column("document_type", ENUM(DocumentType, name="document_type", create_type=False), nullable=False)
+        sa_column=Column(
+            "document_type",
+            ENUM(DocumentType, name="document_type", schema=APP_TYPES_SCHEMA, create_type=False),
+            nullable=False,
+        )
     )
     format_code: str = Field(default=..., sa_column=Column("format_code", String(length=255), nullable=False))
     label: str = Field(default=..., sa_column=Column("label", String(length=255), nullable=False))

@@ -146,18 +146,18 @@ class ContractQueryService:
         service_ids = sorted({item.service_id for items in service_items_by_document.values() for item in items})
         service_names: dict[int, str] = {}
         if service_ids:
-            services = await self.sql_repo.get_services_by_ids(organization_id=organization_id, service_ids=service_ids)
+            services = await self.service_repo.get_services_by_ids(organization_id=organization_id, service_ids=service_ids)
             service_names = {service.id: service.name for service in services if service.id is not None}
 
         service_totals: dict[tuple[int, str], dict[str, Any]] = {}
-        for doc_id, items in service_items_by_document.items():
+        for _document_id, items in service_items_by_document.items():
             for item in items:
-                key = (item.service_id, item.currency.value if hasattr(item.currency, 'value') else str(item.currency))
+                key = (item.service_id, item.currency.value if hasattr(item.currency, "value") else str(item.currency))
                 if key not in service_totals:
                     service_totals[key] = {
                         "service_id": item.service_id,
                         "service_name": service_names.get(item.service_id, f"Servicio {item.service_id}"),
-                        "currency": item.currency.value if hasattr(item.currency, 'value') else str(item.currency),
+                        "currency": item.currency.value if hasattr(item.currency, "value") else str(item.currency),
                         "contracts_count": 0,
                         "total_value": 0.0,
                     }

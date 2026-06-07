@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy.dialects import postgresql
 
-from contractai_backend.modules.dashboard.infrastructure.postgres_repo import SQLModelDashboardRepository
 from contractai_backend.modules.dashboard.domain.value_objs import TopRankingSortBy
+from contractai_backend.modules.dashboard.infrastructure.postgres_repo import SQLModelDashboardRepository
 from contractai_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
 
 
@@ -70,7 +70,7 @@ async def test_get_monthly_amounts_anchors_query_from_documents(document_type):
     statement = session.exec.await_args.kwargs["statement"]
     compiled = str(statement.compile(dialect=postgresql.dialect()))
 
-    assert "FROM documents JOIN" in compiled
+    assert "FROM contracts.documents JOIN" in compiled
 
 
 @pytest.mark.asyncio

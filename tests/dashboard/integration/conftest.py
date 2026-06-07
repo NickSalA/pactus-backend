@@ -1,7 +1,7 @@
 """Integration fixtures for dashboard repository tests."""
 
-from collections.abc import AsyncIterator
 import os
+from collections.abc import AsyncIterator
 from pathlib import Path
 from uuid import uuid4
 
@@ -11,6 +11,16 @@ from sqlalchemy.pool import NullPool
 from sqlmodel import text
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from contractai_backend.core.domain.db_schemas import (
+    APP_TYPES_SCHEMA,
+    CATALOG_SCHEMA,
+    CHATBOT_SCHEMA,
+    CONTRACTS_SCHEMA,
+    IDENTITY_SCHEMA,
+    NOTIFICATIONS_SCHEMA,
+    TELEMETRY_SCHEMA,
+    TEMPLATES_SCHEMA,
+)
 from contractai_backend.modules.dashboard.infrastructure.postgres_repo import SQLModelDashboardRepository
 
 
@@ -30,8 +40,22 @@ async def dashboard_engine():
     if not TEST_DATABASE_URL:
         pytest.skip("TEST_DATABASE_URL is not configured")
 
-    engine = create_async_engine(_async_database_url(TEST_DATABASE_URL), poolclass=NullPool)
     schema_name = f"dashboard_test_{uuid4().hex}"
+    schema_translate_map = {
+        APP_TYPES_SCHEMA: schema_name,
+        CATALOG_SCHEMA: schema_name,
+        CHATBOT_SCHEMA: schema_name,
+        CONTRACTS_SCHEMA: schema_name,
+        IDENTITY_SCHEMA: schema_name,
+        NOTIFICATIONS_SCHEMA: schema_name,
+        TELEMETRY_SCHEMA: schema_name,
+        TEMPLATES_SCHEMA: schema_name,
+    }
+    engine = create_async_engine(
+        _async_database_url(TEST_DATABASE_URL),
+        poolclass=NullPool,
+        execution_options={"schema_translate_map": schema_translate_map},
+    )
     schema_sql = Path(__file__).with_name("schema.sql").read_text(encoding="utf-8")
 
     async with engine.begin() as connection:
