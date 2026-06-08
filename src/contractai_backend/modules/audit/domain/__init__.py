@@ -1,6 +1,6 @@
 """Audit domain exports."""
 
-from .entities import UserActivityTable
-from .value_objs import AuditUserAction
+from .entities import ChatbotActivityTable, UserActivityTable
+from .value_objs import AuditChatbotAction, AuditUserAction
 
-__all__ = ["AuditUserAction", "UserActivityTable"]
+__all__ = ["AuditChatbotAction", "AuditUserAction", "ChatbotActivityTable", "UserActivityTable"]

@@ -1,16 +1,17 @@
 """Persistent entities for audit tables."""
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import ClassVar
 
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Identity, String
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Identity, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import ENUM
 from sqlmodel import Field
 
 from contractai_backend.core.domain.base import BaseTable
-from contractai_backend.core.domain.db_schemas import AUDIT_SCHEMA, IDENTITY_SCHEMA
+from contractai_backend.core.domain.db_schemas import AUDIT_SCHEMA, CHATBOT_SCHEMA, IDENTITY_SCHEMA
 
-from .value_objs import AuditUserAction
+from .value_objs import AuditChatbotAction, AuditUserAction
 
 
 class UserActivityTable(BaseTable, table=True):
@@ -65,6 +66,67 @@ class UserActivityTable(BaseTable, table=True):
     target_user_name: str | None = Field(default=None, sa_column=Column("target_user_name", String, nullable=True))
     previous_role: str | None = Field(default=None, sa_column=Column("previous_role", String, nullable=True))
     role: str | None = Field(default=None, sa_column=Column("role", String, nullable=True))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column("created_at", DateTime(timezone=True), nullable=False),
+    )
+
+
+class ChatbotActivityTable(BaseTable, table=True):
+    """Audit trail for chatbot usage activity."""
+
+    __tablename__ = "chatbot_activity"
+    __table_args__: ClassVar[dict[str, str]] = {"schema": AUDIT_SCHEMA}
+
+    id: int | None = Field(
+        default=None,
+        sa_column=Column("id", BigInteger, Identity(always=False), primary_key=True, index=True),
+    )
+    organization_id: int = Field(
+        sa_column=Column(
+            "organization_id",
+            BigInteger,
+            ForeignKey(f"{IDENTITY_SCHEMA}.organizations.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
+    actor_user_id: int = Field(
+        sa_column=Column(
+            "actor_user_id",
+            BigInteger,
+            ForeignKey(f"{IDENTITY_SCHEMA}.users.id"),
+            nullable=False,
+            index=True,
+        )
+    )
+    actor_name: str | None = Field(default=None, sa_column=Column("actor_name", String, nullable=True))
+    actor_role: str = Field(sa_column=Column("actor_role", String, nullable=False))
+    action: AuditChatbotAction = Field(
+        sa_column=Column(
+            "action",
+            ENUM(AuditChatbotAction, name="audit_chatbot_action", schema=AUDIT_SCHEMA, create_type=False),
+            nullable=False,
+            index=True,
+        )
+    )
+    conversation_id: int | None = Field(
+        default=None,
+        sa_column=Column(
+            "conversation_id",
+            BigInteger,
+            ForeignKey(f"{CHATBOT_SCHEMA}.conversations.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    )
+    input_tokens: int | None = Field(default=None, sa_column=Column("input_tokens", Integer, nullable=True))
+    output_tokens: int | None = Field(default=None, sa_column=Column("output_tokens", Integer, nullable=True))
+    total_tokens: int | None = Field(default=None, sa_column=Column("total_tokens", Integer, nullable=True))
+    input_cost_usd: Decimal | None = Field(default=None, sa_column=Column("input_cost_usd", Numeric, nullable=True))
+    output_cost_usd: Decimal | None = Field(default=None, sa_column=Column("output_cost_usd", Numeric, nullable=True))
+    total_cost_usd: Decimal | None = Field(default=None, sa_column=Column("total_cost_usd", Numeric, nullable=True))
+    model_used: str | None = Field(default=None, sa_column=Column("model_used", String, nullable=True))
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column("created_at", DateTime(timezone=True), nullable=False),
