@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 
 from contractai_backend.modules.users.api.dependencies import get_user_application_service
 from contractai_backend.modules.users.api.schemas import CurrentUserResponse, UserResponse
@@ -28,10 +28,7 @@ async def update_user(
     _current_user: CurrentUserDep,
 ) -> UserResponse:
     """Endpoint para actualizar los datos de un usuario."""
-    # Aquí podríamos agregar validación de permisos (ej. solo ADMIN o el mismo usuario)
     updated_user = await user_service.update_user(user_id, request)
-    if not updated_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
     return UserResponse.model_validate(updated_user)
 
 
@@ -42,8 +39,5 @@ async def delete_user(
     _current_user: CurrentUserDep,
 ) -> None:
     """Endpoint para hacer soft delete de un usuario."""
-    # Aquí podríamos agregar validación de permisos (ej. solo ADMIN)
-    success = await user_service.delete_user(user_id)
-    if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+    await user_service.soft_delete_user(user_id)
 
