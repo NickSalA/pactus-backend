@@ -13,7 +13,7 @@ class UserService:
         self.repo = repo
 
     async def update_user(self, user_id: int, request: UserUpdateRequest) -> UserTable:
-        """Updates a user."""
+        """Updates a user's role."""
         user = await self.repo.get_by_id(user_id)
         if not user:
             raise UserNotFoundError()

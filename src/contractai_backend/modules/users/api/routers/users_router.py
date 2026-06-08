@@ -27,7 +27,7 @@ async def update_user(
     user_service: Annotated[UserService, Depends(get_user_application_service)],
     _current_user: CurrentUserDep,
 ) -> UserResponse:
-    """Endpoint para actualizar los datos de un usuario."""
+    """Endpoint para actualizar el rol de un usuario."""
     updated_user = await user_service.update_user(user_id, request)
     return UserResponse.model_validate(updated_user)
 
