@@ -11,7 +11,8 @@ from ....shared.infrastructure.http import get_http_client
 from ..application.repositories.token_service import IAuthRepository
 from ..application.repositories.user_repo import IUserRepository
 from ..application.services.auth_service import AuthService
-from ..composition import build_default_auth_service
+from ..application.services.user_service import UserService
+from ..composition import build_default_auth_service, build_default_user_service
 from ..infrastructure.jwt_service import SupabaseAuthService
 from ..infrastructure.postgres_repo import SQLModelUserRepository
 
@@ -32,3 +33,10 @@ def get_auth_application_service(
 ) -> AuthService:
     """Inyecta el servicio de aplicación que orquesta la autenticación."""
     return build_default_auth_service(session=session, http_client=client)
+
+
+def get_user_application_service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> UserService:
+    """Inyecta el servicio de aplicación de usuarios."""
+    return build_default_user_service(session=session)

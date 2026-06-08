@@ -6,6 +6,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from .application.repositories.token_service import IAuthRepository
 from .application.repositories.user_repo import IUserRepository
 from .application.services.auth_service import AuthService
+from .application.services.user_service import UserService
 from .infrastructure.jwt_service import SupabaseAuthService
 from .infrastructure.postgres_repo import SQLModelUserRepository
 
@@ -15,9 +16,21 @@ def build_auth_service(identity_provider: IAuthRepository, user_repository: IUse
     return AuthService(jwt_service=identity_provider, repo=user_repository)
 
 
+def build_user_service(user_repository: IUserRepository) -> UserService:
+    """Builds the user application service."""
+    return UserService(repo=user_repository)
+
+
 def build_default_auth_service(*, session: AsyncSession, http_client: httpx.AsyncClient) -> AuthService:
     """Builds the default production authentication service graph."""
     return build_auth_service(
         identity_provider=SupabaseAuthService(client=http_client),
+        user_repository=SQLModelUserRepository(session=session),
+    )
+
+
+def build_default_user_service(*, session: AsyncSession) -> UserService:
+    """Builds the default production user service graph."""
+    return build_user_service(
         user_repository=SQLModelUserRepository(session=session),
     )

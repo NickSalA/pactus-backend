@@ -1,8 +1,13 @@
 """Router de usuarios."""
 
-from fastapi import APIRouter
+from typing import Annotated
 
-from contractai_backend.modules.users.api.schemas import CurrentUserResponse
+from fastapi import APIRouter, Depends, HTTPException, status
+
+from contractai_backend.modules.users.api.dependencies import get_user_application_service
+from contractai_backend.modules.users.api.schemas import CurrentUserResponse, UserResponse
+from contractai_backend.modules.users.application.dto.user_request import UserUpdateRequest
+from contractai_backend.modules.users.application.services.user_service import UserService
 
 from .....shared.api.dependencies.security import CurrentUserDep
 
@@ -13,3 +18,32 @@ router = APIRouter()
 async def get_me(current_user: CurrentUserDep) -> CurrentUserResponse:
     """Endpoint para obtener los datos del usuario autenticado."""
     return CurrentUserResponse.model_validate(current_user)
+
+
+@router.patch("/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: int,
+    request: UserUpdateRequest,
+    user_service: Annotated[UserService, Depends(get_user_application_service)],
+    _current_user: CurrentUserDep,
+) -> UserResponse:
+    """Endpoint para actualizar los datos de un usuario."""
+    # Aquí podríamos agregar validación de permisos (ej. solo ADMIN o el mismo usuario)
+    updated_user = await user_service.update_user(user_id, request)
+    if not updated_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+    return UserResponse.model_validate(updated_user)
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: int,
+    user_service: Annotated[UserService, Depends(get_user_application_service)],
+    _current_user: CurrentUserDep,
+) -> None:
+    """Endpoint para hacer soft delete de un usuario."""
+    # Aquí podríamos agregar validación de permisos (ej. solo ADMIN)
+    success = await user_service.delete_user(user_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+
