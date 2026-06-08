@@ -25,10 +25,10 @@ async def update_user(
     user_id: int,
     request: UserUpdateRequest,
     user_service: Annotated[UserService, Depends(get_user_application_service)],
-    _current_user: CurrentUserDep,
+    current_user: CurrentUserDep,
 ) -> UserResponse:
     """Endpoint para actualizar el rol de un usuario."""
-    updated_user = await user_service.update_user(user_id, request)
+    updated_user = await user_service.update_user(user_id, request, actor=current_user)
     return UserResponse.model_validate(updated_user)
 
 
@@ -36,8 +36,7 @@ async def update_user(
 async def delete_user(
     user_id: int,
     user_service: Annotated[UserService, Depends(get_user_application_service)],
-    _current_user: CurrentUserDep,
+    current_user: CurrentUserDep,
 ) -> None:
     """Endpoint para hacer soft delete de un usuario."""
-    await user_service.soft_delete_user(user_id)
-
+    await user_service.soft_delete_user(user_id, actor=current_user)
