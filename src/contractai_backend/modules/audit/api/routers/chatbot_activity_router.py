@@ -27,4 +27,23 @@ async def list_chatbot_activity(
         raise ForbiddenError("Solo los administradores pueden consultar la auditoria de chatbot")
 
     records = await service.list_by_organization(organization_id=current_user.organization_id, limit=limit, offset=offset)
-    return [ChatbotActivityResponse.model_validate(record) for record in records]
+    return [
+        ChatbotActivityResponse(
+            id=record.id,
+            organization_id=record.organization_id,
+            actor_user_id=record.actor_user_id,
+            actor_name=record.actor_name,
+            actor_role=record.actor_role,
+            action=record.action,
+            conversation_title=conversation_title,
+            input_tokens=record.input_tokens,
+            output_tokens=record.output_tokens,
+            total_tokens=record.total_tokens,
+            input_cost_usd=record.input_cost_usd,
+            output_cost_usd=record.output_cost_usd,
+            total_cost_usd=record.total_cost_usd,
+            model_used=record.model_used,
+            created_at=record.created_at,
+        )
+        for record, conversation_title in records
+    ]

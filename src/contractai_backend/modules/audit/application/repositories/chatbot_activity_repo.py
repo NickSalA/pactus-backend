@@ -5,6 +5,8 @@ from collections.abc import Sequence
 
 from contractai_backend.modules.audit.domain.entities import ChatbotActivityTable
 
+ChatbotActivityWithConversationTitle = tuple[ChatbotActivityTable, str | None]
+
 
 class ChatbotActivityRepository(ABC):
     @abstractmethod
@@ -13,6 +15,6 @@ class ChatbotActivityRepository(ABC):
         pass
 
     @abstractmethod
-    async def list_by_organization(self, *, organization_id: int, limit: int, offset: int) -> Sequence[ChatbotActivityTable]:
+    async def list_by_organization(self, *, organization_id: int, limit: int, offset: int) -> Sequence[ChatbotActivityWithConversationTitle]:
         """Lists chatbot activity for an organization ordered by newest first."""
         pass

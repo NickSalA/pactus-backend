@@ -15,8 +15,8 @@ from contractai_backend.modules.audit.domain.entities import ChatbotActivityTabl
 from contractai_backend.modules.audit.domain.value_objs import AuditChatbotAction, AuditUserAction
 from contractai_backend.modules.users.domain.entities import UserTable
 from contractai_backend.modules.users.domain.value_objs import UserRole
-from contractai_backend.shared.api.error_handlers import app_error_handler
 from contractai_backend.shared.api.dependencies.security import get_current_user
+from contractai_backend.shared.api.error_handlers import app_error_handler
 
 
 def _make_app(service, role: UserRole = UserRole.ADMIN) -> FastAPI:
@@ -118,7 +118,7 @@ class TestChatbotActivityRouter:
     @pytest.mark.asyncio
     async def test_admin_lists_own_organization_chatbot_activity(self):
         service = AsyncMock()
-        service.list_by_organization.return_value = [_make_chatbot_activity()]
+        service.list_by_organization.return_value = [(_make_chatbot_activity(), "Contrato de servicios")]
         app = _make_chatbot_app(service)
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -126,6 +126,8 @@ class TestChatbotActivityRouter:
 
         assert response.status_code == 200
         assert response.json()[0]["action"] == "RESPONSE_GENERATED"
+        assert response.json()[0]["conversation_title"] == "Contrato de servicios"
+        assert "conversation_id" not in response.json()[0]
         assert response.json()[0]["total_tokens"] == 150
         service.list_by_organization.assert_awaited_once_with(organization_id=10, limit=10, offset=2)
 

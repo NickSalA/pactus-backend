@@ -19,7 +19,7 @@ class ChatbotActivityResponse(BaseModel):
     actor_name: str | None
     actor_role: str
     action: AuditChatbotAction
-    conversation_id: int | None
+    conversation_title: str | None
     input_tokens: int | None
     output_tokens: int | None
     total_tokens: int | None

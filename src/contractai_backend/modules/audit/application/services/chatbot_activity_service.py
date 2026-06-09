@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Protocol
 
 from contractai_backend.modules.audit.application.repositories import ChatbotActivityRepository
+from contractai_backend.modules.audit.application.repositories.chatbot_activity_repo import ChatbotActivityWithConversationTitle
 from contractai_backend.modules.audit.domain.entities import ChatbotActivityTable
 from contractai_backend.modules.audit.domain.value_objs import AuditChatbotAction
 from contractai_backend.modules.users.domain.entities import UserTable
@@ -26,7 +27,7 @@ class ChatbotActivityService:
     def __init__(self, repository: ChatbotActivityRepository) -> None:
         self.repository = repository
 
-    async def list_by_organization(self, *, organization_id: int, limit: int, offset: int) -> Sequence[ChatbotActivityTable]:
+    async def list_by_organization(self, *, organization_id: int, limit: int, offset: int) -> Sequence[ChatbotActivityWithConversationTitle]:
         return await self.repository.list_by_organization(organization_id=organization_id, limit=limit, offset=offset)
 
     async def record_conversation_started(self, *, actor: UserTable, conversation_id: int) -> ChatbotActivityTable:
