@@ -4,7 +4,7 @@ import httpx
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from contractai_backend.modules.audit.application.services import UserActivityService
-from contractai_backend.modules.audit.infrastructure import SQLModelUserActivityRepository
+from contractai_backend.modules.audit.composition import build_default_user_activity_service
 
 from .application.repositories.token_service import IAuthRepository
 from .application.repositories.user_repo import IUserRepository
@@ -36,5 +36,5 @@ def build_default_user_service(*, session: AsyncSession) -> UserService:
     """Builds the default production user service graph."""
     return build_user_service(
         user_repository=SQLModelUserRepository(session=session),
-        user_activity_service=UserActivityService(repository=SQLModelUserActivityRepository(session=session)),
+        user_activity_service=build_default_user_activity_service(session=session),
     )
