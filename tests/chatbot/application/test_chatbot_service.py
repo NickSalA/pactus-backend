@@ -28,8 +28,12 @@ def _make_llm_result(response: str = "Respuesta del bot", thread_id: int = 5) ->
     return LLMResult(response=response, thread_id=thread_id, input_tokens=100, output_tokens=50, total_tokens=150, model_used="gemini-2.5-flash")
 
 
-def _make_service(llm=None, conv_service=None) -> ChatbotService:
-    return ChatbotService(llm_provider=llm or AsyncMock(), conv_service=conv_service or AsyncMock())
+def _make_service(llm=None, conv_service=None, activity_service=None) -> ChatbotService:
+    return ChatbotService(
+        llm_provider=llm or AsyncMock(),
+        conv_service=conv_service or AsyncMock(),
+        chatbot_activity_service=activity_service,
+    )
 
 
 class TestProcessUserMessage:
@@ -54,6 +58,30 @@ class TestProcessUserMessage:
         llm.invoke.assert_awaited_once_with(message="Hola", thread_id=5, user_context=ANY)
 
     @pytest.mark.asyncio
+    async def test_audits_new_conversation_message_and_response(self):
+        conv = _make_conv(id=5)
+        conv_service = AsyncMock()
+        conv_service.create_conversation.return_value = conv
+        conv_service.append_messages.return_value = conv
+
+        llm = AsyncMock()
+        llm.invoke.return_value = _make_llm_result(response="Respuesta", thread_id=5)
+        activity_service = AsyncMock()
+        user = _make_user()
+
+        service = _make_service(llm=llm, conv_service=conv_service, activity_service=activity_service)
+        await service.process_user_message("Hola", thread_id=None, current_user=user)
+
+        activity_service.record_conversation_started.assert_awaited_once_with(actor=user, conversation_id=5)
+        activity_service.record_message_sent.assert_awaited_once_with(actor=user, conversation_id=5)
+        activity_service.record_response_generated.assert_awaited_once()
+        response_call = activity_service.record_response_generated.await_args.kwargs
+        assert response_call["actor"] == user
+        assert response_call["conversation_id"] == 5
+        assert response_call["cost"].input_tokens == 100
+        assert response_call["cost"].output_tokens == 50
+
+    @pytest.mark.asyncio
     async def test_uses_existing_thread_id(self):
         conv = _make_conv(id=10)
         conv_service = AsyncMock()
@@ -63,7 +91,7 @@ class TestProcessUserMessage:
         llm.invoke.return_value = _make_llm_result(response="Respuesta", thread_id=10)
 
         service = _make_service(llm=llm, conv_service=conv_service)
-        response, thread_id, chart = await service.process_user_message("Hola", thread_id=10, current_user=_make_user())
+        _, thread_id, chart = await service.process_user_message("Hola", thread_id=10, current_user=_make_user())
 
         assert thread_id == 10
         assert chart is None

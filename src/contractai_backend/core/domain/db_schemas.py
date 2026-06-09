@@ -1,6 +1,7 @@
 """Database schema names used by persistent domain tables."""
 
 APP_TYPES_SCHEMA = "app_types"
+AUDIT_SCHEMA = "audit"
 CATALOG_SCHEMA = "catalog"
 CHATBOT_SCHEMA = "chatbot"
 CHECKPOINT_SCHEMA = "checkpoint"
