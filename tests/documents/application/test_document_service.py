@@ -1,6 +1,7 @@
 """Tests unitarios para DocumentCommandService y servicios auxiliares."""
 
 from datetime import date, timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -226,6 +227,38 @@ class TestCreateDocument:
         vector_repo.add_vectors.assert_called_once()
         sql_repo.update.assert_called_once()
         sql_repo.get_document_services.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_create_document_enriches_vector_chunks_with_import_source_metadata(self):
+        saved = _make_doc()
+        updated = _make_doc(file_path="docs/1/file.pdf")
+
+        sql_repo = AsyncMock()
+        sql_repo.save.return_value = saved
+        sql_repo.update.return_value = updated
+        sql_repo.replace_document_services.return_value = []
+        sql_repo.get_document_services.return_value = []
+
+        vector_repo = AsyncMock()
+        chunk = SimpleNamespace(metadata={})
+        extractor = AsyncMock()
+        extractor.extract.return_value = [chunk]
+
+        storage_repo = AsyncMock()
+        storage_repo.upload_file.return_value = "docs/1/file.pdf"
+
+        service = _make_service(sql_repo, vector_repo, extractor, storage_repo)
+        request = _create_request()
+        request.form_data["source"] = {"provider": "google_drive", "file_id": "drive-file-1"}
+
+        await service.create_document(request, _file_request(), organization_id=7, index_name="drive_contracts_index")
+
+        vector_repo.add_vectors.assert_awaited_once_with(index_name="drive_contracts_index", document_id=1, chunks=[chunk])
+        assert chunk.metadata == {
+            "organization_id": "7",
+            "source_provider": "google_drive",
+            "source_file_id": "drive-file-1",
+        }
 
     @pytest.mark.asyncio
     async def test_create_document_autofills_missing_fields_from_extraction(self):
