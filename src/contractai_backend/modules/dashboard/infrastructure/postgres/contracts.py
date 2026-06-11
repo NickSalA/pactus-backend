@@ -9,6 +9,8 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col
 
+from contractai_backend.core.domain.db_schemas import SYNC_DOCUMENT_STATES_FUNCTION
+
 from ....documents.domain import DocumentTable
 from ....documents.domain.value_objs import DocumentType
 from ...application.repositories import DashboardContractSummary
@@ -23,7 +25,7 @@ class DashboardContractQueriesMixin:
         """Synchronizes document states before dashboard reads."""
         try:
             result = await self.session.exec(
-                type_cast(Any, text("select public.sync_document_states(:organization_id)")),
+                type_cast(Any, text(f"select {SYNC_DOCUMENT_STATES_FUNCTION}(:organization_id)")),
                 params={"organization_id": organization_id},
             )
             return self._read_scalar_result(result.one())

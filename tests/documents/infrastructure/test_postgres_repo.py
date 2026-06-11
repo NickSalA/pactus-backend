@@ -1,18 +1,20 @@
-"""Tests unitarios para SQLModelDocumentRepository con sesión mockeada."""
+"""Tests unitarios para repositories SQLModel de documents con sesión mockeada."""
 
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from sqlalchemy.exc import OperationalError, SQLAlchemyError, TimeoutError as SQLAlchemyTimeoutError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from contractai_backend.core.exceptions.base import ServiceUnavailableError
-from contractai_backend.modules.documents.application.dto import ContractQueryDTO
 from contractai_backend.modules.catalog.domain.entities import ServiceTable
+from contractai_backend.modules.documents.application.dto import CompanyContractQueryDTO
 from contractai_backend.modules.documents.domain import CompanyContractTable, DocumentServiceTable, DocumentTable
 from contractai_backend.modules.documents.domain.exceptions import DocumentDatabaseError, DocumentDatabaseUnavailableError
-from contractai_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
-from contractai_backend.modules.documents.infrastructure.postgres_repo import SQLModelDocumentRepository
+from contractai_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState
+from contractai_backend.modules.documents.infrastructure.command_repo import SQLModelDocumentCommandRepository
+from contractai_backend.modules.documents.infrastructure.query_repo import SQLModelDocumentQueryRepository
 
 
 def _make_doc(id: int = 1) -> DocumentTable:
@@ -44,10 +46,17 @@ def _make_service(id: int = 2) -> ServiceTable:
     return ServiceTable(id=id, organization_id=1, name="Hosting")
 
 
-def _make_repo() -> tuple[SQLModelDocumentRepository, AsyncMock]:
+def _make_repo() -> tuple[SQLModelDocumentQueryRepository, AsyncMock]:
     session = AsyncMock()
     session.add_all = MagicMock()
-    repo = SQLModelDocumentRepository(session=session)
+    repo = SQLModelDocumentQueryRepository(session=session)
+    return repo, session
+
+
+def _make_command_repo() -> tuple[SQLModelDocumentCommandRepository, AsyncMock]:
+    session = AsyncMock()
+    session.add_all = MagicMock()
+    repo = SQLModelDocumentCommandRepository(session=session)
     return repo, session
 
 
@@ -61,7 +70,7 @@ class TestSearchContracts:
         result_mock.all.return_value = docs
         session.exec.return_value = result_mock
 
-        result = await repo.search_contracts(organization_id=1, query=ContractQueryDTO(operation="list", client="Cliente Test"))
+        result = await repo.search_company_contracts(organization_id=1, query=CompanyContractQueryDTO(operation="list", client="Cliente Test"))
 
         assert result == docs
         session.exec.assert_called_once()
@@ -73,7 +82,7 @@ class TestSearchContracts:
         result_mock.all.return_value = []
         session.exec.return_value = result_mock
 
-        await repo.search_contracts(organization_id=1, query=ContractQueryDTO(operation="list", service_name="Hosting"))
+        await repo.search_company_contracts(organization_id=1, query=CompanyContractQueryDTO(operation="list", service_name="Hosting"))
 
         statement = session.exec.await_args.kwargs["statement"]
         compiled = statement.compile()
@@ -87,7 +96,7 @@ class TestSearchContracts:
         session.exec.side_effect = OperationalError("conn", {}, Exception())
 
         with pytest.raises(DocumentDatabaseUnavailableError):
-            await repo.search_contracts(organization_id=1, query=ContractQueryDTO(operation="list", client="Cliente Test"))
+            await repo.search_company_contracts(organization_id=1, query=CompanyContractQueryDTO(operation="list", client="Cliente Test"))
 
     @pytest.mark.asyncio
     async def test_sqlalchemy_error_raises_database_error(self):
@@ -95,7 +104,7 @@ class TestSearchContracts:
         session.exec.side_effect = SQLAlchemyError("query error")
 
         with pytest.raises(DocumentDatabaseError):
-            await repo.search_contracts(organization_id=1, query=ContractQueryDTO(operation="list", client="Cliente Test"))
+            await repo.search_company_contracts(organization_id=1, query=CompanyContractQueryDTO(operation="list", client="Cliente Test"))
 
 
 class TestCountContracts:
@@ -106,7 +115,7 @@ class TestCountContracts:
         result_mock.one.return_value = 1
         session.exec.return_value = result_mock
 
-        result = await repo.count_contracts(organization_id=1, query=ContractQueryDTO(operation="count"))
+        result = await repo.count_company_contracts(organization_id=1, query=CompanyContractQueryDTO(operation="count"))
 
         assert result == 1
 
@@ -117,7 +126,7 @@ class TestCountContracts:
         result_mock.one.return_value = 1
         session.exec.return_value = result_mock
 
-        await repo.count_contracts(organization_id=1, query=ContractQueryDTO(operation="count", service_id=2))
+        await repo.count_company_contracts(organization_id=1, query=CompanyContractQueryDTO(operation="count", service_id=2))
 
         statement = session.exec.await_args.kwargs["statement"]
         compiled = statement.compile()
@@ -147,9 +156,9 @@ class TestRankContractsByClient:
         result_mock.all.return_value = [first_row, second_row]
         session.exec.return_value = result_mock
 
-        result = await repo.rank_contracts_by_client(
+        result = await repo.rank_company_contracts_by_client(
             organization_id=1,
-            query=ContractQueryDTO(operation="ranking", currently_active=True, sort_by="total_value", sort_direction="desc"),
+            query=CompanyContractQueryDTO(operation="ranking", currently_active=True, sort_by="total_value", sort_direction="desc"),
             limit=10,
         )
 
@@ -166,9 +175,9 @@ class TestRankContractsByClient:
         result_mock.all.return_value = []
         session.exec.return_value = result_mock
 
-        await repo.rank_contracts_by_client(
+        await repo.rank_company_contracts_by_client(
             organization_id=1,
-            query=ContractQueryDTO(operation="ranking", service_name="Hosting", service_id=2),
+            query=CompanyContractQueryDTO(operation="ranking", service_name="Hosting", service_id=2),
             limit=10,
         )
 
@@ -185,7 +194,7 @@ class TestRankContractsByClient:
         session.exec.side_effect = OperationalError("conn", {}, Exception())
 
         with pytest.raises(DocumentDatabaseUnavailableError):
-            await repo.rank_contracts_by_client(organization_id=1, query=ContractQueryDTO(operation="ranking"))
+            await repo.rank_company_contracts_by_client(organization_id=1, query=CompanyContractQueryDTO(operation="ranking"))
 
 
 class TestGetDocumentServices:
@@ -249,7 +258,7 @@ class TestGetDocumentServicesByDocumentIds:
 class TestReplaceDocumentServices:
     @pytest.mark.asyncio
     async def test_replaces_services_and_commits(self):
-        repo, session = _make_repo()
+        repo, session = _make_command_repo()
         service_items = [_make_document_service()]
         company_contract_result = MagicMock()
         company_contract_result.first.return_value = CompanyContractTable(id=1, document_id=1, client="Cliente Test")
@@ -267,17 +276,17 @@ class TestReplaceDocumentServices:
 
     @pytest.mark.asyncio
     async def test_sqlalchemy_error_rolls_back(self):
-        repo, session = _make_repo()
+        repo, session = _make_command_repo()
         session.exec.side_effect = SQLAlchemyError("boom")
 
         with pytest.raises(DocumentDatabaseError):
             await repo.replace_document_services(doc_id=1, service_items=[])
 
-        session.rollback.assert_not_called()
+        session.rollback.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_replaces_multiple_services_and_returns_reloaded_rows(self):
-        repo, session = _make_repo()
+        repo, session = _make_command_repo()
         service_items = [_make_document_service(1), _make_document_service(2)]
         company_contract_result = MagicMock()
         company_contract_result.first.return_value = CompanyContractTable(id=1, document_id=1, client="Cliente Test")

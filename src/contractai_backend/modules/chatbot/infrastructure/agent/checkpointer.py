@@ -10,7 +10,7 @@ from contractai_backend.shared.config import settings
 
 async def setup_connection(conn: AsyncConnection[DictRow]) -> None:
     """Configura la conexión a la base de datos para el checkpointer, estableciendo el search_path adecuado."""
-    await conn.execute(query="SET search_path TO checkpoint, public;")
+    await conn.execute("select set_config('search_path', %s, false);", (f"{settings.CHECKPOINTER_SCHEMA}, public",))
 
 
 async def init_checkpointer():

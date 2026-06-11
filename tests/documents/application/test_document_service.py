@@ -1,36 +1,37 @@
 """Tests unitarios para DocumentCommandService y servicios auxiliares."""
 
 from datetime import date, timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
-from contractai_backend.modules.documents.application.dto import (
-    ContractQueryDTO,
-    ExtractedDocumentData,
-    ExtractedDocumentFormData,
-    ExtractedDocumentServiceItem,
-)
+from contractai_backend.modules.catalog.domain.entities import ServiceTable
 from contractai_backend.modules.documents.api.schemas import (
     CompanyContractResponse,
     CreateDocumentDraftRequest,
     CreateDocumentRequest,
-    DocumentServiceItemRequest,
     DocumentResponse,
+    DocumentServiceItemRequest,
     FileRequest,
     LaborContractResponse,
     UpdateDocumentRequest,
 )
-from contractai_backend.modules.documents.infrastructure.chunk_metadata_enricher import VectorChunkMetadataEnricher
+from contractai_backend.modules.documents.application.dto import (
+    CompanyContractQueryDTO,
+    ExtractedDocumentData,
+    ExtractedDocumentFormData,
+    ExtractedDocumentServiceItem,
+    LaborContractQueryDTO,
+)
 from contractai_backend.modules.documents.application.services.contract_query_service import ContractQueryService
-from contractai_backend.modules.documents.application.services.document_query_service import DocumentQueryService
 from contractai_backend.modules.documents.application.services.document_command_service import DocumentCommandService
 from contractai_backend.modules.documents.application.services.document_external_resource_service import (
     DocumentCreationCompensationService,
     DocumentExternalResourceService,
 )
+from contractai_backend.modules.documents.application.services.document_query_service import DocumentQueryService
 from contractai_backend.modules.documents.application.services.service_catalog_service import ServiceCatalogService
-from contractai_backend.modules.catalog.domain.entities import ServiceTable
 from contractai_backend.modules.documents.domain import CompanyContractTable, DocumentServiceTable, DocumentTable
 from contractai_backend.modules.documents.domain.exceptions import (
     DocumentExtractionError,
@@ -40,7 +41,7 @@ from contractai_backend.modules.documents.domain.exceptions import (
     DocumentValidationError,
 )
 from contractai_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
-from contractai_backend.modules.users.domain.value_objs import UserRole
+from contractai_backend.modules.documents.infrastructure.chunk_metadata_enricher import VectorChunkMetadataEnricher
 
 _UNSET = object()
 
@@ -226,6 +227,38 @@ class TestCreateDocument:
         vector_repo.add_vectors.assert_called_once()
         sql_repo.update.assert_called_once()
         sql_repo.get_document_services.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_create_document_enriches_vector_chunks_with_import_source_metadata(self):
+        saved = _make_doc()
+        updated = _make_doc(file_path="docs/1/file.pdf")
+
+        sql_repo = AsyncMock()
+        sql_repo.save.return_value = saved
+        sql_repo.update.return_value = updated
+        sql_repo.replace_document_services.return_value = []
+        sql_repo.get_document_services.return_value = []
+
+        vector_repo = AsyncMock()
+        chunk = SimpleNamespace(metadata={})
+        extractor = AsyncMock()
+        extractor.extract.return_value = [chunk]
+
+        storage_repo = AsyncMock()
+        storage_repo.upload_file.return_value = "docs/1/file.pdf"
+
+        service = _make_service(sql_repo, vector_repo, extractor, storage_repo)
+        request = _create_request()
+        request.form_data["source"] = {"provider": "google_drive", "file_id": "drive-file-1"}
+
+        await service.create_document(request, _file_request(), organization_id=7, index_name="drive_contracts_index")
+
+        vector_repo.add_vectors.assert_awaited_once_with(index_name="drive_contracts_index", document_id=1, chunks=[chunk])
+        assert chunk.metadata == {
+            "organization_id": "7",
+            "source_provider": "google_drive",
+            "source_file_id": "drive-file-1",
+        }
 
     @pytest.mark.asyncio
     async def test_create_document_autofills_missing_fields_from_extraction(self):
@@ -1125,33 +1158,33 @@ class TestContractQueryService:
         sql_repo = AsyncMock()
         service = _make_contract_query_service(sql_repo=sql_repo)
 
-        result = await service.run_query(
+        result = await service.run_company_query(
             organization_id=1,
-            query=ContractQueryDTO(operation="count", max_value=50000),
+            query=CompanyContractQueryDTO(operation="count", max_value=50000),
         )
 
         assert result["status"] == "needs_clarification"
-        sql_repo.count_contracts.assert_not_called()
+        sql_repo.count_company_contracts.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_returns_no_data_when_org_has_no_contracts(self):
         sql_repo = AsyncMock()
-        sql_repo.count_contracts.return_value = 0
+        sql_repo.count_company_contracts.return_value = 0
         service = _make_contract_query_service(sql_repo=sql_repo)
 
-        result = await service.run_query(organization_id=1, query=ContractQueryDTO(operation="count"))
+        result = await service.run_company_query(organization_id=1, query=CompanyContractQueryDTO(operation="count"))
 
-        assert result == {"status": "no_data", "message": "No hay contratos cargados para la organizacion actual."}
+        assert result == {"status": "no_data", "message": "No hay contratos COMPANY cargados para la organizacion actual."}
 
     @pytest.mark.asyncio
     async def test_counts_contracts_with_overlap_range(self):
         sql_repo = AsyncMock()
-        sql_repo.count_contracts.side_effect = [4, 2]
+        sql_repo.count_company_contracts.side_effect = [4, 2]
         service = _make_contract_query_service(sql_repo=sql_repo)
 
-        result = await service.run_query(
+        result = await service.run_company_query(
             organization_id=1,
-            query=ContractQueryDTO(
+            query=CompanyContractQueryDTO(
                 operation="count",
                 max_value=50000,
                 currency="usd",
@@ -1162,21 +1195,15 @@ class TestContractQueryService:
 
         assert result["status"] == "success"
         assert result["count"] == 2
-        assert result["filters_applied"]["currency"] == "USD"
-        sql_repo.count_contracts.assert_any_call(
+        assert result["filters_applied"]["currency"] == CurrencyType.USD
+        sql_repo.count_company_contracts.assert_any_call(
             organization_id=1,
-            query=ContractQueryDTO(operation="count", state=DocumentState.ACTIVE),
-            chatbot_ready_only=True,
-        )
-        sql_repo.count_contracts.assert_any_call(
-            organization_id=1,
-            query=ContractQueryDTO(
+            query=CompanyContractQueryDTO(
                 operation="count",
                 max_value=50000,
-                currency="USD",
+                currency=CurrencyType.USD,
                 period_start=date(2024, 1, 1),
                 period_end=date(2024, 3, 31),
-                state=DocumentState.ACTIVE,
             ),
             chatbot_ready_only=True,
         )
@@ -1184,15 +1211,17 @@ class TestContractQueryService:
     @pytest.mark.asyncio
     async def test_lists_serialized_contracts(self):
         sql_repo = AsyncMock()
-        sql_repo.count_contracts.side_effect = [3, 1]
-        sql_repo.search_contracts.return_value = [_make_doc()]
+        sql_repo.count_company_contracts.side_effect = [3, 1]
+        sql_repo.search_company_contracts.return_value = [_make_doc()]
+        sql_repo.get_contract_value_context.return_value = {1: {"company_total_value": 500.0, "company_currency": "USD"}}
+        sql_repo.get_contract_party_context.return_value = {1: "Cliente Test"}
         sql_repo.get_document_services_by_document_ids.return_value = {1: [_make_document_service(company_contract_id=1)]}
         sql_repo.get_services_by_ids.return_value = [ServiceTable(id=2, organization_id=1, name="Hosting")]
         service = _make_contract_query_service(sql_repo=sql_repo)
 
-        result = await service.run_query(
+        result = await service.run_company_query(
             organization_id=1,
-            query=ContractQueryDTO(operation="list", client="Cliente", limit=5),
+            query=CompanyContractQueryDTO(operation="list", client="Cliente", limit=5),
         )
 
         assert result["status"] == "success"
@@ -1200,9 +1229,9 @@ class TestContractQueryService:
         assert result["items"][0]["value"] == 500.0
         assert result["items"][0]["service_items"][0]["service_name"] == "Hosting"
         assert result["returned_items"] == 1
-        sql_repo.search_contracts.assert_called_once_with(
+        sql_repo.search_company_contracts.assert_called_once_with(
             organization_id=1,
-            query=ContractQueryDTO(operation="list", client="Cliente", limit=5, state=DocumentState.ACTIVE),
+            query=CompanyContractQueryDTO(operation="list", client="Cliente", limit=5),
             limit=5,
             chatbot_ready_only=True,
         )
@@ -1210,23 +1239,25 @@ class TestContractQueryService:
     @pytest.mark.asyncio
     async def test_lists_contracts_filtered_by_service(self):
         sql_repo = AsyncMock()
-        sql_repo.count_contracts.side_effect = [3, 1]
-        sql_repo.search_contracts.return_value = [_make_doc()]
+        sql_repo.count_company_contracts.side_effect = [3, 1]
+        sql_repo.search_company_contracts.return_value = [_make_doc()]
+        sql_repo.get_contract_value_context.return_value = {1: {"company_total_value": 500.0, "company_currency": "USD"}}
+        sql_repo.get_contract_party_context.return_value = {1: "Cliente Test"}
         sql_repo.get_document_services_by_document_ids.return_value = {1: [_make_document_service(company_contract_id=1)]}
         sql_repo.get_services_by_ids.return_value = [ServiceTable(id=2, organization_id=1, name="Hosting")]
         service = _make_contract_query_service(sql_repo=sql_repo)
 
-        result = await service.run_query(
+        result = await service.run_company_query(
             organization_id=1,
-            query=ContractQueryDTO(operation="list", service_name="Hosting", service_id=2, limit=5),
+            query=CompanyContractQueryDTO(operation="list", service_name="Hosting", service_id=2, limit=5),
         )
 
         assert result["status"] == "success"
         assert result["filters_applied"]["service_name"] == "Hosting"
         assert result["filters_applied"]["service_id"] == 2
-        sql_repo.search_contracts.assert_called_once_with(
+        sql_repo.search_company_contracts.assert_called_once_with(
             organization_id=1,
-            query=ContractQueryDTO(operation="list", service_name="Hosting", service_id=2, limit=5, state=DocumentState.ACTIVE),
+            query=CompanyContractQueryDTO(operation="list", service_name="Hosting", service_id=2, limit=5),
             limit=5,
             chatbot_ready_only=True,
         )
@@ -1240,61 +1271,65 @@ class TestContractQueryService:
         )
 
         sql_repo = AsyncMock()
-        sql_repo.count_contracts.side_effect = [2, 1]
-        sql_repo.search_contracts.return_value = [active_document]
+        sql_repo.count_company_contracts.side_effect = [2, 1]
+        sql_repo.search_company_contracts.return_value = [active_document]
+        sql_repo.get_contract_value_context.return_value = {1: {"company_total_value": 500.0, "company_currency": "USD"}}
+        sql_repo.get_contract_party_context.return_value = {1: "Cliente Test"}
         sql_repo.get_document_services_by_document_ids.return_value = {1: []}
         sql_repo.get_services_by_ids.return_value = []
         service = _make_contract_query_service(sql_repo=sql_repo)
 
-        result = await service.run_query(
+        result = await service.run_company_query(
             organization_id=1,
-            query=ContractQueryDTO(operation="list", currently_active=True),
+            query=CompanyContractQueryDTO(operation="list", currently_active=True),
         )
 
         assert result["items"][0]["is_currently_active"] is True
         assert result["filters_applied"]["currently_active"] is True
-        assert result["filters_applied"]["state"] == DocumentState.ACTIVE
+        assert result["filters_applied"]["state"] is None
 
     @pytest.mark.asyncio
     async def test_returns_client_ranking(self):
         sql_repo = AsyncMock()
-        sql_repo.count_contracts.side_effect = [4, 4]
-        sql_repo.rank_contracts_by_client.return_value = [
+        sql_repo.count_company_contracts.side_effect = [4, 4]
+        sql_repo.rank_company_contracts_by_client.return_value = [
             {"client": "Cliente A", "currency": "USD", "total_value": 1500.0, "contracts_count": 3},
             {"client": "Cliente B", "currency": "USD", "total_value": 300.0, "contracts_count": 1},
         ]
         service = _make_contract_query_service(sql_repo=sql_repo)
 
-        result = await service.run_query(
+        result = await service.run_company_query(
             organization_id=1,
-            query=ContractQueryDTO(operation="ranking", currently_active=True, limit=10),
+            query=CompanyContractQueryDTO(operation="ranking", currently_active=True, limit=10),
         )
 
         assert result["status"] == "success"
         assert result["items"][0]["client"] == "Cliente A"
         assert result["items"][0]["contracts_count"] == 3
-        sql_repo.rank_contracts_by_client.assert_called_once_with(
+        sql_repo.rank_company_contracts_by_client.assert_called_once_with(
             organization_id=1,
-            query=ContractQueryDTO(operation="ranking", currently_active=True, limit=10, state=DocumentState.ACTIVE),
+            query=CompanyContractQueryDTO(operation="ranking", currently_active=True, limit=10),
             limit=10,
             chatbot_ready_only=True,
         )
 
     @pytest.mark.asyncio
-    async def test_defaults_chatbot_contract_queries_to_active_state(self):
+    async def test_company_queries_do_not_override_missing_state(self):
         sql_repo = AsyncMock()
-        sql_repo.count_contracts.side_effect = [1, 1]
-        sql_repo.search_contracts.return_value = [_make_doc()]
+        sql_repo.count_company_contracts.side_effect = [1, 1]
+        sql_repo.search_company_contracts.return_value = [_make_doc()]
+        sql_repo.get_contract_value_context.return_value = {1: {"company_total_value": 500.0, "company_currency": "USD"}}
+        sql_repo.get_contract_party_context.return_value = {1: "Cliente Test"}
         sql_repo.get_document_services_by_document_ids.return_value = {1: []}
         sql_repo.get_services_by_ids.return_value = []
         service = _make_contract_query_service(sql_repo=sql_repo)
 
-        result = await service.run_query(organization_id=1, query=ContractQueryDTO(operation="list"))
+        result = await service.run_company_query(organization_id=1, query=CompanyContractQueryDTO(operation="list"))
 
-        assert result["filters_applied"]["state"] == DocumentState.ACTIVE
-        sql_repo.search_contracts.assert_called_once_with(
+        assert result["filters_applied"]["state"] is None
+        sql_repo.search_company_contracts.assert_called_once_with(
             organization_id=1,
-            query=ContractQueryDTO(operation="list", state=DocumentState.ACTIVE),
+            query=CompanyContractQueryDTO(operation="list"),
             limit=20,
             chatbot_ready_only=True,
         )
@@ -1302,59 +1337,69 @@ class TestContractQueryService:
     @pytest.mark.asyncio
     async def test_respects_explicit_state_for_chatbot_contract_queries(self):
         sql_repo = AsyncMock()
-        sql_repo.count_contracts.side_effect = [1, 1]
-        sql_repo.search_contracts.return_value = [_make_doc(state=DocumentState.DRAFT)]
+        sql_repo.count_company_contracts.side_effect = [1, 1]
+        sql_repo.search_company_contracts.return_value = [_make_doc(state=DocumentState.DRAFT)]
+        sql_repo.get_contract_value_context.return_value = {1: {"company_total_value": 500.0, "company_currency": "USD"}}
+        sql_repo.get_contract_party_context.return_value = {1: "Cliente Test"}
         sql_repo.get_document_services_by_document_ids.return_value = {1: []}
         sql_repo.get_services_by_ids.return_value = []
         service = _make_contract_query_service(sql_repo=sql_repo)
 
-        result = await service.run_query(
+        result = await service.run_company_query(
             organization_id=1,
-            query=ContractQueryDTO(operation="list", state=DocumentState.DRAFT),
+            query=CompanyContractQueryDTO(operation="list", state=DocumentState.DRAFT),
         )
 
         assert result["filters_applied"]["state"] == DocumentState.DRAFT
-        sql_repo.search_contracts.assert_called_once_with(
+        sql_repo.search_company_contracts.assert_called_once_with(
             organization_id=1,
-            query=ContractQueryDTO(operation="list", state=DocumentState.DRAFT),
+            query=CompanyContractQueryDTO(operation="list", state=DocumentState.DRAFT),
             limit=20,
             chatbot_ready_only=True,
         )
 
     @pytest.mark.asyncio
-    async def test_denies_queries_for_unreadable_document_type(self):
+    async def test_labor_query_counts_contracts(self):
         sql_repo = AsyncMock()
+        sql_repo.count_labor_contracts.side_effect = [2, 1]
         service = _make_contract_query_service(sql_repo=sql_repo)
 
-        result = await service.run_query(
+        result = await service.run_labor_query(
             organization_id=1,
-            query=ContractQueryDTO(operation="list", document_type=DocumentType.COMPANY),
-            user_role=UserRole.HR,
-        )
-
-        assert result == {"status": "forbidden", "message": "No tienes permisos para acceder a esa informacion."}
-        sql_repo.count_contracts.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_scopes_generic_queries_to_role_readable_type(self):
-        sql_repo = AsyncMock()
-        sql_repo.count_contracts.side_effect = [2, 1]
-        sql_repo.search_contracts.return_value = [_make_doc(doc_type=DocumentType.LABOR)]
-        sql_repo.get_document_services_by_document_ids.return_value = {1: []}
-        sql_repo.get_services_by_ids.return_value = []
-        service = _make_contract_query_service(sql_repo=sql_repo)
-
-        result = await service.run_query(
-            organization_id=1,
-            query=ContractQueryDTO(operation="list"),
-            user_role=UserRole.HR,
+            query=LaborContractQueryDTO(operation="count", position="Developer"),
         )
 
         assert result["status"] == "success"
-        assert result["filters_applied"]["document_type"] == DocumentType.LABOR
-        sql_repo.search_contracts.assert_called_once_with(
+        assert result["document_type"] == "LABOR"
+        assert result["count"] == 1
+        sql_repo.count_labor_contracts.assert_any_call(
             organization_id=1,
-            query=ContractQueryDTO(operation="list", document_type=DocumentType.LABOR, state=DocumentState.ACTIVE),
+            query=LaborContractQueryDTO(operation="count", position="Developer"),
+            chatbot_ready_only=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_labor_query_lists_serialized_contracts(self):
+        sql_repo = AsyncMock()
+        sql_repo.count_labor_contracts.side_effect = [2, 1]
+        sql_repo.search_labor_contracts.return_value = [_make_doc(doc_type=DocumentType.LABOR)]
+        sql_repo.get_contract_value_context.return_value = {1: {"labor_value": 2500.0, "labor_currency": "PEN"}}
+        sql_repo.get_contract_party_context.return_value = {1: "Jane Worker"}
+        sql_repo.get_labor_contract_by_document_id.return_value = None
+        service = _make_contract_query_service(sql_repo=sql_repo)
+
+        result = await service.run_labor_query(
+            organization_id=1,
+            query=LaborContractQueryDTO(operation="list", position="Developer"),
+        )
+
+        assert result["status"] == "success"
+        assert result["document_type"] == "LABOR"
+        assert result["items"][0]["worker_name"] == "Jane Worker"
+        assert result["items"][0]["value"] == 2500.0
+        sql_repo.search_labor_contracts.assert_called_once_with(
+            organization_id=1,
+            query=LaborContractQueryDTO(operation="list", position="Developer"),
             limit=20,
             chatbot_ready_only=True,
         )

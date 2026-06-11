@@ -138,3 +138,30 @@ async def test_recent_contracts_returns_latest_active_contracts_for_type(
 
     assert [item.name for item in result] == ["Acme SAC", "TechCorp"]
     assert [item.title for item in result] == ["Acme SAC", "TechCorp"]
+
+
+@pytest.mark.asyncio
+async def test_origin_distribution_includes_internal_import_source_for_admin_panel(
+    dashboard_repo: SQLModelDashboardRepository,
+    dashboard_session: AsyncSession,
+):
+    await _seed_dashboard_data(dashboard_session)
+    await dashboard_session.exec(
+        text(
+            """
+            insert into documents (id, organization_id, type, start_date, end_date, state, created_at, updated_at) values
+              (6, 10, 'google_drive', '2026-01-01', '2026-08-31', 'ACTIVE', '2026-01-06', '2026-06-02');
+
+            insert into labor_contracts (id, document_id, worker_name, position, salary_value, salary_currency) values
+              (2, 6, 'Drive Worker', 'Analyst', 3000, 'PEN');
+            """
+        )
+    )
+    await dashboard_session.commit()
+
+    result = await dashboard_repo.get_contract_origin_distribution(organization_id=10)
+
+    assert [(item["origin_type"], item["count"], item["percentage"]) for item in result] == [
+        ("Carga Manual", 1, 50.0),
+        ("Importación: Google Drive", 1, 50.0),
+    ]

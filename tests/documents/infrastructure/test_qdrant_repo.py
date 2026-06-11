@@ -83,6 +83,16 @@ class TestEnsureCollection:
         async_client.recreate_collection.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_creates_payload_indexes_needed_by_admin_and_vector_filters(self):
+        repo, async_client, _ = _make_repo()
+        async_client.collection_exists.return_value = True
+
+        await repo._ensure_collection("contracts_index")
+
+        indexed_fields = [call.kwargs["field_name"] for call in async_client.create_payload_index.await_args_list]
+        assert indexed_fields == ["filename", "document_id", "organization_id", "source_provider", "source_file_id"]
+
+    @pytest.mark.asyncio
     async def test_ignores_already_exists_error_on_payload_index(self):
         repo, async_client, _ = _make_repo()
         async_client.collection_exists.return_value = True

@@ -105,6 +105,7 @@ class TestProcessDriveImportInBackground:
                 side_effect=[_AsyncContextManager(first_service), _AsyncContextManager(second_service)],
             ) as mock_builder,
             patch.object(job_registry, "schedule_cleanup", new=AsyncMock()) as mock_schedule_cleanup,
+            patch.object(tracker, "set_phase", wraps=tracker.set_phase) as mock_set_phase,
         ):
             await process_drive_import_in_background(
                 tracker.job_id,
@@ -117,6 +118,19 @@ class TestProcessDriveImportInBackground:
         assert mock_builder.call_count == 2
         mock_schedule_cleanup.assert_awaited_once_with(tracker)
         assert tracker.status == "COMPLETED"
+        assert [call.args for call in mock_set_phase.await_args_list] == [
+            ("file-1", FilePhase.DATABASE),
+            ("file-1", FilePhase.KNOWLEDGE_BASE),
+            ("file-1", FilePhase.COMPLETED),
+            ("file-2", FilePhase.DATABASE),
+            ("file-2", FilePhase.KNOWLEDGE_BASE),
+            ("file-2", FilePhase.COMPLETED),
+        ]
+        queued_events = []
+        while not tracker.event_queue.empty():
+            queued_events.append(tracker.event_queue.get_nowait())
+        assert queued_events[-1].type == "job_complete"
+        assert queued_events[-1].status == "COMPLETED"
         first_service.process_import.assert_awaited_once_with(
             token=token,
             files=[first_file],
@@ -196,3 +210,31 @@ class TestProcessDriveImportInBackground:
         mock_schedule_cleanup.assert_awaited_once_with(tracker)
         assert tracker.files["file-1"].phase == FilePhase.FAILED
         assert tracker.files["file-1"].error == "Error al procesar el archivo"
+
+    @pytest.mark.asyncio
+    async def test_logs_processing_error_when_file_fails(self):
+        service = MagicMock()
+        service.process_import = AsyncMock(side_effect=Exception("vectorization failed"))
+        token = {"token": "abc"}
+        file_item = {"file_id": "file-1", "document": {"name": "Contrato"}}
+        tracker = create_job(files=[file_item], organization_id=7, user_id=3)
+
+        with (
+            patch(
+                "contractai_backend.modules.integrations.api.dependencies.build_background_integration_service",
+                side_effect=[_AsyncContextManager(service)],
+            ),
+            patch.object(job_registry, "schedule_cleanup", new=AsyncMock()),
+            patch("contractai_backend.modules.integrations.api.dependencies.logger.error") as mock_logger_error,
+        ):
+            await process_drive_import_in_background(
+                tracker.job_id,
+                token=token,
+                files=[file_item],
+                organization_id=7,
+                imported_by_user_id=3,
+            )
+
+        mock_logger_error.assert_called_once()
+        assert "Error processing file file-1" in mock_logger_error.call_args.args[0]
+        assert "vectorization failed" in mock_logger_error.call_args.args[0]

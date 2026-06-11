@@ -4,8 +4,9 @@ from typing import Any
 
 from loguru import logger
 
+from ....audit.application.services import ChatbotActivityService
 from ....documents.domain.access_policy import get_readable_document_types
-from ...application.dto import ChartData, LLMResult
+from ...application.dto import ChartData, LLMResult, TokenCostResult
 from ...application.repositories.base_llm import ILLMProvider
 from ...domain.entities import ChatbotTokenUsage, ConversationTable, Message
 from ...domain.exceptions import ConversationNotFoundError
@@ -22,10 +23,12 @@ class ChatbotService:
         llm_provider: ILLMProvider,
         conv_service: ConversationService,
         token_usage_repo: TokenUsageRepository | None = None,
+        chatbot_activity_service: ChatbotActivityService | None = None,
     ):
         self.llm_provider: ILLMProvider = llm_provider
         self.conv_service: ConversationService = conv_service
         self.token_usage_repo: TokenUsageRepository | None = token_usage_repo
+        self.chatbot_activity_service = chatbot_activity_service
         self._cost_calculator = TokenCostCalculator()
 
     @staticmethod
@@ -58,6 +61,8 @@ class ChatbotService:
             title=generated_title,
             initial_messages=[user_message],
         )
+        if self.chatbot_activity_service:
+            await self.chatbot_activity_service.record_conversation_started(actor=current_user, conversation_id=saved_conv.id)
         return saved_conv.id, user_message
 
     async def _append_user_message_to_conversation(
@@ -91,9 +96,21 @@ class ChatbotService:
         user_message: dict[str, Any] = Message(role="user", content=message).as_record()
 
         if thread_id is None:
-            return await self._create_conversation_with_initial_message(message=message, current_user=current_user, user_message=user_message)
+            conversation_id, stored_message = await self._create_conversation_with_initial_message(
+                message=message,
+                current_user=current_user,
+                user_message=user_message,
+            )
+        else:
+            conversation_id, stored_message = await self._append_user_message_to_conversation(
+                thread_id=thread_id,
+                current_user=current_user,
+                user_message=user_message,
+            )
 
-        return await self._append_user_message_to_conversation(thread_id=thread_id, current_user=current_user, user_message=user_message)
+        if self.chatbot_activity_service:
+            await self.chatbot_activity_service.record_message_sent(actor=current_user, conversation_id=conversation_id)
+        return conversation_id, stored_message
 
     async def _append_bot_message(
         self,
@@ -126,14 +143,14 @@ class ChatbotService:
         conversation_id: int,
         llm_result: LLMResult,
         message_index: int,
-    ) -> None:
-        if self.token_usage_repo is None:
-            return
-
+    ) -> TokenCostResult:
         cost = self._cost_calculator.calculate(
             input_tokens=llm_result.input_tokens,
             output_tokens=llm_result.output_tokens,
         )
+
+        if self.token_usage_repo is None:
+            return cost
 
         token_usage = ChatbotTokenUsage(
             conversation_id=conversation_id,
@@ -156,6 +173,7 @@ class ChatbotService:
             cost.total_cost_usd,
             cost.model_used,
         )
+        return cost
 
     async def process_user_message(self, message: str, thread_id: int | None, current_user) -> tuple[str, int, ChartData | None]:
         """Procesa un mensaje del usuario, obtiene la respuesta del LLM y actualiza la conversación en la base de datos."""
@@ -172,11 +190,13 @@ class ChatbotService:
         )
 
         message_index = 1 if thread_id else 0
-        await self._persist_token_usage(
+        cost = await self._persist_token_usage(
             conversation_id=thread_id,
             llm_result=llm_result,
             message_index=message_index,
         )
+        if self.chatbot_activity_service:
+            await self.chatbot_activity_service.record_response_generated(actor=current_user, conversation_id=thread_id, cost=cost)
 
         await self._append_bot_message(
             response_text=llm_result.response,

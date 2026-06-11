@@ -1,15 +1,18 @@
 """Database models for organizations."""
 
 from datetime import UTC, date, datetime
+from typing import ClassVar
 
 from sqlalchemy import Boolean, Column, Date, DateTime, String, Text
 from sqlmodel import Field
 
 from contractai_backend.core.domain.base import BaseTable
+from contractai_backend.core.domain.db_schemas import IDENTITY_SCHEMA
 
 
 class OrganizationTable(BaseTable, table=True):
     __tablename__ = "organizations"
+    __table_args__: ClassVar[dict[str, str]] = {"schema": IDENTITY_SCHEMA}
 
     name: str = Field(sa_column=Column("name", String(255), nullable=False, unique=True))
     is_active: bool = Field(default=True, sa_column=Column("is_active", Boolean, nullable=False, default=True))

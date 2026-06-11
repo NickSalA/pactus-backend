@@ -12,6 +12,8 @@ from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from contractai_backend.core.domain.db_schemas import SYNC_DOCUMENT_STATES_FUNCTION
+
 from ....core.exceptions.base import InternalServerError, ServiceUnavailableError
 from ...documents.domain import DocumentTable
 from ...documents.domain.value_objs import DocumentState
@@ -48,7 +50,7 @@ class SQLModelNotificationAlertRepository(NotificationAlertRepository):
         """Updates persisted contract states using the DB synchronization function."""
         try:
             result = await self.session.exec(
-                cast(Any, text("select public.sync_document_states(:organization_id)")),
+                cast(Any, text(f"select {SYNC_DOCUMENT_STATES_FUNCTION}(:organization_id)")),
                 params={"organization_id": organization_id},
             )
             return _read_scalar_result(result.one())

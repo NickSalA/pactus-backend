@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 from pydantic import ValidationInfo, field_validator
 from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, Text
@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import ENUM
 from sqlmodel import Field
 
 from ....core.domain.base import BaseTable
+from ....core.domain.db_schemas import APP_TYPES_SCHEMA, CATALOG_SCHEMA, CONTRACTS_SCHEMA
 from .exceptions import DocumentValidationError
 from .value_objs import CurrencyType
 
@@ -51,14 +52,25 @@ class CompanyContractServiceTable(BaseTable, table=True):
     """Represents a service attached to a company contract."""
 
     __tablename__: str = "company_contract_services"
+    __table_args__: ClassVar[dict[str, str]] = {"schema": CONTRACTS_SCHEMA}
 
     company_contract_id: int = Field(
-        sa_column=Column("company_contract_id", Integer, ForeignKey("company_contracts.id", ondelete="CASCADE"), nullable=False, index=True)
+        sa_column=Column(
+            "company_contract_id",
+            Integer,
+            ForeignKey(f"{CONTRACTS_SCHEMA}.company_contracts.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
     )
-    service_id: int = Field(sa_column=Column("service_id", Integer, nullable=False, index=True))
+    service_id: int = Field(
+        sa_column=Column("service_id", Integer, ForeignKey(f"{CATALOG_SCHEMA}.services.id"), nullable=False, index=True)
+    )
     description: str | None = Field(default=None, sa_column=Column("description", Text, nullable=True))
     value: float = Field(sa_column=Column("value", Float, nullable=False))
-    currency: CurrencyType = Field(sa_column=Column("currency", ENUM(CurrencyType, name="currency_type"), nullable=False))
+    currency: CurrencyType = Field(
+        sa_column=Column("currency", ENUM(CurrencyType, name="currency_type", schema=APP_TYPES_SCHEMA, create_type=False), nullable=False)
+    )
     start_date: date = Field(sa_column=Column("start_date", Date, nullable=False))
     end_date: date = Field(sa_column=Column("end_date", Date, nullable=False))
     created_at: datetime = Field(
