@@ -1,4 +1,4 @@
-"""PostgreSQL repositories for audit records."""
+"""PostgreSQL repository for chatbot activity audit records."""
 
 from collections.abc import Sequence
 
@@ -10,9 +10,9 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from contractai_backend.core.domain.db_schemas import CHATBOT_SCHEMA
 from contractai_backend.core.exceptions.base import ConflictError, InternalServerError, ServiceUnavailableError
-from contractai_backend.modules.audit.application.repositories import ChatbotActivityRepository, UserActivityRepository
+from contractai_backend.modules.audit.application.repositories import ChatbotActivityRepository
 from contractai_backend.modules.audit.application.repositories.chatbot_activity_repo import ChatbotActivityWithConversationTitle
-from contractai_backend.modules.audit.domain.entities import ChatbotActivityTable, UserActivityTable
+from contractai_backend.modules.audit.domain.entities import ChatbotActivityTable
 
 CONVERSATIONS_TABLE = Table(
     "conversations",
@@ -21,43 +21,6 @@ CONVERSATIONS_TABLE = Table(
     Column("title", String),
     schema=CHATBOT_SCHEMA,
 )
-
-
-class SQLModelUserActivityRepository(UserActivityRepository):
-    def __init__(self, session: AsyncSession):
-        self.session = session
-
-    async def record(self, activity: UserActivityTable) -> UserActivityTable:
-        try:
-            self.session.add(instance=activity)
-            await self.session.commit()
-            await self.session.refresh(instance=activity)
-            return activity
-        except IntegrityError as e:
-            await self.session.rollback()
-            raise ConflictError("Conflicto al registrar auditoria de usuario") from e
-        except (SQLAlchemyTimeoutError, OperationalError) as e:
-            await self.session.rollback()
-            raise ServiceUnavailableError("La base de datos relacional no esta disponible") from e
-        except SQLAlchemyError as e:
-            await self.session.rollback()
-            raise InternalServerError("Error al registrar auditoria de usuario") from e
-
-    async def list_by_organization(self, *, organization_id: int, limit: int, offset: int) -> Sequence[UserActivityTable]:
-        try:
-            query = (
-                select(UserActivityTable)
-                .where(UserActivityTable.organization_id == organization_id)
-                .order_by(desc(UserActivityTable.created_at), desc(UserActivityTable.id))
-                .limit(limit)
-                .offset(offset)
-            )
-            result = await self.session.exec(statement=query)
-            return result.all()
-        except (SQLAlchemyTimeoutError, OperationalError) as e:
-            raise ServiceUnavailableError("La base de datos relacional no esta disponible") from e
-        except SQLAlchemyError as e:
-            raise InternalServerError("Error al listar auditoria de usuario") from e
 
 
 class SQLModelChatbotActivityRepository(ChatbotActivityRepository):
