@@ -19,9 +19,9 @@ from ....modules.users.domain.entities import UserTable
 from ....shared.api.dependencies.security import get_current_user
 from ....shared.config import settings
 from ....shared.infrastructure.database import get_aclient, get_session
-from ..application import ChatbotService, ConversationService, ILLMProvider, TokenUsageService
+from ..application import ChatbotService, ConversationService, ILLMProvider
 from ..composition import build_conversation_service
-from ..infrastructure import ConversationRepository, QdrantVectorRepository, TokenUsageRepository
+from ..infrastructure import ConversationRepository, QdrantVectorRepository
 from ..infrastructure.agent import (
     ContractAgentGraph,
     LangGraphLLMAdapter,
@@ -38,20 +38,6 @@ async def get_conversation_service(session: Annotated[AsyncSession, Depends(get_
     """Construye el servicio de conversación, inyectando el repositorio necesario."""
     repo = ConversationRepository(session=session)
     return build_conversation_service(repository=repo)
-
-
-async def get_token_usage_repository(session: Annotated[AsyncSession, Depends(get_session)]) -> TokenUsageRepository:
-    """Construye el repositorio de token usage."""
-    return TokenUsageRepository(session=session)
-
-
-async def get_token_usage_service(
-    session: Annotated[AsyncSession, Depends(get_session)],
-) -> TokenUsageService:
-    """Construye el servicio de token usage."""
-    usage_repo = TokenUsageRepository(session=session)
-    conv_repo = ConversationRepository(session=session)
-    return TokenUsageService(usage_repo=usage_repo, conv_repo=conv_repo)
 
 
 async def get_llm_provider(
@@ -139,7 +125,6 @@ async def get_llm_provider(
 async def get_chatbot_service(
     llm_provider: Annotated[ILLMProvider, Depends(get_llm_provider)],
     conv_service: Annotated[ConversationService, Depends(get_conversation_service)],
-    token_usage_repo: Annotated[TokenUsageRepository, Depends(get_token_usage_repository)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ChatbotService:
     """Construye el servicio principal del chatbot, inyectando el LLM y el servicio de conversaciones."""
@@ -147,6 +132,5 @@ async def get_chatbot_service(
     return ChatbotService(
         llm_provider=llm_provider,
         conv_service=conv_service,
-        token_usage_repo=token_usage_repo,
         chatbot_activity_service=chatbot_activity_service,
     )

@@ -131,3 +131,4 @@ class ChatbotActivityTable(BaseTable, table=True):
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column("created_at", DateTime(timezone=True), nullable=False),
     )
+
