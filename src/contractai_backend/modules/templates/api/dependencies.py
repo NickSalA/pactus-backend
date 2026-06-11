@@ -9,6 +9,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....shared.infrastructure.database import get_aclient, get_client, get_session
 from ....shared.infrastructure.http import get_http_client
+from ...audit.application.services import TemplateActivityService
+from ...audit.composition import build_default_template_activity_service
 from ...documents.application.repositories import DocumentExtractor
 from ...documents.application.services import DocumentCommandService
 from ...documents.composition import build_default_document_command_service, build_default_document_extractor
@@ -100,6 +102,11 @@ async def get_template_draft_generator() -> ITemplateDraftGenerator:
     return GeminiTemplateDraftGenerator()
 
 
+async def get_template_activity_service(session: SessionDep) -> TemplateActivityService:
+    """Devuelve el servicio de auditoría de plantillas."""
+    return build_default_template_activity_service(session=session)
+
+
 TemplateRepositoryDep = Annotated[ITemplateRepository, Depends(get_template_repository)]
 TemplateFormatRepositoryDep = Annotated[ITemplateFormatRepository, Depends(get_template_format_repository)]
 DocumentAdapterDep = Annotated[IDocumentModuleAdapter, Depends(get_document_module_adapter)]
@@ -108,6 +115,7 @@ TemplateRendererDep = Annotated[ITemplateRenderer, Depends(get_template_renderer
 DocumentGeneratorDep = Annotated[IDocumentGenerator, Depends(get_document_generator)]
 DocumentExtractorDep = Annotated[DocumentExtractor, Depends(get_document_extractor)]
 TemplateDraftGeneratorDep = Annotated[ITemplateDraftGenerator, Depends(get_template_draft_generator)]
+TemplateActivityServiceDep = Annotated[TemplateActivityService, Depends(get_template_activity_service)]
 
 
 async def get_template_service(
@@ -136,6 +144,7 @@ async def get_template_authoring_service(
     renderer: TemplateRendererDep,
     extractor: DocumentExtractorDep,
     draft_generator: TemplateDraftGeneratorDep,
+    activity_service: TemplateActivityServiceDep,
 ) -> TemplateAuthoringService:
     """Devuelve una instancia del servicio de autoría de plantillas."""
     return TemplateAuthoringService(
@@ -145,4 +154,5 @@ async def get_template_authoring_service(
         renderer=renderer,
         extractor=extractor,
         draft_generator=draft_generator,
+        activity_service=activity_service,
     )

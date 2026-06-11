@@ -1,6 +1,6 @@
 """BaseTable: Clase base para todas las tablas de la base de datos."""
 
-from sqlalchemy import BigInteger, Column, Identity
+from sqlalchemy import BigInteger, Identity
 from sqlmodel import Field, SQLModel
 
 
@@ -15,5 +15,8 @@ class BigIntBaseTable(SQLModel):
 
     id: int | None = Field(
         default=None,
-        sa_column=Column("id", BigInteger, Identity(always=False), primary_key=True, index=True),
+        sa_type=BigInteger,
+        sa_column_args=(Identity(always=False),),
+        primary_key=True,
+        index=True,
     )

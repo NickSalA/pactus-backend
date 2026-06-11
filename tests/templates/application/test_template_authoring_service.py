@@ -10,6 +10,7 @@ from contractai_backend.modules.templates.application.services.template_authorin
 from contractai_backend.modules.templates.domain.entities import TemplateContent, TemplateField, TemplateFormatTable, TemplateTable
 from contractai_backend.modules.templates.domain.value_objs import TemplateGenerationMode, TemplateState
 from contractai_backend.modules.templates.domain.exceptions import TemplateValidationError
+from contractai_backend.modules.users.domain.entities import UserTable
 from contractai_backend.modules.users.domain.value_objs import UserRole
 
 
@@ -30,6 +31,7 @@ def _make_authoring_service(
     renderer: AsyncMock | None = None,
     extractor: AsyncMock | None = None,
     draft_generator: AsyncMock | None = None,
+    activity_service: AsyncMock | None = None,
 ) -> TemplateAuthoringService:
     return TemplateAuthoringService(
         template_repo=template_repo or AsyncMock(),
@@ -38,6 +40,7 @@ def _make_authoring_service(
         renderer=renderer or AsyncMock(),
         extractor=extractor or AsyncMock(),
         draft_generator=draft_generator or AsyncMock(),
+        activity_service=activity_service or AsyncMock(),
     )
 
 
@@ -1058,7 +1061,10 @@ class TestPublishTemplate:
         service = _make_authoring_service(template_repo=template_repo, template_format_repo=template_format_repo)
 
         with pytest.raises(TemplateValidationError, match="mapeo de vigencia del contrato"):
-            await service.publish_template(template_id=1, organization_id=1, user_role=UserRole.MANAGER)
+            await service.publish_template(
+                template_id=1,
+                actor=UserTable(id=1, organization_id=1, role=UserRole.MANAGER, email="a@b.com", password_hash=""),
+            )
 
         template_repo.publish.assert_not_called()
 
@@ -1090,7 +1096,10 @@ class TestPublishTemplate:
         template_format_repo.get_by_document_type_and_code.return_value = _make_format()
         service = _make_authoring_service(template_repo=template_repo, template_format_repo=template_format_repo)
 
-        response = await service.publish_template(template_id=1, organization_id=1, user_role=UserRole.MANAGER)
+        response = await service.publish_template(
+            template_id=1,
+            actor=UserTable(id=1, organization_id=1, role=UserRole.MANAGER, email="a@b.com", password_hash=""),
+        )
 
         assert response.content.contract_date_mapping is not None
         assert response.content.contract_date_mapping.start_date_field == "vigencia_inicio_real"

@@ -106,15 +106,13 @@ async def generate_template_draft(
                 request=request_obj,
                 file_content=file_content,
                 filename=file.filename,
-                organization_id=current_user.organization_id,
-                user_role=current_user.role,
+                actor=current_user,
             )
             return PersistedTemplateDraftResponse.model_validate(draft, from_attributes=True)
 
         draft = await template_service.generate_and_save_draft_from_prompt(
             request=request_obj,
-            organization_id=current_user.organization_id,
-            user_role=current_user.role,
+            actor=current_user,
         )
         return PersistedTemplateDraftResponse.model_validate(draft, from_attributes=True)
     except HTTPException:
@@ -179,8 +177,7 @@ async def create_template(
     try:
         template = await template_service.create_template(
             request=request,
-            organization_id=current_user.organization_id,
-            user_role=current_user.role,
+            actor=current_user,
         )
         return TemplateResponse.model_validate(template, from_attributes=True)
     except AppError:
@@ -201,8 +198,7 @@ async def update_template(
         template = await template_service.update_template(
             template_id=template_id,
             request=request,
-            organization_id=current_user.organization_id,
-            user_role=current_user.role,
+            actor=current_user,
         )
         return TemplateResponse.model_validate(template, from_attributes=True)
     except AppError:
@@ -221,8 +217,7 @@ async def publish_template(
     try:
         template = await template_service.publish_template(
             template_id=template_id,
-            organization_id=current_user.organization_id,
-            user_role=current_user.role,
+            actor=current_user,
         )
         return TemplateResponse.model_validate(template, from_attributes=True)
     except AppError:
@@ -241,8 +236,7 @@ async def archive_template(
     try:
         template = await template_service.archive_template(
             template_id=template_id,
-            organization_id=current_user.organization_id,
-            user_role=current_user.role,
+            actor=current_user,
         )
         return TemplateResponse.model_validate(template, from_attributes=True)
     except AppError:

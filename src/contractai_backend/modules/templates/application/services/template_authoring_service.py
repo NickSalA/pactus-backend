@@ -5,9 +5,11 @@ import unicodedata
 from datetime import datetime
 from typing import Any
 
+from ....audit.application.services import TemplateActivityService
 from ....documents.application.repositories import DocumentExtractor
 from ....documents.domain import DocumentType
 from ....documents.domain.access_policy import can_write_document_type
+from ....users.domain.entities import UserTable
 from ....users.domain.value_objs import UserRole
 from ...domain.entities import TemplateContent, TemplateField, TemplateFormatTable, TemplateTable
 from ...domain.exceptions import (
@@ -100,6 +102,7 @@ class TemplateAuthoringService:
         renderer: ITemplateRenderer,
         extractor: DocumentExtractor,
         draft_generator: ITemplateDraftGenerator,
+        activity_service: TemplateActivityService,
     ):
         """Stores dependencies for template authoring."""
         self.template_repo = template_repo
@@ -108,6 +111,7 @@ class TemplateAuthoringService:
         self.renderer = renderer
         self.extractor = extractor
         self.draft_generator = draft_generator
+        self.activity_service = activity_service
         self.content_synchronizer = TemplateContentSynchronizer()
         self.validator = TemplatePlaceholderValidator()
         self.reference_preprocessor = TemplateReferencePreprocessor()
@@ -166,18 +170,17 @@ class TemplateAuthoringService:
     async def generate_and_save_draft_from_prompt(
         self,
         request: GenerateTemplateDraftRequest,
-        organization_id: int,
-        user_role: UserRole,
+        actor: UserTable,
     ) -> PersistedTemplateDraftResponse:
         """Generates and persists a draft from prompt data."""
         draft, document_type = await self.generate_draft_from_prompt(
             request=request,
-            organization_id=organization_id,
-            user_role=user_role,
+            organization_id=actor.organization_id,
+            user_role=actor.role,
         )
         template = await self._persist_draft(
             draft=draft,
-            organization_id=organization_id,
+            actor=actor,
             document_type=document_type,
             format_code=request.format_code,
         )
@@ -236,20 +239,19 @@ class TemplateAuthoringService:
         request: GenerateTemplateDraftRequest,
         file_content: bytes,
         filename: str,
-        organization_id: int,
-        user_role: UserRole,
+        actor: UserTable,
     ) -> PersistedTemplateDraftResponse:
         """Generates and persists a draft from a reference file."""
         draft, document_type = await self.generate_draft_from_file(
             request=request,
             file_content=file_content,
             filename=filename,
-            organization_id=organization_id,
-            user_role=user_role,
+            organization_id=actor.organization_id,
+            user_role=actor.role,
         )
         template = await self._persist_draft(
             draft=draft,
-            organization_id=organization_id,
+            actor=actor,
             document_type=document_type,
             format_code=request.format_code,
         )
@@ -281,17 +283,16 @@ class TemplateAuthoringService:
     async def create_template(
         self,
         request: CreateTemplateRequest,
-        organization_id: int,
-        user_role: UserRole,
+        actor: UserTable,
     ) -> TemplateResponse:
         """Creates a manual draft template."""
-        document_type = self._resolve_effective_document_type(user_role=user_role, requested_document_type=request.document_type)
+        document_type = self._resolve_effective_document_type(user_role=actor.role, requested_document_type=request.document_type)
         template_format = await self._get_template_format_or_raise(document_type=document_type, format_code=request.format_code)
 
         synced_content = self.content_synchronizer.sync(request.content)
         self.validator.validate(synced_content, document_type=document_type)
         template = self._build_template_entity(
-            organization_id=organization_id,
+            organization_id=actor.organization_id,
             name=request.name or self._resolve_template_default_name(template_format),
             description=request.description if request.description is not None else template_format.default_description,
             document_type=document_type,
@@ -299,20 +300,22 @@ class TemplateAuthoringService:
             content=synced_content,
         )
         saved_template = await self.template_repo.save(entity=template)
+        await self.activity_service.record_created(actor=actor, template=saved_template)
         return build_template_response(saved_template, template_format=template_format)
 
     async def update_template(
         self,
         template_id: int,
         request: UpdateTemplateRequest,
-        organization_id: int,
-        user_role: UserRole,
+        actor: UserTable,
     ) -> TemplateResponse:
         """Updates a draft template without changing its base format."""
-        template = await self._get_template_or_raise(template_id=template_id, organization_id=organization_id)
-        self._ensure_can_author_document_type(user_role=user_role, document_type=template.document_type)
+        template = await self._get_template_or_raise(template_id=template_id, organization_id=actor.organization_id)
+        self._ensure_can_author_document_type(user_role=actor.role, document_type=template.document_type)
         if template.state != TemplateState.DRAFT:
             raise TemplateStateError("Solo se pueden editar plantillas en estado DRAFT.")
+
+        previous_state = str(template.state.value) if template.state else None
 
         fields_set = request.model_fields_set
 
@@ -330,18 +333,18 @@ class TemplateAuthoringService:
             template.description = request.description
 
         updated_template = await self.template_repo.update(entity=template)
+        await self.activity_service.record_updated(actor=actor, template=updated_template, previous_state=previous_state)
         template_format = await self._get_template_format_by_id(template.template_format_id)
         return build_template_response(updated_template, template_format=template_format)
 
     async def publish_template(
         self,
         template_id: int,
-        organization_id: int,
-        user_role: UserRole,
+        actor: UserTable,
     ) -> TemplateResponse:
         """Publishes a draft template."""
-        template = await self._get_template_or_raise(template_id=template_id, organization_id=organization_id)
-        self._ensure_can_author_document_type(user_role=user_role, document_type=template.document_type)
+        template = await self._get_template_or_raise(template_id=template_id, organization_id=actor.organization_id)
+        self._ensure_can_author_document_type(user_role=actor.role, document_type=template.document_type)
         if template.state != TemplateState.DRAFT:
             raise TemplateStateError("Solo se pueden publicar plantillas en estado DRAFT.")
         template_format = await self._get_template_format_by_id(template.template_format_id)
@@ -357,39 +360,42 @@ class TemplateAuthoringService:
         )
         content.version = self._resolve_publish_version(content.version)
 
+        previous_state = str(template.state.value) if template.state else None
         template.content = content.model_dump(mode="python")
         template.state = TemplateState.PUBLISHED
         published_template = await self.template_repo.publish(entity=template)
+        await self.activity_service.record_updated(actor=actor, template=published_template, previous_state=previous_state)
         return build_template_response(published_template, template_format=template_format)
 
     async def archive_template(
         self,
         template_id: int,
-        organization_id: int,
-        user_role: UserRole,
+        actor: UserTable,
     ) -> TemplateResponse:
         """Archives a template that should no longer be used."""
-        template = await self._get_template_or_raise(template_id=template_id, organization_id=organization_id)
-        self._ensure_can_author_document_type(user_role=user_role, document_type=template.document_type)
+        template = await self._get_template_or_raise(template_id=template_id, organization_id=actor.organization_id)
+        self._ensure_can_author_document_type(user_role=actor.role, document_type=template.document_type)
         if template.state == TemplateState.ARCHIVED:
             raise TemplateStateError("La plantilla ya se encuentra archivada.")
 
+        previous_state = str(template.state.value) if template.state else None
         template.state = TemplateState.ARCHIVED
         archived_template = await self.template_repo.update(entity=template)
+        await self.activity_service.record_archived(actor=actor, template=archived_template, previous_state=previous_state)
         template_format = await self._get_template_format_by_id(template.template_format_id)
         return build_template_response(archived_template, template_format=template_format)
 
     async def _persist_draft(
         self,
         draft: TemplateDraftResponse,
-        organization_id: int,
+        actor: UserTable,
         document_type: DocumentType,
         format_code: str,
     ) -> TemplateResponse:
         """Persists a generated draft template."""
         template_format = await self._get_template_format_or_raise(document_type=document_type, format_code=format_code)
         template = self._build_template_entity(
-            organization_id=organization_id,
+            organization_id=actor.organization_id,
             name=draft.name,
             description=draft.description,
             document_type=document_type,
@@ -397,6 +403,7 @@ class TemplateAuthoringService:
             content=draft.content,
         )
         saved_template = await self.template_repo.save(entity=template)
+        await self.activity_service.record_created(actor=actor, template=saved_template)
         return build_template_response(saved_template, template_format=template_format)
 
     async def _generate_validated_file_draft(
