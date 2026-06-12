@@ -31,10 +31,21 @@ from ..application.dto import (
 from ..application.dto import (
     build_template_response,
 )
+from ..domain.exceptions import TemplateValidationError
 
 
 class GenerateTemplateDraftRequest(ApplicationGenerateTemplateDraftRequest):
     """HTTP request body for draft template generation."""
+
+    @classmethod
+    def parse_raw_form(cls, raw_request: str | None) -> "GenerateTemplateDraftRequest":
+        """Parses and validates the JSON string from form data."""
+        if not raw_request:
+            raise TemplateValidationError("Debes enviar un request valido.")
+        try:
+            return cls.model_validate_json(raw_request)
+        except Exception as e:
+            raise TemplateValidationError(f"Payload invalido: {e}") from e
 
 
 class TemplateUsage(ApplicationTemplateUsage):
