@@ -10,10 +10,11 @@ from ....shared.config import settings
 from ..application.dto import GenerateTemplateDraftRequest, TemplateDraftResponse, TemplateUsage
 from ..application.repositories.base_draft_generator import ITemplateDraftGenerator
 from ..application.services.template_placeholder_generator import TemplatePlaceholderGenerator
+from ..domain.patterns import AUTO_VARIABLES
+from .prompts import build_system_prompt
 
 
 class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
-    TIME_PLACEHOLDER_PATTERN = re.compile(r"^(?:[01]?\d|2[0-3]):[0-5]\d(?:\s?(?:AM|PM|am|pm))?$")
 
     def __init__(self):
         """Configura el cliente Gemini."""
@@ -168,9 +169,7 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             issues.append(f"El campo '{key}' debe usar type='text' porque representa un valor en letras.")
         if tokens & {"dni", "ruc"} and field_type != "text":
             issues.append(f"El campo '{key}' debe usar type='text' porque es un identificador, no un número para calcular.")
-        if self._looks_like_time_field(tokens=tokens, key=key, placeholder=placeholder) and field_type != "time":
-            issues.append(f"El campo '{key}' debe usar type='time' porque representa una hora puntual.")
-        if placeholder and self._is_instructional_placeholder(placeholder):
+        if placeholder and TemplatePlaceholderGenerator.should_autogenerate_placeholder(placeholder):
             issues.append(f"El campo '{key}' debe usar un placeholder de ejemplo con 'Ej.' y no texto instruccional.")
         return issues
 
@@ -178,23 +177,6 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
         """Builds normalized tokens from a field key and label."""
         normalized = re.sub(r"[^a-z0-9]+", "_", f"{key} {label}".lower()).strip("_")
         return {token for token in normalized.split("_") if token}
-
-    def _looks_like_time_field(self, *, tokens: set[str], key: str, placeholder: str | None) -> bool:
-        """Detects whether a raw field semantically represents a time value."""
-        if placeholder and self.TIME_PLACEHOLDER_PATTERN.fullmatch(placeholder):
-            return True
-        if tokens & {"hora", "horario"} and not tokens & {"duracion", "dias", "laborales"}:
-            return True
-        if tokens & {"ingreso", "salida", "entrada"}:
-            return True
-        if "refrigerio" in tokens and tokens & {"inicio", "fin"}:
-            return True
-        return key.endswith("_time")
-
-    def _is_instructional_placeholder(self, placeholder: str) -> bool:
-        """Detects placeholders that instruct the user instead of showing an example."""
-        normalized = placeholder.strip().lower()
-        return normalized.startswith(("ingrese", "introduzca", "escriba", "seleccione", "indique", "coloque", "digite", "consigne"))
 
     def _build_prompt(
         self,
@@ -230,83 +212,18 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             feedback_lines = "\n".join(f"- {issue}" for issue in validation_feedback)
             feedback_section = "\nVALIDATION_FEEDBACK:\n" + feedback_lines
 
-        domain_rules = ""
-        if document_type == "COMPANY":
-            domain_rules = (
-                "- IMPORTANT: You MUST use the following canonical keys for client data: 'cliente_nombre', 'cliente_ruc', 'cliente_domicilio', 'representante_cliente'.\n"
-                "- For financial data, use 'monto_retribucion' and 'moneda'.\n"
-                "- For dates, use 'fecha_inicio' and 'fecha_fin'.\n"
-                "- If the reference document does not explicitly state the client's RUC or name, you MUST add 'cliente_nombre' and 'cliente_ruc' to content.operational_fields so the backend can collect them.\n"
-            )
-        elif document_type == "LABOR":
-            domain_rules = (
-                "- IMPORTANT: You MUST use the following canonical keys for the employee: 'trabajador_nombre', 'trabajador_dni', 'trabajador_domicilio'.\n"
-                "- For the job role, use 'cargo'.\n"
-                "- For the remuneration, ALWAYS use 'salario' (must be type number), 'moneda' (PEN/USD), and 'periodicidad' (e.g. MENSUAL).\n"
-                "- For the contract type, use 'modalidad'.\n"
-                "- For dates, use 'fecha_inicio' and 'fecha_fin'.\n"
-                "- Any of these canonical keys that do not naturally appear in the text MUST be added to content.operational_fields. They are mandatory for backend processing.\n"
-            )
+        system_instructions = build_system_prompt(
+            auto_variables=AUTO_VARIABLES,
+            document_type=document_type,
+            has_organization=bool(organization_context),
+            has_reference=bool(reference_context),
+            has_outline=bool(reference_outline),
+            has_feedback=bool(validation_feedback),
+            generation_mode=generation_mode,
+        )
 
         return (
-            "You are a legal template generator. Return ONLY valid JSON.\n"
-            "The JSON must match this schema:\n"
-            "{\n"
-            '  "name": string,\n'
-            '  "description": string|null,\n'
-            '  "content": {\n'
-            '    "body_md": string,\n'
-            '    "fields": [\n'
-            '      {"key": string, "label": string, "type": string, "required": boolean, "placeholder": string|null}\n'
-            "    ],\n"
-            '    "operational_fields": [\n'
-            '      {"key": string, "label": string, "type": string, "required": boolean, "placeholder": string|null}\n'
-            "    ],\n"
-            '    "contract_date_mapping": {"start_date_field": string, "end_date_field": string} | null,\n'
-            '    "version": "1.0"\n'
-            "  },\n"
-            '  "warnings": [string],\n'
-            '  "source": {}\n'
-            "}\n\n"
-            "Rules:\n"
-            "- Use only these field types: text, number, date, time, boolean.\n"
-            "- Use type 'time' for hour-only values such as hora_inicio, hora_fin, hora_ingreso or horario_refrigerio.\n"
-            "- Use type 'text' for identifiers such as DNI and RUC.\n"
-            "- Use type 'text' for fields expressed in words or letters, such as monto_literal or remuneracion_en_letras.\n"
-            "- Use snake_case for keys.\n"
-            "- Use Jinja placeholders like {{ key }} in body_md.\n"
-            "- Provide a useful placeholder example for every field and operational field. Use examples prefixed with 'Ej.' and never instructional text like 'Ingrese', 'Seleccione' or 'Indique'.\n"
-            "- Respect DOCUMENT_TYPE and FORMAT_CODE as the target base format for the draft.\n"
-            "- Every placeholder must exist in fields or be one of these auto variables:\n"
-            "  empleador_razon_social, empleador_ruc, empleador_domicilio, empleador_descripcion,\n"
-            "  empleador_objeto_social, representante_nombre, representante_dni, jurisdiccion,\n"
-            "  lugar_firma, autorizacion_entidad, autorizacion_fecha, autorizacion_emitida_por,\n"
-            "  empleador_email, empleador_telefono, day_sign, month_sign, year_sign.\n"
-            "- If ORGANIZATION_CONTEXT is present, use it only as drafting context. Do not hardcode those values in body_md when an auto variable exists.\n"
-            "- Use only the auto variables that are relevant for the contract. Do not force every available variable into the template.\n"
-            "- For employer-side data that already exists as an auto variable, use the canonical auto variable name instead of creating aliases like representante_nombre_empresa or ruc_empresa.\n"
-            "- Do not use filters inside placeholders.\n"
-            "- Each placeholder must appear at most once across content.fields and content.operational_fields.\n"
-            "- If a placeholder appears in body_md, define it ONLY in content.fields. If it is required by backend workflows but does not appear in body_md, define it ONLY in content.operational_fields.\n"
-            "- Reuse one canonical key per fact. Do not invent naming variants for the same party attribute unless the contract text clearly distinguishes them as different facts.\n"
-            "- Any placeholder that appears directly in body_md must be marked as required=true. Optional visible placeholders are not allowed because they break the contract text when empty.\n"
-            "- Use content.operational_fields for extra form fields needed by backend workflows when they should not appear in body_md.\n"
-            "- When the contract defines a validity term, duration, plazo or vigencia, expose the contract start and end as dedicated placeholders if they belong in the contract text; otherwise put them in content.operational_fields, and set content.contract_date_mapping accordingly.\n"
-            "- A duration-only field such as duracion_contrato or plazo_contrato is not equivalent to start_date or end_date and must not be mapped as either boundary.\n"
-            "- The fields referenced by content.contract_date_mapping must exist either in content.fields or content.operational_fields. Prefer type 'date' for those fields.\n"
-            "- If the contract does not expose both dates clearly enough, set content.contract_date_mapping to null and add a warning describing the ambiguity.\n"
-            "- If REFERENCE_CONTEXT is present, preserve the original contract structure as faithfully as possible. Replace variable values with placeholders, but do not freely rewrite or summarize clauses.\n"
-            "- If REFERENCE_OUTLINE is present, preserve every item in clause_sequence when available, and otherwise preserve the order of structure_sequence. Do not omit structural markers that appear in the reference.\n"
-            "- Preserve section titles and the closing section when they appear in the reference.\n"
-            "- Do not include signature blocks, underscore signature lines, signer labels, or representative placeholders at the end of body_md. Signature rendering is handled by the backend.\n"
-            "- GENERATION_MODE controls how strictly the result must follow the reference.\n"
-            "- If GENERATION_MODE is strict, stay as close as possible to the original wording. Do not add new legal clauses that are absent from the reference just to make the template operational.\n"
-            "- If GENERATION_MODE is adaptive, the reference is guidance, not a literal constraint. You may add a concise vigencia clause to body_md when explicit contract start and end placeholders are needed.\n"
-            "- Preserve distinct placeholders from the reference unless they are clearly invalid. Do not aggressively merge or remove fields.\n"
-            "- Convert reference markers written as [NOMBRE DEL CAMPO] into proper Jinja placeholders instead of leaving them literal in body_md.\n"
-            "- If VALIDATION_FEEDBACK is present, correct every listed issue in this attempt.\n"
-            "- Use Spanish legal language in body_md.\n"
-            f"{domain_rules}\n"
+            f"{system_instructions}\n"
             f"NAME_HINT: {name_hint}\n"
             f"DESCRIPTION_HINT: {description_hint}\n"
             f"DOCUMENT_TYPE: {document_type}\n"

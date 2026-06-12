@@ -1,26 +1,24 @@
 """Helpers for compacting reference documents before prompting."""
 
 import re
-import unicodedata
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-WHITESPACE_PATTERN = re.compile(r"\s+")
-MULTI_BLANK_PATTERN = re.compile(r"\n{3,}")
-CLAUSE_HEADING_PATTERN = re.compile(
-    r"^(cl[aá]usula|art[ií]culo|cap[ií]tulo|secci[oó]n|primera|segunda|tercera|cuarta|quinta|sexta|septima|séptima|octava|novena|d[eé]cima|und[eé]cima|duod[eé]cima)\b",
-    re.IGNORECASE,
-)
-PAGE_LINE_PATTERN = re.compile(r"^(p[aá]gina\s+\d+|\d+\s*/\s*\d+)$", re.IGNORECASE)
-CLAUSE_LABEL_PATTERN = re.compile(r"\*\*(?P<label>[A-ZÁÉÍÓÚÑ ]+?)\s*\.\-\*\*", re.IGNORECASE)
-MARKDOWN_HEADING_PATTERN = re.compile(r"^#{1,6}\s+(?P<title>.+)$")
-MARKDOWN_IMAGE_PATTERN = re.compile(r"^!\[[^\]]*\]\([^\)]+\)$")
-REFERENCE_IMAGE_ARTIFACT_PATTERN = re.compile(r"^!{{[^{}\n]+}}\([^\)]+\)$")
-NAMED_STRUCTURE_PATTERN = re.compile(
-    r"^(?:\*\*)?(?P<prefix>cl[aá]usula|art[ií]culo|secci[oó]n|cap[ií]tulo)\s+(?P<identifier>[A-Z0-9IVXLCM]+(?:\.\d+)*)",
-    re.IGNORECASE,
+from .....shared.text import normalize_clause_label
+from ...domain.patterns import (
+    CLAUSE_HEADING_PATTERN,
+    CLAUSE_LABEL_PATTERN,
+    MARKDOWN_HEADING_PATTERN,
+    MARKDOWN_IMAGE_PATTERN,
+    MULTI_BLANK_PATTERN,
+    NAMED_STRUCTURE_PATTERN,
+    NEGATIVE_KEYWORDS,
+    PAGE_LINE_PATTERN,
+    POSITIVE_KEYWORDS,
+    REFERENCE_IMAGE_ARTIFACT_PATTERN,
+    WHITESPACE_PATTERN,
 )
 
 
@@ -56,25 +54,8 @@ class TemplateReferenceContext:
 class TemplateReferencePreprocessor:
     """Builds a compact or full reference from extracted pages."""
 
-    POSITIVE_KEYWORDS = (
-        "comparecen",
-        "partes",
-        "objeto",
-        "servicio",
-        "plazo",
-        "vigencia",
-        "remuneracion",
-        "remuneración",
-        "honorarios",
-        "pago",
-        "obligaciones",
-        "confidencialidad",
-        "resolucion",
-        "resolución",
-        "terminacion",
-        "terminación",
-    )
-    NEGATIVE_KEYWORDS = ("firma", "firmas", "anexo", "anexos", "huella", "sello")
+    POSITIVE_KEYWORDS = POSITIVE_KEYWORDS
+    NEGATIVE_KEYWORDS = NEGATIVE_KEYWORDS
     MAX_REFERENCE_CHARS = 7000
     FULL_REFERENCE_CHAR_THRESHOLD = 6500
     MAX_SECTION_CHARS = 1400
@@ -363,9 +344,7 @@ class TemplateReferencePreprocessor:
 
     def _normalize_clause_label(self, label: str) -> str:
         """Normalizes clause labels for consistent comparison."""
-        normalized = unicodedata.normalize("NFD", label)
-        normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
-        return re.sub(r"\s+", " ", normalized).strip().upper()
+        return normalize_clause_label(label)
 
     def _format_section(self, title: str, body: str) -> str:
         """Formats a selected section for the prompt."""

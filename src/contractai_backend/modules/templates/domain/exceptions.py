@@ -1,6 +1,6 @@
 """Excepciones personalizadas para el módulo de plantillas."""
 
-from ....core.exceptions.base import AppError, ForbiddenError, NotFoundError, ValidationError
+from ....core.exceptions.base import ForbiddenError, NotFoundError, UnprocessableEntityError, ValidationError
 
 
 class TemplateNotFoundError(NotFoundError):
@@ -31,8 +31,8 @@ class TemplateValidationError(ValidationError):
         super().__init__(message=message)
 
 
-class TemplateReferenceError(AppError):
+class TemplateReferenceError(UnprocessableEntityError):
     """Se lanza cuando hay un problema con el archivo de referencia utilizado para generar una plantilla."""
 
-    def __init__(self, message: str = "Error procesando el archivo de referencia.", status_code: int = 422):
-        super().__init__(message=message, status_code=status_code)
+    def __init__(self, message: str = "Error procesando el archivo de referencia."):
+        super().__init__(message=message)

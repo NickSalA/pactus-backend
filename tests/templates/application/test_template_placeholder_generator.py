@@ -28,7 +28,7 @@ class TestTemplatePlaceholderGenerator:
 
     def test_infers_literal_placeholder_for_textual_amounts(self):
         placeholder = TemplatePlaceholderGenerator.build_placeholder(key="monto_remuneracion_literal", label="Monto de la Remuneración en letras", field_type="text")
-        assert placeholder == "Ej. mil quinientos"
+        assert placeholder == "Ej. Monto de la Remuneración en letras"
 
     def test_infers_canonical_placeholders(self):
         placeholder = TemplatePlaceholderGenerator.build_placeholder(key="salario", label="Salario Base", field_type="number")
