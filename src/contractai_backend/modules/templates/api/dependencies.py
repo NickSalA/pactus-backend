@@ -9,8 +9,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....shared.infrastructure.database import get_aclient, get_client, get_session
 from ....shared.infrastructure.http import get_http_client
-from ...audit.application.services import TemplateActivityService
-from ...audit.composition import build_default_template_activity_service
+from ...audit.application.services import ContractActivityService, TemplateActivityService
+from ...audit.composition import build_default_contract_activity_service, build_default_template_activity_service
 from ...documents.application.repositories import DocumentExtractor
 from ...documents.application.services import DocumentCommandService
 from ...documents.composition import build_default_document_command_service, build_default_document_extractor
@@ -109,6 +109,11 @@ async def get_template_activity_service(session: SessionDep) -> TemplateActivity
     return build_default_template_activity_service(session=session)
 
 
+async def get_contract_activity_service(session: SessionDep) -> ContractActivityService:
+    """Devuelve el servicio de auditoría de contratos."""
+    return build_default_contract_activity_service(session=session)
+
+
 TemplateRepositoryDep = Annotated[ITemplateRepository, Depends(get_template_repository)]
 TemplateFormatRepositoryDep = Annotated[ITemplateFormatRepository, Depends(get_template_format_repository)]
 DocumentAdapterDep = Annotated[IDocumentModuleAdapter, Depends(get_document_module_adapter)]
@@ -118,6 +123,7 @@ DocumentGeneratorDep = Annotated[IDocumentGenerator, Depends(get_document_genera
 DocumentExtractorDep = Annotated[DocumentExtractor, Depends(get_document_extractor)]
 TemplateDraftGeneratorDep = Annotated[ITemplateDraftGenerator, Depends(get_template_draft_generator)]
 TemplateActivityServiceDep = Annotated[TemplateActivityService, Depends(get_template_activity_service)]
+ContractActivityServiceDep = Annotated[ContractActivityService, Depends(get_contract_activity_service)]
 
 
 async def get_template_service(
@@ -127,6 +133,7 @@ async def get_template_service(
     organization_repo: OrganizationRepositoryDep,
     renderer: TemplateRendererDep,
     generator: DocumentGeneratorDep,
+    contract_activity_service: ContractActivityServiceDep,
 ) -> TemplateService:
     """Devuelve una instancia del servicio de plantillas."""
     return TemplateService(
@@ -136,6 +143,7 @@ async def get_template_service(
         organization_repo=organization_repo,
         renderer=renderer,
         document_generator=generator,
+        contract_activity_service=contract_activity_service,
     )
 
 

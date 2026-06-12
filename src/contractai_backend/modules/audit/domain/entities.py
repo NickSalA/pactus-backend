@@ -9,9 +9,9 @@ from sqlalchemy.dialects.postgresql import ENUM
 from sqlmodel import Field
 
 from contractai_backend.core.domain.base import BigIntBaseTable
-from contractai_backend.core.domain.db_schemas import AUDIT_SCHEMA, CHATBOT_SCHEMA, IDENTITY_SCHEMA, TEMPLATES_SCHEMA
+from contractai_backend.core.domain.db_schemas import AUDIT_SCHEMA, CHATBOT_SCHEMA, CONTRACTS_SCHEMA, IDENTITY_SCHEMA, TEMPLATES_SCHEMA
 
-from .value_objs import AuditChatbotAction, AuditTemplateAction, AuditUserAction
+from .value_objs import AuditChatbotAction, AuditContractAction, AuditTemplateAction, AuditUserAction
 
 
 class UserActivityTable(BigIntBaseTable, table=True):
@@ -174,6 +174,77 @@ class TemplateActivityTable(BigIntBaseTable, table=True):
         ),
     )
     template_name: str | None = Field(default=None, sa_column=Column("template_name", String(255), nullable=True))
+    document_type: str | None = Field(default=None, sa_column=Column("document_type", String(50), nullable=True))
+    previous_state: str | None = Field(default=None, sa_column=Column("previous_state", String(50), nullable=True))
+    state: str | None = Field(default=None, sa_column=Column("state", String(50), nullable=True))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column("created_at", DateTime(timezone=True), nullable=False),
+    )
+
+
+class ContractActivityTable(BigIntBaseTable, table=True):
+    __tablename__ = "contract_activity"
+    __table_args__: ClassVar[dict[str, str]] = {"schema": AUDIT_SCHEMA}
+    organization_id: int = Field(
+        sa_column=Column(
+            "organization_id",
+            BigInteger,
+            ForeignKey(f"{IDENTITY_SCHEMA}.organizations.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
+    actor_user_id: int = Field(
+        sa_column=Column(
+            "actor_user_id",
+            BigInteger,
+            ForeignKey(f"{IDENTITY_SCHEMA}.users.id"),
+            nullable=False,
+            index=True,
+        )
+    )
+    actor_name: str | None = Field(default=None, sa_column=Column("actor_name", String, nullable=True))
+    actor_role: str = Field(sa_column=Column("actor_role", String, nullable=False))
+    action: AuditContractAction = Field(
+        sa_column=Column(
+            "action",
+            ENUM(AuditContractAction, name="audit_contract_action", schema=AUDIT_SCHEMA, create_type=False),
+            nullable=False,
+            index=True,
+        )
+    )
+    document_id: int | None = Field(
+        default=None,
+        sa_column=Column(
+            "document_id",
+            BigInteger,
+            ForeignKey(f"{CONTRACTS_SCHEMA}.documents.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    )
+    company_contract_id: int | None = Field(
+        default=None,
+        sa_column=Column(
+            "company_contract_id",
+            BigInteger,
+            ForeignKey(f"{CONTRACTS_SCHEMA}.company_contracts.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    )
+    labor_contract_id: int | None = Field(
+        default=None,
+        sa_column=Column(
+            "labor_contract_id",
+            BigInteger,
+            ForeignKey(f"{CONTRACTS_SCHEMA}.labor_contracts.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    )
+    document_name: str | None = Field(default=None, sa_column=Column("document_name", String(255), nullable=True))
     document_type: str | None = Field(default=None, sa_column=Column("document_type", String(50), nullable=True))
     previous_state: str | None = Field(default=None, sa_column=Column("previous_state", String(50), nullable=True))
     state: str | None = Field(default=None, sa_column=Column("state", String(50), nullable=True))

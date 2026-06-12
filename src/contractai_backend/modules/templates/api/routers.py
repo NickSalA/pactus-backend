@@ -43,6 +43,7 @@ async def generate_template(
         form_data=request,
         organization_id=current_user.organization_id,
         user_role=current_user.role,
+        actor=current_user,
     )
 
 

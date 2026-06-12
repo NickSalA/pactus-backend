@@ -20,6 +20,12 @@ from .template_content_synchronizer import TemplateContentSynchronizer
 from .template_runtime_payloads import build_signature_time_payload
 
 
+from typing import Any as AnyType
+
+from ....audit.application.services import ContractActivityService
+from ....audit.domain.value_objs import AuditContractAction
+
+
 class TemplateService:
     def __init__(
         self,
@@ -29,14 +35,15 @@ class TemplateService:
         renderer: ITemplateRenderer,
         document_generator: IDocumentGenerator,
         document_adapter: IDocumentModuleAdapter,
+        contract_activity_service: ContractActivityService | None = None,
     ):
-        """Stores dependencies for template reads and rendering."""
         self.template_repo = template_repo
         self.template_format_repo = template_format_repo
         self.organization_repo = organization_repo
         self.renderer = renderer
         self.document_generator = document_generator
         self.document_adapter = document_adapter
+        self.contract_activity_service = contract_activity_service
         self.content_synchronizer = TemplateContentSynchronizer()
         self.rendered_contract_formatter = RenderedContractFormatter()
 
@@ -46,6 +53,7 @@ class TemplateService:
         organization_id: int,
         form_data: dict[str, Any],
         user_role: UserRole | None,
+        actor: AnyType | None = None,
     ):
         """Generates a contract from a published template."""
         template = await self._get_and_validate_template(template_id, organization_id, user_role)
@@ -94,11 +102,24 @@ class TemplateService:
             "company_contract": company_contract,
             "labor_contract": labor_contract,
         }
-        return await self.document_adapter.save_generated_document(
+        created_doc = await self.document_adapter.save_generated_document(
             document_payload=document_payload,
             file=pdf_bytes,
             user_role=user_role,
+            actor=actor,
         )
+
+        if self.contract_activity_service is not None:
+            await self.contract_activity_service.record(
+                action=AuditContractAction.GENERATED_FROM_TEMPLATE,
+                actor=actor or {},
+                document_id=getattr(created_doc, "id", None),
+                document_name=getattr(created_doc, "file_name", None),
+                document_type=template.document_type.value if hasattr(template.document_type, "value") else str(template.document_type),
+                state="PENDING_SIGNATURE",
+            )
+
+        return created_doc
 
     async def _get_and_validate_template(self, template_id: int, organization_id: int, user_role: UserRole | None) -> TemplateTable:
         template = await self.template_repo.get_template_by_id(template_id=template_id, organization_id=organization_id)
