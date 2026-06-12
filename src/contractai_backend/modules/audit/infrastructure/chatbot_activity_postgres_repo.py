@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from sqlalchemy import Column, Integer, MetaData, String, Table, desc
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
-from sqlmodel import select
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from contractai_backend.core.domain.db_schemas import CHATBOT_SCHEMA
@@ -49,7 +49,7 @@ class SQLModelChatbotActivityRepository(ChatbotActivityRepository):
                 select(ChatbotActivityTable, CONVERSATIONS_TABLE.c.title)
                 .outerjoin(CONVERSATIONS_TABLE, CONVERSATIONS_TABLE.c.id == ChatbotActivityTable.conversation_id)
                 .where(ChatbotActivityTable.organization_id == organization_id)
-                .order_by(desc(ChatbotActivityTable.created_at), desc(ChatbotActivityTable.id))
+                .order_by(desc(col(ChatbotActivityTable.created_at)), desc(col(ChatbotActivityTable.id)))
                 .limit(limit)
                 .offset(offset)
             )

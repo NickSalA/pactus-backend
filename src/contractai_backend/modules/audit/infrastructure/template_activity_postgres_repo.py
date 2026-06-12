@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
-from sqlmodel import select
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from contractai_backend.core.exceptions.base import ConflictError, InternalServerError, ServiceUnavailableError
@@ -38,7 +38,7 @@ class SQLModelTemplateActivityRepository(TemplateActivityRepository):
             query = (
                 select(TemplateActivityTable)
                 .where(TemplateActivityTable.organization_id == organization_id)
-                .order_by(desc(TemplateActivityTable.created_at), desc(TemplateActivityTable.id))
+                .order_by(desc(col(TemplateActivityTable.created_at)), desc(col(TemplateActivityTable.id)))
                 .limit(limit)
                 .offset(offset)
             )

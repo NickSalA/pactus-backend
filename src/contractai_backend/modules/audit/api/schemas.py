@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
-from contractai_backend.modules.audit.domain.value_objs import AuditChatbotAction, AuditUserAction
+from contractai_backend.modules.audit.domain.value_objs import AuditChatbotAction, AuditTemplateAction, AuditUserAction
 
 
 class ChatbotActivityResponse(BaseModel):
@@ -49,4 +49,24 @@ class UserActivityResponse(BaseModel):
     created_at: datetime
 
 
-__all__ = ["ChatbotActivityResponse", "UserActivityResponse"]
+class TemplateActivityResponse(BaseModel):
+    """Response model for template activity audit entries."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    organization_id: int
+    actor_user_id: int
+    actor_name: str | None
+    actor_role: str
+    action: AuditTemplateAction
+    template_id: int | None
+    template_format_id: int | None
+    template_name: str | None
+    document_type: str | None
+    previous_state: str | None
+    state: str | None
+    created_at: datetime
+
+
+__all__ = ["ChatbotActivityResponse", "TemplateActivityResponse", "UserActivityResponse"]
