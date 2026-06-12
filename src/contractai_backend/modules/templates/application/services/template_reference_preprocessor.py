@@ -1,12 +1,12 @@
 """Helpers for compacting reference documents before prompting."""
 
 import re
-import unicodedata
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from .....shared.text import normalize_clause_label
 from ...domain.patterns import (
     CLAUSE_HEADING_PATTERN,
     CLAUSE_LABEL_PATTERN,
@@ -344,9 +344,7 @@ class TemplateReferencePreprocessor:
 
     def _normalize_clause_label(self, label: str) -> str:
         """Normalizes clause labels for consistent comparison."""
-        normalized = unicodedata.normalize("NFD", label)
-        normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
-        return re.sub(r"\s+", " ", normalized).strip().upper()
+        return normalize_clause_label(label)
 
     def _format_section(self, title: str, body: str) -> str:
         """Formats a selected section for the prompt."""

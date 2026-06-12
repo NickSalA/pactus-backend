@@ -1,11 +1,10 @@
 """Utilities for validating template placeholders."""
 
 import itertools
-import re
-import unicodedata
 from collections.abc import Sequence
 from typing import ClassVar
 
+from .....shared.text import normalize_clause_label
 from ....documents.domain import DocumentType
 from ...domain.entities import TemplateContent
 from ...domain.exceptions import TemplateValidationError
@@ -204,6 +203,4 @@ class TemplatePlaceholderValidator:
 
     def _normalize_clause_label(self, label: str) -> str:
         """Normaliza etiquetas de cláusulas para el mapeo."""
-        normalized = unicodedata.normalize("NFD", label)
-        normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
-        return re.sub(r"\s+", " ", normalized).strip().upper()
+        return normalize_clause_label(label)

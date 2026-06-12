@@ -1,8 +1,8 @@
 """Synchronizes template fields with the markdown placeholders."""
 
 import re
-import unicodedata
 
+from .....shared.text import remove_accents
 from ...domain.entities import TemplateContent, TemplateContractDateMapping, TemplateField
 from ...domain.exceptions import TemplateValidationError
 from ...domain.patterns import (
@@ -319,8 +319,7 @@ class TemplateContentSynchronizer:
         return {token for token in f"{normalized_key}_{normalized_label}".split("_") if token}
 
     def _normalize_text(self, value: str) -> str:
-        normalized = unicodedata.normalize("NFD", value)
-        normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+        normalized = remove_accents(value)
         return re.sub(r"[^a-zA-Z0-9]+", "_", normalized).strip("_").lower()
 
     def _extract_manual_keys(self, expressions: list[str]) -> list[str]:

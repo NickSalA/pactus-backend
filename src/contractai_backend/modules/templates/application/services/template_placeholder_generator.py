@@ -1,7 +1,6 @@
 """Application service for generating template placeholders."""
 
-import unicodedata
-
+from .....shared.text import remove_accents
 from ...domain.patterns import INSTRUCTIONAL_PLACEHOLDER_PREFIXES
 
 
@@ -41,7 +40,5 @@ class TemplatePlaceholderGenerator:
         """Determines if a placeholder is missing or invalid."""
         if placeholder is None:
             return True
-        normalized = unicodedata.normalize("NFD", placeholder)
-        normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
-        normalized = normalized.strip().lower()
+        normalized = remove_accents(placeholder).strip().lower()
         return normalized.startswith(INSTRUCTIONAL_PLACEHOLDER_PREFIXES)

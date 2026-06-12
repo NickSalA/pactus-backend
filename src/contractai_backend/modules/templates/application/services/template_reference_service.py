@@ -1,8 +1,8 @@
 """Service for classifying and validating reference document types."""
 
 import re
-import unicodedata
 
+from .....shared.text import remove_accents
 from ....documents.domain import DocumentType
 from ...domain.exceptions import TemplateReferenceError
 from ...domain.patterns import COMPANY_CLASSIFIER_PATTERNS, LABOR_CLASSIFIER_PATTERNS
@@ -42,6 +42,5 @@ class TemplateReferenceService:
 
     def _normalize_reference_text(self, value: str) -> str:
         """Normalizes extracted text for heuristic matching."""
-        normalized = unicodedata.normalize("NFD", value)
-        normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+        normalized = remove_accents(value)
         return re.sub(r"\s+", " ", normalized).strip().lower()
