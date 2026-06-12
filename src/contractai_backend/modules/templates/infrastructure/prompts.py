@@ -54,7 +54,7 @@ CONDITIONAL_INSTRUCTIONS = {
 }
 
 def build_system_prompt(*,
-    auto_variables: set[str],
+    auto_variables: set[str] | frozenset[str],
     document_type: str,
     has_organization: bool,
     has_reference: bool,

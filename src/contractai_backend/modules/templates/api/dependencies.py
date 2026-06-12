@@ -27,6 +27,8 @@ from ..application.repositories import (
     ITemplateRepository,
 )
 from ..application.services.template_authoring_service import TemplateAuthoringService
+from ..application.services.template_draft_service import TemplateDraftService
+from ..application.services.template_reference_service import TemplateReferenceService
 from ..application.services.template_service import TemplateService
 from ..infrastructure import (
     DocumentModuleAdapter,
@@ -147,12 +149,18 @@ async def get_template_authoring_service(
     activity_service: TemplateActivityServiceDep,
 ) -> TemplateAuthoringService:
     """Devuelve una instancia del servicio de autoría de plantillas."""
+    draft_service = TemplateDraftService(
+        draft_generator=draft_generator,
+        organization_repo=organization_repo,
+    )
+    reference_service = TemplateReferenceService()
     return TemplateAuthoringService(
         template_repo=template_repo,
         template_format_repo=template_format_repo,
         organization_repo=organization_repo,
         renderer=renderer,
         extractor=extractor,
-        draft_generator=draft_generator,
         activity_service=activity_service,
+        draft_service=draft_service,
+        reference_service=reference_service,
     )

@@ -12,6 +12,8 @@ from contractai_backend.modules.templates.domain.value_objs import TemplateGener
 from contractai_backend.modules.templates.domain.exceptions import TemplateValidationError
 from contractai_backend.modules.users.domain.entities import UserTable
 from contractai_backend.modules.users.domain.value_objs import UserRole
+from contractai_backend.modules.templates.application.services.template_draft_service import TemplateDraftService
+from contractai_backend.modules.templates.application.services.template_reference_service import TemplateReferenceService
 
 
 def _make_format(document_type: DocumentType = DocumentType.COMPANY) -> TemplateFormatTable:
@@ -33,14 +35,22 @@ def _make_authoring_service(
     draft_generator: AsyncMock | None = None,
     activity_service: AsyncMock | None = None,
 ) -> TemplateAuthoringService:
+    org_repo = organization_repo or AsyncMock()
+    d_generator = draft_generator or AsyncMock()
+    draft_service = TemplateDraftService(
+        draft_generator=d_generator,
+        organization_repo=org_repo,
+    )
+    reference_service = TemplateReferenceService()
     return TemplateAuthoringService(
         template_repo=template_repo or AsyncMock(),
         template_format_repo=template_format_repo or AsyncMock(),
-        organization_repo=organization_repo or AsyncMock(),
+        organization_repo=org_repo,
         renderer=renderer or AsyncMock(),
         extractor=extractor or AsyncMock(),
-        draft_generator=draft_generator or AsyncMock(),
         activity_service=activity_service or AsyncMock(),
+        draft_service=draft_service,
+        reference_service=reference_service,
     )
 
 
@@ -961,9 +971,9 @@ class TestPublishTemplate:
 
 class TestReferenceDocumentClassifier:
     def test_classifies_labor_reference_with_employer_and_worker_terms(self):
-        service = object.__new__(TemplateAuthoringService)
+        service = TemplateReferenceService()
 
-        detected_type = service._classify_reference_document_type(
+        detected_type = service.classify_reference_document_type(
             """
             MODELO DE CONTRATO DE TRABAJO SUJETO A MODALIDAD
             Conste por el presente documento el contrato de trabajo sujeto a modalidad.
@@ -975,9 +985,9 @@ class TestReferenceDocumentClassifier:
         assert detected_type == DocumentType.LABOR
 
     def test_classifies_company_reference_with_management_terms(self):
-        service = object.__new__(TemplateAuthoringService)
+        service = TemplateReferenceService()
 
-        detected_type = service._classify_reference_document_type(
+        detected_type = service.classify_reference_document_type(
             """
             CONTRATO DE MANAGEMENT
             Celebran de una parte la EMPRESA y de otra parte el GERENTE.
