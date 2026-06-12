@@ -10,10 +10,10 @@ from ....shared.config import settings
 from ..application.dto import GenerateTemplateDraftRequest, TemplateDraftResponse, TemplateUsage
 from ..application.repositories.base_draft_generator import ITemplateDraftGenerator
 from ..application.services.template_placeholder_generator import TemplatePlaceholderGenerator
+from ..domain.patterns import AUTO_VARIABLES, DOCUMENT_TYPE_PROMPT_RULES
 
 
 class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
-    TIME_PLACEHOLDER_PATTERN = re.compile(r"^(?:[01]?\d|2[0-3]):[0-5]\d(?:\s?(?:AM|PM|am|pm))?$")
 
     def __init__(self):
         """Configura el cliente Gemini."""
@@ -168,9 +168,7 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             issues.append(f"El campo '{key}' debe usar type='text' porque representa un valor en letras.")
         if tokens & {"dni", "ruc"} and field_type != "text":
             issues.append(f"El campo '{key}' debe usar type='text' porque es un identificador, no un número para calcular.")
-        if self._looks_like_time_field(tokens=tokens, key=key, placeholder=placeholder) and field_type != "time":
-            issues.append(f"El campo '{key}' debe usar type='time' porque representa una hora puntual.")
-        if placeholder and self._is_instructional_placeholder(placeholder):
+        if placeholder and TemplatePlaceholderGenerator.should_autogenerate_placeholder(placeholder):
             issues.append(f"El campo '{key}' debe usar un placeholder de ejemplo con 'Ej.' y no texto instruccional.")
         return issues
 
@@ -178,23 +176,6 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
         """Builds normalized tokens from a field key and label."""
         normalized = re.sub(r"[^a-z0-9]+", "_", f"{key} {label}".lower()).strip("_")
         return {token for token in normalized.split("_") if token}
-
-    def _looks_like_time_field(self, *, tokens: set[str], key: str, placeholder: str | None) -> bool:
-        """Detects whether a raw field semantically represents a time value."""
-        if placeholder and self.TIME_PLACEHOLDER_PATTERN.fullmatch(placeholder):
-            return True
-        if tokens & {"hora", "horario"} and not tokens & {"duracion", "dias", "laborales"}:
-            return True
-        if tokens & {"ingreso", "salida", "entrada"}:
-            return True
-        if "refrigerio" in tokens and tokens & {"inicio", "fin"}:
-            return True
-        return key.endswith("_time")
-
-    def _is_instructional_placeholder(self, placeholder: str) -> bool:
-        """Detects placeholders that instruct the user instead of showing an example."""
-        normalized = placeholder.strip().lower()
-        return normalized.startswith(("ingrese", "introduzca", "escriba", "seleccione", "indique", "coloque", "digite", "consigne"))
 
     def _build_prompt(
         self,
@@ -230,23 +211,7 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             feedback_lines = "\n".join(f"- {issue}" for issue in validation_feedback)
             feedback_section = "\nVALIDATION_FEEDBACK:\n" + feedback_lines
 
-        domain_rules = ""
-        if document_type == "COMPANY":
-            domain_rules = (
-                "- IMPORTANT: You MUST use the following canonical keys for client data: 'cliente_nombre', 'cliente_ruc', 'cliente_domicilio', 'representante_cliente'.\n"
-                "- For financial data, use 'monto_retribucion' and 'moneda'.\n"
-                "- For dates, use 'fecha_inicio' and 'fecha_fin'.\n"
-                "- If the reference document does not explicitly state the client's RUC or name, you MUST add 'cliente_nombre' and 'cliente_ruc' to content.operational_fields so the backend can collect them.\n"
-            )
-        elif document_type == "LABOR":
-            domain_rules = (
-                "- IMPORTANT: You MUST use the following canonical keys for the employee: 'trabajador_nombre', 'trabajador_dni', 'trabajador_domicilio'.\n"
-                "- For the job role, use 'cargo'.\n"
-                "- For the remuneration, ALWAYS use 'salario' (must be type number), 'moneda' (PEN/USD), and 'periodicidad' (e.g. MENSUAL).\n"
-                "- For the contract type, use 'modalidad'.\n"
-                "- For dates, use 'fecha_inicio' and 'fecha_fin'.\n"
-                "- Any of these canonical keys that do not naturally appear in the text MUST be added to content.operational_fields. They are mandatory for backend processing.\n"
-            )
+        domain_rules = DOCUMENT_TYPE_PROMPT_RULES.get(document_type, "")
 
         return (
             "You are a legal template generator. Return ONLY valid JSON.\n"
@@ -278,10 +243,7 @@ class GeminiTemplateDraftGenerator(ITemplateDraftGenerator):
             "- Provide a useful placeholder example for every field and operational field. Use examples prefixed with 'Ej.' and never instructional text like 'Ingrese', 'Seleccione' or 'Indique'.\n"
             "- Respect DOCUMENT_TYPE and FORMAT_CODE as the target base format for the draft.\n"
             "- Every placeholder must exist in fields or be one of these auto variables:\n"
-            "  empleador_razon_social, empleador_ruc, empleador_domicilio, empleador_descripcion,\n"
-            "  empleador_objeto_social, representante_nombre, representante_dni, jurisdiccion,\n"
-            "  lugar_firma, autorizacion_entidad, autorizacion_fecha, autorizacion_emitida_por,\n"
-            "  empleador_email, empleador_telefono, day_sign, month_sign, year_sign.\n"
+            f"  {', '.join(sorted(AUTO_VARIABLES))}.\n"
             "- If ORGANIZATION_CONTEXT is present, use it only as drafting context. Do not hardcode those values in body_md when an auto variable exists.\n"
             "- Use only the auto variables that are relevant for the contract. Do not force every available variable into the template.\n"
             "- For employer-side data that already exists as an auto variable, use the canonical auto variable name instead of creating aliases like representante_nombre_empresa or ruc_empresa.\n"

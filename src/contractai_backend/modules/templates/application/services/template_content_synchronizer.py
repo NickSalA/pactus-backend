@@ -21,7 +21,6 @@ from ...domain.patterns import (
     SHORTHAND_DATE_FILTER_PATTERN,
     START_DATE_HINTS,
     START_DATE_KEYS,
-    TIME_PLACEHOLDER_PATTERN,
 )
 from .template_placeholder_generator import TemplatePlaceholderGenerator
 from .template_placeholder_validator import (
@@ -200,9 +199,10 @@ class TemplateContentSynchronizer:
     def _normalize_operational_field(self, field: TemplateField, *, is_contract_date_field: bool) -> TemplateField:
         """Contract-date operational fields must stay required and typed as dates."""
         updates: dict[str, str | bool] = {}
+        inferred_type = "date" if is_contract_date_field else field.type
         inferred_type = "date" if is_contract_date_field else self._normalize_existing_field_type(field)
-        if is_contract_date_field:
-            updates["required"] = True
+        if inferred_type != "date" and is_contract_date_field:
+            inferred_type = "date"
         self._sync_field_type_and_placeholder(inferred_type, field, updates)
         return TemplateField.model_validate({**field.model_dump(), **updates}) if updates else field
 
@@ -217,7 +217,6 @@ class TemplateContentSynchronizer:
         resolved_type = str(updates.get("type", field.type))
         if TemplatePlaceholderGenerator.should_autogenerate_placeholder(field.placeholder) or resolved_type != field.type:
             updates["placeholder"] = TemplatePlaceholderGenerator.build_placeholder(key=field.key, label=field.label, field_type=resolved_type)
-
     def _normalize_existing_field_type(self, field: TemplateField) -> str:
         """Fixes obvious type mismatches returned by the draft generator."""
         inferred_type = self._infer_field_type(field.key, field.label, field.placeholder)
@@ -379,8 +378,6 @@ class TemplateContentSynchronizer:
         tokens = self._tokenize_field(TemplateField(key=key, label=label, placeholder=placeholder))
         if tokens & {"literal", "letras"}:
             return "text"
-        if placeholder and TIME_PLACEHOLDER_PATTERN.fullmatch(placeholder.strip()):
-            return "time"
         if tokens & {"hora", "horario"} and not tokens & {"duracion", "dias", "laborales"}:
             return "time"
         if tokens & {"ingreso", "salida", "entrada"}:
@@ -389,7 +386,7 @@ class TemplateContentSynchronizer:
             return "time"
         if "fecha" in tokens or key.endswith("_date"):
             return "date"
-        if tokens & {"numero", "cantidad", "monto", "porcentaje", "valor", "retribucion", "remuneracion", "utilidad"}:
+        if tokens & {"numero", "cantidad", "monto", "porcentaje", "valor", "retribucion", "remuneracion", "utilidad", "ruc", "dni", "telefono"}:
             return "number"
         return "text"
 

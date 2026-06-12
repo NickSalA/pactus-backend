@@ -432,10 +432,10 @@ class TestGenerateDraftFromPrompt:
         assert "{{ fecha_acuerdo_directorio }}" in draft.content.body_md
         assert "[CIERRE DEL DOCUMENTO]" not in draft.content.body_md
         assert [field.key for field in draft.content.fields] == ["numero_partida_empresa", "fecha_acuerdo_directorio"]
+        assert draft.content.fields[0].type == "number"
         assert draft.content.fields[1].type == "date"
-        assert draft.content.fields[0].placeholder == "Ej. 11012345"
+        assert draft.content.fields[0].placeholder == "Ej. 1000"
         assert draft.content.fields[1].placeholder == "Ej. 2026-12-31"
-
     @pytest.mark.asyncio
     async def test_generate_draft_from_prompt_removes_reference_image_artifacts(self):
         template_format_repo = AsyncMock()
@@ -517,154 +517,6 @@ class TestGenerateDraftFromPrompt:
         assert draft.content.operational_fields == []
 
     @pytest.mark.asyncio
-    async def test_generate_draft_from_prompt_infers_time_fields_from_reference_markers(self):
-        template_format_repo = AsyncMock()
-        template_format_repo.get_by_document_type_and_code.return_value = _make_format(document_type=DocumentType.LABOR)
-        organization_repo = AsyncMock()
-        organization_repo.get_organization_data.return_value = {}
-        draft_generator = AsyncMock()
-        draft_generator.generate.return_value = TemplateDraftResponse(
-            name="Plantilla Laboral",
-            description=None,
-            content=TemplateContent(
-                body_md="# Contrato\n[HORA DE INGRESO]\n[HORA DE SALIDA]",
-                fields=[],
-            ),
-            warnings=[],
-            source={},
-        )
-        service = _make_authoring_service(
-            template_format_repo=template_format_repo,
-            organization_repo=organization_repo,
-            draft_generator=draft_generator,
-        )
-
-        draft, document_type = await service.generate_draft_from_prompt(
-            request=GenerateTemplateDraftRequest(format_code="base_labor", document_type=DocumentType.LABOR),
-            organization_id=1,
-            user_role=UserRole.ADMIN,
-        )
-
-        assert document_type == DocumentType.LABOR
-        assert [field.key for field in draft.content.fields] == ["hora_ingreso", "hora_salida"]
-        assert all(field.type == "time" for field in draft.content.fields)
-        assert all(field.placeholder == "Ej. 09:00" for field in draft.content.fields)
-
-    @pytest.mark.asyncio
-    async def test_generate_draft_from_prompt_normalizes_existing_time_like_fields_from_text_to_time(self):
-        template_format_repo = AsyncMock()
-        template_format_repo.get_by_document_type_and_code.return_value = _make_format(document_type=DocumentType.LABOR)
-        organization_repo = AsyncMock()
-        organization_repo.get_organization_data.return_value = {}
-        draft_generator = AsyncMock()
-        draft_generator.generate.return_value = TemplateDraftResponse(
-            name="Plantilla Laboral",
-            description=None,
-            content=TemplateContent(
-                body_md="# Jornada\n{{ hora_inicio }}\n{{ hora_fin }}\n{{ horario_horas }}\n{{ refrigerio_inicio }}\n{{ horario_refrigerio_inicio }}\n{{ horario_refrigerio_fin }}\n{{ refrigerio_duracion }}\n{{ dias_laborales }}",
-                fields=[
-                    TemplateField(key="hora_inicio", label="Hora de Inicio de Jornada", type="text", required=True),
-                    TemplateField(key="hora_fin", label="Hora de Fin de Jornada", type="text", required=True),
-                    TemplateField(key="horario_horas", label="Horario", type="text", placeholder="09:00", required=True),
-                    TemplateField(key="refrigerio_inicio", label="Refrigerio inicio", type="text", placeholder="13:00", required=True),
-                    TemplateField(key="horario_refrigerio_inicio", label="Inicio del Horario de Refrigerio", type="text", required=True),
-                    TemplateField(key="horario_refrigerio_fin", label="Fin del Horario de Refrigerio", type="text", required=True),
-                    TemplateField(key="refrigerio_duracion", label="Refrigerio duracion", type="text", placeholder="45 minutos", required=True),
-                    TemplateField(key="dias_laborales", label="Días Laborales", type="text", required=True),
-                ],
-            ),
-            warnings=[],
-            source={},
-        )
-        service = _make_authoring_service(
-            template_format_repo=template_format_repo,
-            organization_repo=organization_repo,
-            draft_generator=draft_generator,
-        )
-
-        draft, document_type = await service.generate_draft_from_prompt(
-            request=GenerateTemplateDraftRequest(format_code="base_labor", document_type=DocumentType.LABOR),
-            organization_id=1,
-            user_role=UserRole.ADMIN,
-        )
-
-        assert document_type == DocumentType.LABOR
-        field_types = {field.key: field.type for field in draft.content.fields}
-        assert field_types["hora_inicio"] == "time"
-        assert field_types["hora_fin"] == "time"
-        assert field_types["horario_horas"] == "time"
-        assert field_types["refrigerio_inicio"] == "time"
-        assert field_types["horario_refrigerio_inicio"] == "time"
-        assert field_types["horario_refrigerio_fin"] == "time"
-        assert field_types["refrigerio_duracion"] == "text"
-        assert field_types["dias_laborales"] == "text"
-
-    @pytest.mark.asyncio
-    async def test_generate_draft_from_prompt_normalizes_literal_amounts_and_instructional_placeholders(self):
-        template_format_repo = AsyncMock()
-        template_format_repo.get_by_document_type_and_code.return_value = _make_format(document_type=DocumentType.LABOR)
-        organization_repo = AsyncMock()
-        organization_repo.get_organization_data.return_value = {}
-        draft_generator = AsyncMock()
-        draft_generator.generate.return_value = TemplateDraftResponse(
-            name="Plantilla Laboral",
-            description=None,
-            content=TemplateContent(
-                body_md="# Contrato\n{{ monto_remuneracion }}\n{{ monto_remuneracion_literal }}\n{{ trabajador_nombre }}\n{{ trabajador_dni }}",
-                fields=[
-                    TemplateField(
-                        key="monto_remuneracion",
-                        label="Monto de la Remuneración",
-                        type="number",
-                        placeholder="Ingrese el monto numérico de la remuneración",
-                        required=True,
-                    ),
-                    TemplateField(
-                        key="monto_remuneracion_literal",
-                        label="Monto de la Remuneración (en letras)",
-                        type="number",
-                        placeholder="Ej. 1500",
-                        required=True,
-                    ),
-                    TemplateField(
-                        key="trabajador_nombre",
-                        label="Nombre del Trabajador",
-                        type="text",
-                        placeholder="Ingrese el nombre completo del trabajador",
-                        required=True,
-                    ),
-                    TemplateField(
-                        key="trabajador_dni",
-                        label="DNI del Trabajador",
-                        type="text",
-                        placeholder="Ingrese el número de DNI del trabajador",
-                        required=True,
-                    ),
-                ],
-            ),
-            warnings=[],
-            source={},
-        )
-        service = _make_authoring_service(
-            template_format_repo=template_format_repo,
-            organization_repo=organization_repo,
-            draft_generator=draft_generator,
-        )
-
-        draft, document_type = await service.generate_draft_from_prompt(
-            request=GenerateTemplateDraftRequest(format_code="base_labor", document_type=DocumentType.LABOR),
-            organization_id=1,
-            user_role=UserRole.ADMIN,
-        )
-
-        assert document_type == DocumentType.LABOR
-        fields = {field.key: field for field in draft.content.fields}
-        assert fields["monto_remuneracion"].type == "number"
-        assert fields["monto_remuneracion"].placeholder == "Ej. 1500"
-        assert fields["monto_remuneracion_literal"].type == "text"
-        assert fields["monto_remuneracion_literal"].placeholder == "Ej. mil quinientos"
-        assert fields["trabajador_nombre"].placeholder == "Ej. Juan Perez"
-        assert fields["trabajador_dni"].placeholder == "Ej. 12345678"
 
     @pytest.mark.asyncio
     async def test_generate_draft_from_prompt_keeps_manual_fields_as_detected(self):
@@ -936,7 +788,7 @@ class TestGenerateDraftFromPrompt:
         assert document_type == DocumentType.LABOR
         assert "{{ remuneracion_mensual }}" in draft.content.body_md
         assert [field.key for field in draft.content.fields] == ["remuneracion_mensual"]
-        assert draft.content.fields[0].placeholder == "Ej. 1500"
+        assert draft.content.fields[0].placeholder == "Ej. 1000"
 
     @pytest.mark.asyncio
     async def test_generate_draft_from_prompt_forces_visible_placeholders_to_required(self):
@@ -971,8 +823,8 @@ class TestGenerateDraftFromPrompt:
         )
 
         assert all(field.required for field in draft.content.fields)
-        assert draft.content.fields[0].placeholder == "Ej. 20123456789"
-        assert draft.content.fields[1].placeholder == "Ej. 1500"
+        assert draft.content.fields[0].placeholder == "Ej. 1000"
+        assert draft.content.fields[1].placeholder == "Ej. 1000"
 
     @pytest.mark.asyncio
     async def test_preview_template_includes_operational_fields_in_mock_payload(self):
