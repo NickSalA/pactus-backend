@@ -104,38 +104,7 @@ class PreviewTemplateResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
-class CreateTemplateRequest(BaseModel):
-    name: str | None = None
-    description: str | None = None
-    document_type: DocumentType | None = None
-    format_code: str
-    content: TemplateContent
 
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, value: str | None) -> str | None:
-        """Normaliza el nombre obligatorio."""
-        if value is None:
-            return None
-        if cleaned := value.strip():
-            return cleaned
-        else:
-            raise ValueError("Name cannot be empty")
-
-    @field_validator("description")
-    @classmethod
-    def validate_description(cls, value: str | None) -> str | None:
-        """Normaliza la descripcion opcional."""
-        if value is None:
-            return None
-        cleaned = value.strip()
-        return cleaned or None
-
-    @field_validator("format_code")
-    @classmethod
-    def validate_create_format_code(cls, value: str) -> str:
-        """Normaliza el codigo tecnico del formato."""
-        return normalize_format_code(value)
 
 
 class UpdateTemplateRequest(BaseModel):

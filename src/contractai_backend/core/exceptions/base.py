@@ -30,6 +30,13 @@ class ValidationError(AppError):
         super().__init__(message, status_code=status.HTTP_400_BAD_REQUEST)
 
 
+class UnprocessableEntityError(AppError):
+    """Excepción para errores semánticos o contenido que no puede ser procesado (HTTP 422)."""
+
+    def __init__(self, message: str = "Entidad no procesable"):
+        super().__init__(message, status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+
 class UnauthorizedError(AppError):
     """Excepción para fallos de autenticación (HTTP 401)."""
 

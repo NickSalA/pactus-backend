@@ -19,9 +19,14 @@ from ...domain.exceptions import (
     TemplateStateError,
     TemplateValidationError,
 )
+from ...domain.patterns import (
+    COMPANY_CLASSIFIER_PATTERNS,
+    CONTRACT_CLOSING_PATTERNS,
+    LABOR_CLASSIFIER_PATTERNS,
+    STALE_AI_WARNING_PATTERNS,
+)
 from ...domain.value_objs import TemplateGenerationMode, TemplateState
 from ..dto import (
-    CreateTemplateRequest,
     GenerateTemplateDraftRequest,
     PersistedTemplateDraftResponse,
     PreviewTemplateRequest,
@@ -53,46 +58,7 @@ class TemplateAuthoringService:
         "La plantilla de referencia no expone fechas de inicio y fin del contrato de forma explícita. "
         "Usa generation_mode='adaptive' para permitir que la IA las complete."
     )
-    STALE_AI_WARNING_PATTERNS = (
-        re.compile(r"^El campo '.*' no est[aá] siendo utilizado en el cuerpo del documento\.?$", re.IGNORECASE),
-        re.compile(r"^Campos definidos pero no usados:", re.IGNORECASE),
-    )
 
-    CONTRACT_CLOSING_PATTERNS = (
-        r"(?im)^en fe de lo cual\b",
-        r"(?im)^en se[nñ]al de conformidad\b",
-        r"(?im)^para constancia\b",
-        r"(?im)^firman\b",
-        r"(?im)^suscriben\b",
-    )
-
-    LABOR_CLASSIFIER_PATTERNS = (
-        (r"\btrabajador(?:es)?\b", 2),
-        (r"\bemplead(?:o|a|os|as)\b", 2),
-        (r"\bempleador\b", 2),
-        (r"\bremuneraci[oó]n\b", 2),
-        (r"\bjornada\b", 2),
-        (r"\bvacaciones\b", 2),
-        (r"\bperiodo de prueba\b", 3),
-        (r"\bplanilla\b", 3),
-        (r"\bsubordinaci[oó]n\b", 3),
-        (r"\bsujeto a modalidad\b", 4),
-        (r"\bcontrato de trabajo\b", 4),
-        (r"\bdecreto legislativo\s*(?:n[°oº]?\s*)?728\b", 4),
-        (r"\bley de productividad y competitividad laboral\b", 4),
-    )
-    COMPANY_CLASSIFIER_PATTERNS = (
-        (r"\bempresa(?:s)?\b", 1),
-        (r"\bcliente(?:s)?\b", 2),
-        (r"\bproveedor(?:es)?\b", 2),
-        (r"\bmanagement\b", 4),
-        (r"\bgerenc(?:ia|iamiento|ial)\b", 4),
-        (r"\bservicio(?:s)?\b", 1),
-        (r"\bpersona jur[ií]dica\b", 2),
-        (r"\bsociedad an[oó]nima\b", 2),
-        (r"\br\.?u\.?c\.?\b", 1),
-        (r"\bcontrato comercial\b", 3),
-    )
 
     def __init__(
         self,
@@ -280,28 +246,7 @@ class TemplateAuthoringService:
         markdown = self.rendered_contract_formatter.format(markdown, document_type=document_type, payload=payload)
         return PreviewTemplateResponse(markdown=markdown, resolved_payload=payload, warnings=warnings)
 
-    async def create_template(
-        self,
-        request: CreateTemplateRequest,
-        actor: UserTable,
-    ) -> TemplateResponse:
-        """Creates a manual draft template."""
-        document_type = self._resolve_effective_document_type(user_role=actor.role, requested_document_type=request.document_type)
-        template_format = await self._get_template_format_or_raise(document_type=document_type, format_code=request.format_code)
 
-        synced_content = self.content_synchronizer.sync(request.content)
-        self.validator.validate(synced_content, document_type=document_type)
-        template = self._build_template_entity(
-            organization_id=actor.organization_id,
-            name=request.name or self._resolve_template_default_name(template_format),
-            description=request.description if request.description is not None else template_format.default_description,
-            document_type=document_type,
-            template_format_id=template_format.id,
-            content=synced_content,
-        )
-        saved_template = await self.template_repo.save(entity=template)
-        await self.activity_service.record_created(actor=actor, template=saved_template)
-        return build_template_response(saved_template, template_format=template_format)
 
     async def update_template(
         self,
@@ -567,7 +512,7 @@ class TemplateAuthoringService:
         for warning in warnings:
             if warning == self.validator.MISSING_CONTRACT_DATE_MAPPING_WARNING:
                 continue
-            if any(pattern.match(warning) for pattern in self.STALE_AI_WARNING_PATTERNS):
+            if any(pattern.match(warning) for pattern in STALE_AI_WARNING_PATTERNS):
                 continue
             filtered_warnings.append(warning)
         return filtered_warnings
@@ -641,7 +586,7 @@ class TemplateAuthoringService:
     def _insert_clause_before_closing(self, body_md: str, clause_text: str) -> str:
         """Places the generated clause before the closing section when possible."""
         stripped_body = body_md.rstrip()
-        for pattern in self.CONTRACT_CLOSING_PATTERNS:
+        for pattern in CONTRACT_CLOSING_PATTERNS:
             match = re.search(pattern, stripped_body)
             if match is None:
                 continue
@@ -785,8 +730,8 @@ class TemplateAuthoringService:
     def _classify_reference_document_type(self, clean_text: str) -> DocumentType | None:
         """Classifies a reference document as COMPANY or LABOR using heuristics."""
         normalized_text = self._normalize_reference_text(clean_text)
-        labor_score = self._score_classifier_patterns(normalized_text, self.LABOR_CLASSIFIER_PATTERNS)
-        company_score = self._score_classifier_patterns(normalized_text, self.COMPANY_CLASSIFIER_PATTERNS)
+        labor_score = self._score_classifier_patterns(normalized_text, LABOR_CLASSIFIER_PATTERNS)
+        company_score = self._score_classifier_patterns(normalized_text, COMPANY_CLASSIFIER_PATTERNS)
 
         if labor_score == 0 and company_score == 0:
             return None

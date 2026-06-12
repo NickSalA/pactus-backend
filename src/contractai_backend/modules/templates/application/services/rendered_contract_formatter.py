@@ -1,11 +1,18 @@
 """Post-processes rendered contracts for preview and PDF output."""
 
 import html
-import re
 from dataclasses import dataclass
 from typing import Any
 
 from ....documents.domain import DocumentType
+from ...domain.patterns import (
+    CLOSING_LINE_PATTERN,
+    SIGNATURE_BLOCK_MARKER,
+    SIGNATURE_PLACEHOLDER_KEYS,
+    SIGNATURE_PLACEHOLDER_PATTERN,
+    SIGNATURE_TITLE_PATTERN,
+    UNDERSCORE_LINE_PATTERN,
+)
 
 
 @dataclass(frozen=True)
@@ -17,32 +24,6 @@ class SignatureParty:
 
 class RenderedContractFormatter:
     """Applies output-only formatting such as signature blocks."""
-
-    SIGNATURE_BLOCK_MARKER = 'data-generated-signatures="true"'
-    UNDERSCORE_LINE_PATTERN = re.compile(r"^_{8,}\s*$")
-    CLOSING_LINE_PATTERN = re.compile(r"^(?:en fe de lo cual|en se[nñ]al de conformidad|para constancia|firman|suscriben)\b", re.IGNORECASE)
-    SIGNATURE_TITLE_PATTERN = re.compile(
-        r"^(?:la empresa|el gerente|la contratista|la contraparte|el empleador|el trabajador)$",
-        re.IGNORECASE,
-    )
-    SIGNATURE_PLACEHOLDER_PATTERN = re.compile(r"^{{\s*(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*}}$")
-    SIGNATURE_PLACEHOLDER_KEYS = frozenset(
-        {
-            "representante_nombre",
-            "representante_nombre_empresa",
-            "representante_nombre_empleador",
-            "gerente_representante_nombre",
-            "contratista_representante_nombre",
-            "representante_nombre_contratista",
-            "representante_nombre_gerente",
-            "contratista_nombre_representante",
-            "gerente_nombre_representante",
-            "trabajador_nombre",
-            "empleador_razon_social",
-            "gerente_razon_social",
-            "contratista_razon_social",
-        }
-    )
 
     def format(self, markdown: str, *, document_type: DocumentType, payload: dict[str, Any]) -> str:
         """Formats rendered markdown for output-specific presentation."""
@@ -62,7 +43,7 @@ class RenderedContractFormatter:
 
     def _strip_generated_signature_block(self, markdown: str) -> str:
         """Avoids duplicating a previously formatted signature block."""
-        marker_index = markdown.find(self.SIGNATURE_BLOCK_MARKER)
+        marker_index = markdown.find(SIGNATURE_BLOCK_MARKER)
         if marker_index == -1:
             return markdown
         start_index = markdown.rfind("<div", 0, marker_index)
@@ -82,7 +63,7 @@ class RenderedContractFormatter:
 
         search_start = max(0, last_non_empty_index - 18)
         underscore_index = next(
-            (index for index in range(last_non_empty_index, search_start - 1, -1) if self.UNDERSCORE_LINE_PATTERN.match(lines[index].strip())),
+            (index for index in range(last_non_empty_index, search_start - 1, -1) if UNDERSCORE_LINE_PATTERN.match(lines[index].strip())),
             None,
         )
         if underscore_index is None:
@@ -99,13 +80,13 @@ class RenderedContractFormatter:
         stripped = line.strip().strip("*")
         if not stripped:
             return True
-        if self.UNDERSCORE_LINE_PATTERN.match(stripped):
+        if UNDERSCORE_LINE_PATTERN.match(stripped):
             return True
-        if self.SIGNATURE_TITLE_PATTERN.fullmatch(stripped):
+        if SIGNATURE_TITLE_PATTERN.fullmatch(stripped):
             return True
         if self._is_signature_placeholder_line(stripped):
             return True
-        if self.CLOSING_LINE_PATTERN.match(stripped):
+        if CLOSING_LINE_PATTERN.match(stripped):
             return False
         alpha_count = sum(bool(char.isalpha())
                         for char in stripped)
@@ -121,10 +102,10 @@ class RenderedContractFormatter:
 
     def _is_signature_placeholder_line(self, stripped_line: str) -> bool:
         """Detects placeholder-only lines commonly used inside legacy signature blocks."""
-        match = self.SIGNATURE_PLACEHOLDER_PATTERN.fullmatch(stripped_line)
+        match = SIGNATURE_PLACEHOLDER_PATTERN.fullmatch(stripped_line)
         if match is None:
             return False
-        return match.group("key") in self.SIGNATURE_PLACEHOLDER_KEYS
+        return match.group("key") in SIGNATURE_PLACEHOLDER_KEYS
 
     def _build_signature_block(self, *, document_type: DocumentType, payload: dict[str, Any]) -> str:
         """Builds a standardized HTML signature block."""

@@ -16,7 +16,6 @@ from ..application.services.template_authoring_service import TemplateAuthoringS
 from ..application.services.template_service import TemplateService
 from .dependencies import get_template_authoring_service, get_template_service
 from .schemas import (
-    CreateTemplateRequest,
     DocumentResponse,
     GenerateTemplateDraftRequest,
     PersistedTemplateDraftResponse,
@@ -167,23 +166,7 @@ async def get_template(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al obtener la plantilla: {e!s}") from e
 
 
-@router.post(path="/", response_model=TemplateResponse, status_code=status.HTTP_201_CREATED)
-async def create_template(
-    request: CreateTemplateRequest,
-    template_service: TemplateAuthoringServiceDep,
-    current_user: CurrentUserDep,
-) -> TemplateResponse:
-    """Endpoint para crear una plantilla."""
-    try:
-        template = await template_service.create_template(
-            request=request,
-            actor=current_user,
-        )
-        return TemplateResponse.model_validate(template, from_attributes=True)
-    except AppError:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al crear la plantilla: {e!s}") from e
+
 
 
 @router.patch(path="/{template_id}", response_model=TemplateResponse, status_code=status.HTTP_200_OK)

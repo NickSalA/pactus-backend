@@ -9,42 +9,16 @@ from typing import ClassVar
 from ....documents.domain import DocumentType
 from ...domain.entities import TemplateContent
 from ...domain.exceptions import TemplateValidationError
-
-EXPRESSION_PATTERN = re.compile(r"{{\s*(.*?)\s*}}")
-SIMPLE_PLACEHOLDER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
-SUPPORTED_FORMAT_DATE_EXPRESSION_PATTERN = re.compile(
-    r"^(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*\|\s*format_date\s*\(\s*(?P<quote>['\"])(?P<fmt>.*?)\2\s*\)$"
+from ...domain.patterns import (
+    AUTO_VARIABLES,
+    CLAUSE_ORDER,
+    CLAUSE_PATTERN,
+    EXPRESSION_PATTERN,
+    MARKDOWN_HEADING_PATTERN,
+    NAMED_STRUCTURE_PATTERN,
+    SIMPLE_PLACEHOLDER_PATTERN,
+    SUPPORTED_FORMAT_DATE_EXPRESSION_PATTERN,
 )
-CLAUSE_PATTERN = re.compile(r"\*\*(?P<label>[A-ZÁÉÍÓÚÑ ]+?)\.\-\*\*", re.IGNORECASE)
-MARKDOWN_HEADING_PATTERN = re.compile(r"^#{1,6}\s+(?P<title>.+)$")
-NAMED_STRUCTURE_PATTERN = re.compile(
-    r"^(?:\*\*)?(?P<prefix>cl[aá]usula|art[ií]culo|secci[oó]n|cap[ií]tulo)\s+(?P<identifier>[A-Z0-9IVXLCM]+(?:\.\d+)*)",
-    re.IGNORECASE,
-)
-
-CLAUSE_ORDER: dict[str, int] = {
-    "PRIMERA": 1,
-    "SEGUNDA": 2,
-    "TERCERA": 3,
-    "CUARTA": 4,
-    "QUINTA": 5,
-    "SEXTA": 6,
-    "SEPTIMA": 7,
-    "SETIMA": 7,
-    "OCTAVA": 8,
-    "NOVENA": 9,
-    "DECIMA": 10,
-    "DECIMO PRIMERA": 11,
-    "DECIMO SEGUNDA": 12,
-    "DECIMO TERCERA": 13,
-    "DECIMO CUARTA": 14,
-    "DECIMO QUINTA": 15,
-    "DECIMO SEXTA": 16,
-    "DECIMO SEPTIMA": 17,
-    "DECIMO OCTAVA": 18,
-    "DECIMO NOVENA": 19,
-    "VIGESIMA": 20,
-}
 
 
 def extract_supported_placeholder_key(expression: str) -> str | None:
@@ -57,27 +31,7 @@ def extract_supported_placeholder_key(expression: str) -> str | None:
 
 class TemplatePlaceholderValidator:
     MISSING_CONTRACT_DATE_MAPPING_WARNING: ClassVar[str] = "La plantilla no define un mapeo de vigencia del contrato para fecha de inicio y fin."
-    AUTO_VARIABLES: ClassVar[frozenset[str]] = frozenset(
-        {
-            "empleador_razon_social",
-            "empleador_ruc",
-            "empleador_domicilio",
-            "empleador_descripcion",
-            "empleador_objeto_social",
-            "representante_nombre",
-            "representante_dni",
-            "jurisdiccion",
-            "lugar_firma",
-            "autorizacion_entidad",
-            "autorizacion_fecha",
-            "autorizacion_emitida_por",
-            "empleador_email",
-            "empleador_telefono",
-            "day_sign",
-            "month_sign",
-            "year_sign",
-        }
-    )
+    AUTO_VARIABLES = AUTO_VARIABLES
 
     def extract(self, body_md: str) -> set[str]:
         """Extrae placeholders Jinja simples del markdown."""

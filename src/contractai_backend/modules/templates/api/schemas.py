@@ -2,9 +2,6 @@
 
 from ...documents.api.schemas import DocumentResponse
 from ..application.dto import (
-    CreateTemplateRequest as ApplicationCreateTemplateRequest,
-)
-from ..application.dto import (
     GenerateTemplateDraftRequest as ApplicationGenerateTemplateDraftRequest,
 )
 from ..application.dto import (
@@ -64,8 +61,7 @@ class PreviewTemplateResponse(ApplicationPreviewTemplateResponse):
     """HTTP response schema for template previews."""
 
 
-class CreateTemplateRequest(ApplicationCreateTemplateRequest):
-    """HTTP request body for creating templates."""
+
 
 
 class UpdateTemplateRequest(ApplicationUpdateTemplateRequest):
@@ -76,7 +72,6 @@ class TemplateFormatResponse(ApplicationTemplateFormatResponse):
     """HTTP response schema for available template formats."""
 
 __all__ = [
-    "CreateTemplateRequest",
     "DocumentResponse",
     "GenerateTemplateDraftRequest",
     "PersistedTemplateDraftResponse",
