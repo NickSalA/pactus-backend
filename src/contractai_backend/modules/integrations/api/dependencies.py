@@ -63,9 +63,17 @@ DocumentIngestionTargetDep = Annotated[DocumentIngestionAdapter, Depends(get_doc
 def get_integration_service(
     provider: CloudStorageProviderDep,
     ingestion_target: DocumentIngestionTargetDep,
+    session: SessionDep,
 ) -> IntegrationService:
     """Builds the application service for Google Drive integrations."""
-    return IntegrationService(provider=provider, ingestion_target=ingestion_target, index_name=settings.DRIVE_INDEX_NAME)
+    from contractai_backend.modules.audit.composition import build_default_contract_activity_service
+    contract_activity_service = build_default_contract_activity_service(session=session)
+    return IntegrationService(
+        provider=provider,
+        ingestion_target=ingestion_target,
+        index_name=settings.DRIVE_INDEX_NAME,
+        contract_activity_service=contract_activity_service,
+    )
 
 
 @asynccontextmanager
@@ -89,7 +97,15 @@ async def build_background_integration_service() -> AsyncIterator[IntegrationSer
             )
             ingestion_target = get_document_ingestion_target(document_service=document_service)
 
-            yield get_integration_service(provider=provider, ingestion_target=ingestion_target)
+            from contractai_backend.modules.audit.composition import build_default_contract_activity_service
+            contract_activity_service = build_default_contract_activity_service(session=session)
+
+            yield IntegrationService(
+                provider=provider,
+                ingestion_target=ingestion_target,
+                index_name=settings.DRIVE_INDEX_NAME,
+                contract_activity_service=contract_activity_service,
+            )
     finally:
         if async_qdrant is not None:
             await async_qdrant.close()
@@ -213,6 +229,7 @@ async def _process_single_file(
     file_item: dict[str, Any],
     organization_id: int,
     imported_by_user_id: int | None,
+    imported_by: dict[str, Any] | None = None,
 ) -> bool:
     file_id = str(file_item.get("file_id") or "").strip()
     if not file_id:
@@ -231,6 +248,7 @@ async def _process_single_file(
                 files=[file_item],
                 organization_id=organization_id,
                 imported_by_user_id=imported_by_user_id,
+                imported_by=imported_by,
             )
 
         if not token_is_valid:
@@ -257,6 +275,7 @@ async def process_drive_import_in_background(
     files: list[dict[str, Any]],
     organization_id: int,
     imported_by_user_id: int | None = None,
+    imported_by: dict[str, Any] | None = None,
 ) -> None:
     tracker = job_registry.get(job_id)
     if not tracker:
@@ -270,6 +289,7 @@ async def process_drive_import_in_background(
             file_item=file_item,
             organization_id=organization_id,
             imported_by_user_id=imported_by_user_id,
+            imported_by=imported_by,
         )
         if not should_continue:
             return

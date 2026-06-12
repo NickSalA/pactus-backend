@@ -4,8 +4,11 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import Any
 
+from typing import Any
+
 from .....core.application.base import BaseRepository
 from ....documents.domain import DocumentType
+from ....users.domain.entities import UserTable
 from ....users.domain.value_objs import UserRole
 from ...domain.entities import TemplateFormatTable, TemplateTable
 
@@ -57,6 +60,6 @@ class IOrganizationRepository(ABC):
 
 class IDocumentModuleAdapter(ABC):
     @abstractmethod
-    async def save_generated_document(self, document_payload: dict, file: bytes, user_role: UserRole | None) -> Any:
+    async def save_generated_document(self, document_payload: dict, file: bytes, user_role: UserRole | None, actor: UserTable | None = None) -> Any:
         """Envía los datos del PDF generado al módulo de Documentos para que él lo guarde."""
         pass

@@ -4,12 +4,19 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from contractai_backend.modules.audit.application.repositories import (
     ChatbotActivityRepository,
+    ContractActivityRepository,
     TemplateActivityRepository,
     UserActivityRepository,
 )
-from contractai_backend.modules.audit.application.services import ChatbotActivityService, TemplateActivityService, UserActivityService
+from contractai_backend.modules.audit.application.services import (
+    ChatbotActivityService,
+    ContractActivityService,
+    TemplateActivityService,
+    UserActivityService,
+)
 from contractai_backend.modules.audit.infrastructure import (
     SQLModelChatbotActivityRepository,
+    SQLModelContractActivityRepository,
     SQLModelTemplateActivityRepository,
     SQLModelUserActivityRepository,
 )
@@ -37,3 +44,11 @@ def build_template_activity_service(repository: TemplateActivityRepository) -> T
 
 def build_default_template_activity_service(*, session: AsyncSession) -> TemplateActivityService:
     return build_template_activity_service(repository=SQLModelTemplateActivityRepository(session=session))
+
+
+def build_contract_activity_service(repository: ContractActivityRepository) -> ContractActivityService:
+    return ContractActivityService(repository=repository)
+
+
+def build_default_contract_activity_service(*, session: AsyncSession) -> ContractActivityService:
+    return build_contract_activity_service(repository=SQLModelContractActivityRepository(session=session))

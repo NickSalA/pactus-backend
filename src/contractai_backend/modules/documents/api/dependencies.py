@@ -1,6 +1,6 @@
 """Dependency Injection for the documents module."""
 
-from typing import Annotated
+from typing import Annotated, Any
 
 import httpx
 from fastapi import Depends
@@ -134,3 +134,11 @@ async def get_document_command_service(
 async def get_document_query_service(sql_repo: DocumentQueryRepoDep) -> DocumentQueryService:
     """Construye un servicio de lectura para documentos."""
     return build_document_query_service(query_repo=sql_repo)
+
+
+async def get_contract_activity_service_for_documents(
+    session: SessionDep,
+) -> Any:
+    """Construye el servicio de auditoría de contratos (lazy import)."""
+    from contractai_backend.modules.audit.composition import build_default_contract_activity_service
+    return build_default_contract_activity_service(session=session)

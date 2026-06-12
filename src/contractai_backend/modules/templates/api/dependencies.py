@@ -1,6 +1,6 @@
 """Módulo de dependencias para el API de plantillas."""
 
-from typing import Annotated
+from typing import Annotated, Any
 
 import httpx
 from fastapi import Depends
@@ -120,6 +120,12 @@ TemplateDraftGeneratorDep = Annotated[ITemplateDraftGenerator, Depends(get_templ
 TemplateActivityServiceDep = Annotated[TemplateActivityService, Depends(get_template_activity_service)]
 
 
+async def get_contract_activity_service_for_templates(session: SessionDep) -> Any:
+    """Devuelve el servicio de auditoría de contratos (lazy import)."""
+    from contractai_backend.modules.audit.composition import build_default_contract_activity_service
+    return build_default_contract_activity_service(session=session)
+
+
 async def get_template_service(
     template_repo: TemplateRepositoryDep,
     template_format_repo: TemplateFormatRepositoryDep,
@@ -127,6 +133,7 @@ async def get_template_service(
     organization_repo: OrganizationRepositoryDep,
     renderer: TemplateRendererDep,
     generator: DocumentGeneratorDep,
+    contract_activity_service: Annotated[Any, Depends(get_contract_activity_service_for_templates)],
 ) -> TemplateService:
     """Devuelve una instancia del servicio de plantillas."""
     return TemplateService(
@@ -136,6 +143,7 @@ async def get_template_service(
         organization_repo=organization_repo,
         renderer=renderer,
         document_generator=generator,
+        contract_activity_service=contract_activity_service,
     )
 
 

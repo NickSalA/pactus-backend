@@ -11,6 +11,7 @@ from httpx import ASGITransport, AsyncClient
 
 from contractai_backend.core.exceptions.base import AppError
 from contractai_backend.modules.documents.api.dependencies import (
+    get_contract_activity_service_for_documents,
     get_document_command_service,
     get_document_query_service,
     get_service_catalog_service,
@@ -27,7 +28,8 @@ from contractai_backend.shared.api.error_handlers import app_error_handler
 def _make_app(mock_document_service=None, mock_query_service=None, mock_catalog_service=None) -> FastAPI:
     app = FastAPI()
     app.include_router(router, prefix="/documents")
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1, organization_id=1)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1, organization_id=1, full_name="Admin", email="admin@test.com", role="ADMIN", is_active=True)
+    app.dependency_overrides[get_contract_activity_service_for_documents] = lambda: AsyncMock()
     app.add_exception_handler(AppError, app_error_handler)  # type: ignore[arg-type]
 
     if mock_document_service is not None:

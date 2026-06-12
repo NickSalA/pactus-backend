@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Sequence
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Form, Query, Response, UploadFile, status
 from pydantic import ValidationError
@@ -12,7 +12,12 @@ from ...catalog.application.services import ServiceCatalogService
 from ...users.domain.value_objs import UserRole
 from ..application.services import DocumentCommandService, DocumentQueryService
 from ..domain.exceptions import DocumentNotFoundError, DocumentValidationError, InvalidDocumentFileError
-from .dependencies import get_document_command_service, get_document_query_service, get_service_catalog_service
+from .dependencies import (
+    get_contract_activity_service_for_documents,
+    get_document_command_service,
+    get_document_query_service,
+    get_service_catalog_service,
+)
 from .schemas import (
     CreateDocumentDraftRequest,
     DocumentCatalogServiceResponse,
@@ -45,9 +50,12 @@ async def create_document(
     file: UploadFile,
     service: Annotated[DocumentCommandService, Depends(get_document_command_service)],
     current_user: CurrentUserDep,
+    audit_service: Annotated[Any, Depends(get_contract_activity_service_for_documents)],
     document: str = Form("{}"),
 ) -> DocumentResponse:
     """Endpoint to create a new document."""
+    from contractai_backend.modules.audit.domain.value_objs import AuditContractAction
+
     try:
         doc_data = json.loads(document)
         doc_obj = CreateDocumentDraftRequest(**doc_data)
@@ -67,6 +75,16 @@ async def create_document(
         organization_id=current_user.organization_id,
         user_role=user_role,
     )
+
+    await audit_service.record(
+        action=AuditContractAction.CREATED,
+        actor=current_user,
+        document_id=saved_document.id,
+        document_name=saved_document.file_name,
+        document_type=saved_document.type,
+        state=str(saved_document.state.value) if saved_document.state else None,
+    )
+
     return DocumentResponse.model_validate(saved_document)
 
 
@@ -126,16 +144,27 @@ async def get_document_file_url(
 async def update_document(
     document_id: int,
     service: Annotated[DocumentCommandService, Depends(get_document_command_service)],
+    query_service: Annotated[DocumentQueryService, Depends(get_document_query_service)],
     current_user: CurrentUserDep,
+    audit_service: Annotated[Any, Depends(get_contract_activity_service_for_documents)],
     document: str = Form(...),
     file: UploadFile | None = None,
 ) -> DocumentResponse:
     """Endpoint to update an existing document."""
+    from contractai_backend.modules.audit.domain.value_objs import AuditContractAction
+
     try:
         doc_data = json.loads(document)
         doc_obj = UpdateDocumentRequest(**doc_data)
     except (json.JSONDecodeError, ValidationError) as e:
         raise DocumentValidationError(f"Datos del documento invalidos: {e}") from e
+
+    previous_doc = await query_service.get_document(
+        id=document_id,
+        organization_id=current_user.organization_id,
+        user_role=getattr(current_user, "role", None),
+    )
+    previous_state = str(previous_doc.state.value) if previous_doc and previous_doc.state else None
 
     file_data = None
     if file:
@@ -153,6 +182,17 @@ async def update_document(
         user_role=user_role,
         file_data=file_data,
     )
+
+    await audit_service.record(
+        action=AuditContractAction.UPDATED,
+        actor=current_user,
+        document_id=updated_doc.id,
+        document_name=updated_doc.file_name,
+        document_type=updated_doc.type,
+        previous_state=previous_state,
+        state=str(updated_doc.state.value) if updated_doc.state else None,
+    )
+
     return DocumentResponse.model_validate(updated_doc)
 
 
@@ -160,8 +200,30 @@ async def update_document(
 async def delete_document(
     document_id: int,
     service: Annotated[DocumentCommandService, Depends(get_document_command_service)],
+    query_service: Annotated[DocumentQueryService, Depends(get_document_query_service)],
     current_user: CurrentUserDep,
+    audit_service: Annotated[Any, Depends(get_contract_activity_service_for_documents)],
 ) -> None:
     """Endpoint to delete a document by its ID."""
+    from contractai_backend.modules.audit.domain.value_objs import AuditContractAction
+
     user_role = getattr(current_user, "role", None)
+
+    previous_doc = await query_service.get_document(
+        id=document_id,
+        organization_id=current_user.organization_id,
+        user_role=user_role,
+    )
+
     await service.delete_document(id=document_id, organization_id=current_user.organization_id, user_role=user_role)
+
+    if previous_doc:
+        await audit_service.record(
+            action=AuditContractAction.DELETED,
+            actor=current_user,
+            document_id=previous_doc.id,
+            document_name=previous_doc.file_name,
+            document_type=previous_doc.type,
+            previous_state=str(previous_doc.state.value) if previous_doc.state else None,
+            state=None,
+        )

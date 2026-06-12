@@ -6,6 +6,7 @@ from typing import Any
 
 from ....documents.domain import DocumentType
 from ....documents.domain.access_policy import can_write_document_type
+from ....users.domain.entities import UserTable
 from ....users.domain.value_objs import UserRole
 from ...domain.entities import TemplateContent, TemplateFormatTable, TemplateTable
 from ...domain.exceptions import TemplateAccessDeniedError, TemplateNotFoundError, TemplateStateError, TemplateValidationError
@@ -29,6 +30,7 @@ class TemplateService:
         renderer: ITemplateRenderer,
         document_generator: IDocumentGenerator,
         document_adapter: IDocumentModuleAdapter,
+        contract_activity_service: Any | None = None,
     ):
         """Stores dependencies for template reads and rendering."""
         self.template_repo = template_repo
@@ -37,6 +39,7 @@ class TemplateService:
         self.renderer = renderer
         self.document_generator = document_generator
         self.document_adapter = document_adapter
+        self.contract_activity_service = contract_activity_service
         self.content_synchronizer = TemplateContentSynchronizer()
         self.rendered_contract_formatter = RenderedContractFormatter()
 
@@ -46,6 +49,7 @@ class TemplateService:
         organization_id: int,
         form_data: dict[str, Any],
         user_role: UserRole | None,
+        actor: UserTable | None = None,
     ):
         """Generates a contract from a published template."""
         template = await self._get_and_validate_template(template_id, organization_id, user_role)
@@ -94,11 +98,26 @@ class TemplateService:
             "company_contract": company_contract,
             "labor_contract": labor_contract,
         }
-        return await self.document_adapter.save_generated_document(
+        nuevo_documento = await self.document_adapter.save_generated_document(
             document_payload=document_payload,
             file=pdf_bytes,
             user_role=user_role,
+            actor=actor,
         )
+
+        if actor is not None and self.contract_activity_service is not None:
+            from contractai_backend.modules.audit.domain.value_objs import AuditContractAction
+
+            await self.contract_activity_service.record(
+                action=AuditContractAction.GENERATED_FROM_TEMPLATE,
+                actor=actor,
+                document_id=nuevo_documento.id,
+                document_name=nuevo_documento.file_name,
+                document_type=nuevo_documento.type,
+                state=str(nuevo_documento.state.value) if nuevo_documento.state else None,
+            )
+
+        return nuevo_documento
 
     async def _get_and_validate_template(self, template_id: int, organization_id: int, user_role: UserRole | None) -> TemplateTable:
         template = await self.template_repo.get_template_by_id(template_id=template_id, organization_id=organization_id)

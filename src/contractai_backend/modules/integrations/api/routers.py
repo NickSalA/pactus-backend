@@ -68,6 +68,15 @@ async def import_drive_files(request: ImportRequest, background_tasks: Backgroun
     files_payload = [file_item.model_dump(mode="python", exclude_unset=True, exclude_none=True) for file_item in request.files]
     tracker = create_job(files_payload, current_user.organization_id, current_user.id)
 
+    imported_by = {
+        "id": current_user.id,
+        "organization_id": current_user.organization_id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "role": str(current_user.role) if current_user.role else None,
+        "is_active": current_user.is_active,
+    }
+
     background_tasks.add_task(
         process_drive_import_in_background,
         tracker.job_id,
@@ -75,6 +84,7 @@ async def import_drive_files(request: ImportRequest, background_tasks: Backgroun
         files_payload,
         current_user.organization_id,
         current_user.id,
+        imported_by,
     )
 
     return ImportResponse(
