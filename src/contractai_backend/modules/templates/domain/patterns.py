@@ -236,19 +236,3 @@ INSTRUCTIONAL_PLACEHOLDER_PREFIXES = (
     "consigne",
 )
 
-DOCUMENT_TYPE_PROMPT_RULES: dict[str, str] = {
-    "COMPANY": (
-        "- IMPORTANT: You MUST use the following canonical keys for client data: 'cliente_nombre', 'cliente_ruc', 'cliente_domicilio', 'representante_cliente'.\n"
-        "- For financial data, use 'monto_retribucion' and 'moneda'.\n"
-        "- For dates, use 'fecha_inicio' and 'fecha_fin'.\n"
-        "- If the reference document does not explicitly state the client's RUC or name, you MUST add 'cliente_nombre' and 'cliente_ruc' to content.operational_fields so the backend can collect them.\n"
-    ),
-    "LABOR": (
-        "- IMPORTANT: You MUST use the following canonical keys for the employee: 'trabajador_nombre', 'trabajador_dni', 'trabajador_domicilio'.\n"
-        "- For the job role, use 'cargo'.\n"
-        "- For the remuneration, ALWAYS use 'salario' (must be type number), 'moneda' (PEN/USD), and 'periodicidad' (e.g. MENSUAL).\n"
-        "- For the contract type, use 'modalidad'.\n"
-        "- For dates, use 'fecha_inicio' and 'fecha_fin'.\n"
-        "- Any of these canonical keys that do not naturally appear in the text MUST be added to content.operational_fields. They are mandatory for backend processing.\n"
-    )
-}
