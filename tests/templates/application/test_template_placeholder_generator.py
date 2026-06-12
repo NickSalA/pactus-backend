@@ -8,7 +8,7 @@ from contractai_backend.modules.templates.application.services.template_placehol
 class TestTemplatePlaceholderGenerator:
     def test_infers_placeholder_from_common_field_patterns(self):
         placeholder = TemplatePlaceholderGenerator.build_placeholder(key="gerente_ruc", label="RUC del Gerente", field_type="text")
-        assert placeholder == "Ej. RUC del Gerente"
+        assert placeholder == "Ej. 20123456789"
 
     def test_infers_date_placeholder_from_field_type(self):
         placeholder = TemplatePlaceholderGenerator.build_placeholder(key="fecha_inicio_contrato", label="Fecha de Inicio", field_type="date")

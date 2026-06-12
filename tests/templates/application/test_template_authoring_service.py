@@ -833,7 +833,7 @@ class TestGenerateDraftFromPrompt:
         )
 
         assert all(field.required for field in draft.content.fields)
-        assert draft.content.fields[0].placeholder == "Ej. 1000"
+        assert draft.content.fields[0].placeholder == "Ej. 20123456789"
         assert draft.content.fields[1].placeholder == "Ej. 1000"
 
     @pytest.mark.asyncio
@@ -996,3 +996,29 @@ class TestReferenceDocumentClassifier:
         )
 
         assert detected_type == DocumentType.COMPANY
+
+
+class TestTemplateFieldTypeInference:
+    def test_infers_correct_type_for_currency_and_amount_fields(self):
+        from contractai_backend.modules.templates.application.services.template_content_synchronizer import TemplateContentSynchronizer
+
+        synchronizer = TemplateContentSynchronizer()
+
+        # Currency name / type fields should be 'text'
+        assert synchronizer._infer_field_type(key="moneda", label="Moneda de pago", placeholder=None) == "text"
+        assert synchronizer._infer_field_type(key="tipo_moneda", label="Tipo de moneda", placeholder=None) == "text"
+        assert synchronizer._infer_field_type(key="moneda_pago", label="Moneda", placeholder=None) == "text"
+
+        # Monetary amount fields should be 'number'
+        assert synchronizer._infer_field_type(key="monto_moneda", label="Monto de la moneda", placeholder=None) == "number"
+        assert synchronizer._infer_field_type(key="valor_moneda", label="Valor en moneda", placeholder=None) == "number"
+        assert synchronizer._infer_field_type(key="retribucion_mensual", label="Monto retribución", placeholder=None) == "number"
+
+        # Identifiers should be 'text'
+        assert synchronizer._infer_field_type(key="representante_cliente_dni", label="DNI", placeholder=None) == "text"
+        assert synchronizer._infer_field_type(key="ruc_empresa", label="RUC", placeholder=None) == "text"
+        assert synchronizer._infer_field_type(key="telefono_contacto", label="Telefono", placeholder=None) == "text"
+
+        # Explicit checks for user-provided examples
+        assert synchronizer._infer_field_type(key="monto_retribucion", label="Monto de la retribución mensual (numérico)", placeholder=None) == "number"
+        assert synchronizer._infer_field_type(key="monto_retribucion_literal", label="Monto de la retribución mensual (en letras)", placeholder=None) == "text"

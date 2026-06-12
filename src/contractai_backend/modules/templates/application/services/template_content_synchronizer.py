@@ -375,7 +375,11 @@ class TemplateContentSynchronizer:
     def _infer_field_type(self, key: str, label: str, placeholder: str | None) -> str:
         """Infers a sensible field type from key and label semantics."""
         tokens = self._tokenize_field(TemplateField(key=key, label=label, placeholder=placeholder))
-        if tokens & {"literal", "letras"}:
+        if tokens & {"literal", "letras", "ruc", "dni", "telefono"}:
+            return "text"
+        if tokens & {"moneda", "divisa"}:
+            if tokens & {"monto", "valor", "cantidad", "precio", "costo"}:
+                return "number"
             return "text"
         if tokens & {"hora", "horario"} and not tokens & {"duracion", "dias", "laborales"}:
             return "time"
@@ -385,7 +389,7 @@ class TemplateContentSynchronizer:
             return "time"
         if "fecha" in tokens or key.endswith("_date"):
             return "date"
-        if tokens & {"numero", "cantidad", "monto", "porcentaje", "valor", "retribucion", "remuneracion", "utilidad", "ruc", "dni", "telefono"}:
+        if tokens & {"numero", "cantidad", "monto", "porcentaje", "valor", "retribucion", "remuneracion", "utilidad"}:
             return "number"
         return "text"
 

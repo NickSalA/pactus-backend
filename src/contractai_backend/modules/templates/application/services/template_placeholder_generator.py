@@ -24,6 +24,12 @@ class TemplatePlaceholderGenerator:
         if key in canonical_examples:
             return canonical_examples[key]
 
+        normalized_key = key.lower()
+        if "dni" in normalized_key:
+            return "Ej. 12345678"
+        if "ruc" in normalized_key:
+            return "Ej. 20123456789"
+
         if field_type == "date":
             return "Ej. 2026-12-31"
         if field_type == "time":
