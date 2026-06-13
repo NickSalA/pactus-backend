@@ -17,8 +17,25 @@ from contractai_backend.shared.config import settings
 def _make_app(user_id: int = 5, organization_id: int = 9) -> FastAPI:
     app = FastAPI()
     app.include_router(router, prefix="/integrations")
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=user_id, organization_id=organization_id)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        id=user_id,
+        organization_id=organization_id,
+        email=f"user-{user_id}@example.com",
+        full_name=f"User {user_id}",
+        role=None,
+    )
     return app
+
+
+def _expected_imported_by(user_id: int = 5, organization_id: int = 9) -> dict:
+    return {
+        "id": user_id,
+        "organization_id": organization_id,
+        "email": f"user-{user_id}@example.com",
+        "full_name": f"User {user_id}",
+        "role": None,
+        "is_active": True,
+    }
 
 
 @pytest.fixture(autouse=True)
@@ -71,7 +88,14 @@ class TestImportDriveFiles:
         }
         assert response_payload["job_id"]
         assert response_payload["job_id"] in job_registry._jobs
-        mock_background_import.assert_awaited_once_with(response_payload["job_id"], import_request.token, expected_files_payload, 9, 5)
+        mock_background_import.assert_awaited_once_with(
+            response_payload["job_id"],
+            import_request.token,
+            expected_files_payload,
+            9,
+            5,
+            _expected_imported_by(),
+        )
 
     @pytest.mark.asyncio
     async def test_import_route_accepts_files_without_document_payload(self):
@@ -98,7 +122,14 @@ class TestImportDriveFiles:
         response_payload = response.json()
         assert response_payload["job_id"]
         assert response_payload["job_id"] in job_registry._jobs
-        mock_background_import.assert_awaited_once_with(response_payload["job_id"], import_request.token, expected_files_payload, 9, 5)
+        mock_background_import.assert_awaited_once_with(
+            response_payload["job_id"],
+            import_request.token,
+            expected_files_payload,
+            9,
+            5,
+            _expected_imported_by(),
+        )
 
     @pytest.mark.asyncio
     async def test_import_route_preserves_empty_document_overrides_as_empty_object(self):
@@ -130,6 +161,7 @@ class TestImportDriveFiles:
             [{"file_id": "drive-file-1", "document": {}}],
             9,
             5,
+            _expected_imported_by(),
         )
 
     @pytest.mark.asyncio
@@ -168,6 +200,7 @@ class TestImportDriveFiles:
             [{"file_id": "drive-file-1", "document": {}}],
             9,
             5,
+            _expected_imported_by(),
         )
 
     @pytest.mark.asyncio
