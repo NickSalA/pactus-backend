@@ -11,6 +11,7 @@ from httpx import ASGITransport, AsyncClient
 
 from contractai_backend.core.exceptions.base import AppError
 from contractai_backend.modules.documents.api.dependencies import (
+    get_contract_activity_service_for_documents,
     get_document_command_service,
     get_document_query_service,
     get_service_catalog_service,
@@ -24,7 +25,7 @@ from contractai_backend.shared.api.dependencies.security import get_current_user
 from contractai_backend.shared.api.error_handlers import app_error_handler
 
 
-def _make_app(mock_document_service=None, mock_query_service=None, mock_catalog_service=None) -> FastAPI:
+def _make_app(mock_document_service=None, mock_query_service=None, mock_catalog_service=None, mock_contract_activity_service=None) -> FastAPI:
     app = FastAPI()
     app.include_router(router, prefix="/documents")
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1, organization_id=1)
@@ -36,6 +37,8 @@ def _make_app(mock_document_service=None, mock_query_service=None, mock_catalog_
         app.dependency_overrides[get_document_query_service] = lambda: mock_query_service
     if mock_catalog_service is not None:
         app.dependency_overrides[get_service_catalog_service] = lambda: mock_catalog_service
+    if mock_contract_activity_service is not None:
+        app.dependency_overrides[get_contract_activity_service_for_documents] = lambda: mock_contract_activity_service
 
     return app
 
@@ -133,8 +136,9 @@ class TestCreateDocument:
         doc = _make_doc()
         mock_document_service = AsyncMock()
         mock_document_service.create_document.return_value = doc
+        mock_audit = AsyncMock()
 
-        app = _make_app(mock_document_service=mock_document_service)
+        app = _make_app(mock_document_service=mock_document_service, mock_contract_activity_service=mock_audit)
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 "/documents/",
@@ -148,7 +152,8 @@ class TestCreateDocument:
     @pytest.mark.asyncio
     async def test_create_document_invalid_json_returns_400(self):
         mock_document_service = AsyncMock()
-        app = _make_app(mock_document_service=mock_document_service)
+        mock_audit = AsyncMock()
+        app = _make_app(mock_document_service=mock_document_service, mock_contract_activity_service=mock_audit)
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
@@ -164,8 +169,9 @@ class TestCreateDocument:
         doc = _make_doc()
         mock_document_service = AsyncMock()
         mock_document_service.create_document.return_value = doc
+        mock_audit = AsyncMock()
 
-        app = _make_app(mock_document_service=mock_document_service)
+        app = _make_app(mock_document_service=mock_document_service, mock_contract_activity_service=mock_audit)
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 "/documents/",
@@ -181,8 +187,11 @@ class TestDeleteDocument:
     async def test_delete_document_returns_204(self):
         mock_document_service = AsyncMock()
         mock_document_service.delete_document.return_value = True
+        mock_query_service = AsyncMock()
+        mock_query_service.get_document.return_value = _make_doc()
+        mock_audit = AsyncMock()
 
-        app = _make_app(mock_document_service=mock_document_service)
+        app = _make_app(mock_document_service=mock_document_service, mock_query_service=mock_query_service, mock_contract_activity_service=mock_audit)
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.delete("/documents/1")
 
@@ -192,8 +201,11 @@ class TestDeleteDocument:
     async def test_delete_document_not_found_returns_404(self):
         mock_document_service = AsyncMock()
         mock_document_service.delete_document.side_effect = DocumentNotFoundError(document_id=99)
+        mock_query_service = AsyncMock()
+        mock_query_service.get_document.return_value = _make_doc()
+        mock_audit = AsyncMock()
 
-        app = _make_app(mock_document_service=mock_document_service)
+        app = _make_app(mock_document_service=mock_document_service, mock_query_service=mock_query_service, mock_contract_activity_service=mock_audit)
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.delete("/documents/99")
 
@@ -233,8 +245,11 @@ class TestUpdateDocument:
 
         mock_document_service = AsyncMock()
         mock_document_service.update_document.return_value = updated
+        mock_query_service = AsyncMock()
+        mock_query_service.get_document.return_value = _make_doc()
+        mock_audit = AsyncMock()
 
-        app = _make_app(mock_document_service=mock_document_service)
+        app = _make_app(mock_document_service=mock_document_service, mock_query_service=mock_query_service, mock_contract_activity_service=mock_audit)
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.patch(
                 "/documents/1",
@@ -248,8 +263,11 @@ class TestUpdateDocument:
     async def test_update_document_not_found_returns_404(self):
         mock_document_service = AsyncMock()
         mock_document_service.update_document.side_effect = DocumentNotFoundError(document_id=99)
+        mock_query_service = AsyncMock()
+        mock_query_service.get_document.return_value = _make_doc()
+        mock_audit = AsyncMock()
 
-        app = _make_app(mock_document_service=mock_document_service)
+        app = _make_app(mock_document_service=mock_document_service, mock_query_service=mock_query_service, mock_contract_activity_service=mock_audit)
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.patch(
