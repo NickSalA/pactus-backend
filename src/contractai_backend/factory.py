@@ -81,4 +81,29 @@ def create() -> FastAPI:
         """Endpoint raíz para verificar que la aplicación está funcionando."""
         return {"message": "¡Bienvenido a ContractAI-Backend!", "version": __version__}
 
+    @app.get(path="/perf-test-data")
+    def perf_test_data():
+        """Endpoint simple de prueba de rendimiento sin base de datos ni autenticación."""
+        return {
+            "status": "ok",
+            "message": "Performance test mock data",
+            "data": [
+                {"id": 1, "name": "Item 1", "category": "General"},
+                {"id": 2, "name": "Item 2", "category": "Special"},
+                {"id": 3, "name": "Item 3", "category": "Advanced"},
+            ],
+        }
+
+    @app.post(path="/perf-render-template")
+    def perf_render_template(payload: dict):
+        """Simula el renderizado de un contrato sustituyendo variables."""
+        template = "CONTRATO DE SERVICIOS entre la empresa {company} y el cliente {client}. Valor: {value} {currency}."
+        rendered = template.format(
+            company=payload.get("company", "Empresa A"),
+            client=payload.get("client", "Cliente B"),
+            value=payload.get("value", "5000"),
+            currency=payload.get("currency", "USD")
+        )
+        return {"rendered": rendered}
+
     return app

@@ -33,6 +33,7 @@ dependencies = [
     "markdown2",
     "weasyprint",
     "langchain-openai>=1.1.12",
+    "locust>=2.44.1",
 ]
 
 [project.scripts]
@@ -111,6 +112,7 @@ dev = [
     "httpx>=0.27.0",
     "ruff",
     "ty",
+    "locust>=2.44.1",
 ]
 
 [tool.pytest.ini_options]
