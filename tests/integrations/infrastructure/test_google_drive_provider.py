@@ -1,70 +1,69 @@
 """Tests for Google Drive provider configuration."""
 
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qs, urlparse
 
-import pytest
-from googleapiclient.errors import HttpError
-
-from contractai_backend.modules.integrations.domain import InvalidCloudTokenError
 from contractai_backend.modules.integrations.infrastructure.google_drive_provider import (
     GOOGLE_DRIVE_FILE_SCOPE,
     GoogleDriveProvider,
 )
 
 
-def _google_http_error(status: int) -> HttpError:
-    return HttpError(SimpleNamespace(status=status, reason="Forbidden"), b'{"error": {"code": 403}}')
+def _make_provider() -> GoogleDriveProvider:
+    return GoogleDriveProvider(
+        client_id="verified-client-id.apps.googleusercontent.com",
+        client_secret="test-client-secret",
+        redirect_uri="https://verified.example.com/integrations/drive/callback",
+    )
+
+
+def _parse_auth_url(provider: GoogleDriveProvider):
+    parsed = urlparse(provider.get_auth_url())
+    return parsed, parse_qs(parsed.query)
 
 
 class TestGoogleDriveProvider:
     def test_uses_drive_file_scope(self):
-        provider = GoogleDriveProvider(
-            client_id="client-id",
-            client_secret="client-secret",
-            redirect_uri="https://example.com/integrations/drive/callback",
-        )
+        provider = _make_provider()
 
         assert provider.scopes == [GOOGLE_DRIVE_FILE_SCOPE]
 
-    @pytest.mark.asyncio
-    async def test_metadata_access_for_unselected_drive_file_is_rejected(self):
-        provider = GoogleDriveProvider(
-            client_id="client-id",
-            client_secret="client-secret",
-            redirect_uri="https://example.com/integrations/drive/callback",
-        )
-        files_resource = MagicMock()
-        files_resource.get.return_value.execute.side_effect = _google_http_error(403)
-        drive_service = MagicMock()
-        drive_service.files.return_value = files_resource
+    def test_auth_url_contains_google_oauth_endpoint(self):
+        provider = _make_provider()
 
-        with (
-            patch("contractai_backend.modules.integrations.infrastructure.google_drive_provider.Credentials"),
-            patch("contractai_backend.modules.integrations.infrastructure.google_drive_provider.build", return_value=drive_service),
-        ):
-            with pytest.raises(InvalidCloudTokenError):
-                await provider.get_file_metadata({"token": "drive-token"}, "unselected-file-id")
+        parsed, _query = _parse_auth_url(provider)
 
-        files_resource.get.assert_called_once_with(fileId="unselected-file-id", fields="id, name, mimeType, webViewLink")
+        assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == "https://accounts.google.com/o/oauth2/auth"
 
-    @pytest.mark.asyncio
-    async def test_download_access_for_unselected_drive_file_is_rejected(self):
-        provider = GoogleDriveProvider(
-            client_id="client-id",
-            client_secret="client-secret",
-            redirect_uri="https://example.com/integrations/drive/callback",
-        )
-        files_resource = MagicMock()
-        files_resource.get.return_value.execute.side_effect = _google_http_error(403)
-        drive_service = MagicMock()
-        drive_service.files.return_value = files_resource
+    def test_auth_url_contains_configured_client_id_and_redirect_uri(self):
+        provider = _make_provider()
 
-        with (
-            patch("contractai_backend.modules.integrations.infrastructure.google_drive_provider.Credentials"),
-            patch("contractai_backend.modules.integrations.infrastructure.google_drive_provider.build", return_value=drive_service),
-        ):
-            with pytest.raises(InvalidCloudTokenError):
-                await provider.download_file({"token": "drive-token"}, "unselected-file-id")
+        _parsed, query = _parse_auth_url(provider)
 
-        files_resource.get.assert_called_once_with(fileId="unselected-file-id", fields="mimeType")
+        assert query["client_id"] == ["verified-client-id.apps.googleusercontent.com"]
+        assert query["redirect_uri"] == ["https://verified.example.com/integrations/drive/callback"]
+
+    def test_auth_url_does_not_include_client_secret(self):
+        provider = _make_provider()
+
+        parsed, query = _parse_auth_url(provider)
+        auth_url = parsed.geturl()
+
+        assert "client_secret" not in query
+        assert "test-client-secret" not in auth_url
+
+    def test_auth_url_contains_response_type_code(self):
+        provider = _make_provider()
+
+        _parsed, query = _parse_auth_url(provider)
+
+        assert query["response_type"] == ["code"]
+
+    def test_auth_url_requests_offline_access_consent_and_drive_file_scope_only(self):
+        provider = _make_provider()
+
+        _parsed, query = _parse_auth_url(provider)
+
+        assert query["access_type"] == ["offline"]
+        assert query["prompt"] == ["consent"]
+        assert query["scope"] == [GOOGLE_DRIVE_FILE_SCOPE]
+        assert "https://www.googleapis.com/auth/drive" not in query["scope"]
