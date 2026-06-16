@@ -42,13 +42,13 @@ class TemplateActivityService:
             state=str(template.state.value) if template.state else None,
         )
 
-    async def record_deleted(self, *, actor: UserTable, template: TemplateTable) -> TemplateActivityTable:
+    async def record_published(self, *, actor: UserTable, template: TemplateTable, previous_state: str | None) -> TemplateActivityTable:
         return await self._record(
-            action=AuditTemplateAction.DELETED,
+            action=AuditTemplateAction.PUBLISHED,
             actor=actor,
             template=template,
-            previous_state=str(template.state.value) if template.state else None,
-            state=None,
+            previous_state=previous_state,
+            state=str(template.state.value) if template.state else None,
         )
 
     async def record_archived(self, *, actor: UserTable, template: TemplateTable, previous_state: str | None) -> TemplateActivityTable:

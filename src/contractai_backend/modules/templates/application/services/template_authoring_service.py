@@ -273,7 +273,7 @@ class TemplateAuthoringService:
         template.content = content.model_dump(mode="python")
         template.state = TemplateState.PUBLISHED
         published_template = await self.template_repo.publish(entity=template)
-        await self.activity_service.record_updated(actor=actor, template=published_template, previous_state=previous_state)
+        await self.activity_service.record_published(actor=actor, template=published_template, previous_state=previous_state)
         return build_template_response(published_template, template_format=template_format)
 
     async def archive_template(

@@ -14,7 +14,12 @@ from ...catalog.application.services import ServiceCatalogService
 from ...users.domain.value_objs import UserRole
 from ..application.services import DocumentCommandService, DocumentQueryService
 from ..domain.exceptions import DocumentNotFoundError, DocumentValidationError, InvalidDocumentFileError
-from .dependencies import get_contract_activity_service_for_documents, get_document_command_service, get_document_query_service, get_service_catalog_service
+from .dependencies import (
+    get_contract_activity_service_for_documents,
+    get_document_command_service,
+    get_document_query_service,
+    get_service_catalog_service,
+)
 from .schemas import (
     CreateDocumentDraftRequest,
     DocumentCatalogServiceResponse,
@@ -72,7 +77,7 @@ async def create_document(
     )
     response = DocumentResponse.model_validate(saved_document)
     await contract_activity_service.record(
-        action=AuditContractAction.CREATED,
+        action=AuditContractAction.MANUAL_UPLOAD,
         actor=current_user,
         document_id=response.id,
         company_contract_id=getattr(response.company_contract, "id", None) if response.company_contract else None,
