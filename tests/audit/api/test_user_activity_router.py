@@ -105,12 +105,13 @@ class TestUserActivityRouter:
     @pytest.mark.asyncio
     async def test_non_admin_cannot_list_activity(self):
         service = AsyncMock()
-        app = _make_app(service, role=UserRole.SUPERADMIN)
+        app = _make_app(service, role=UserRole.WORKER)
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/audit/users")
 
         assert response.status_code == 403
+        assert response.json()["type"] == "ForbiddenError"
         service.list_by_organization.assert_not_awaited()
 
 
@@ -140,4 +141,5 @@ class TestChatbotActivityRouter:
             response = await client.get("/audit/chatbot")
 
         assert response.status_code == 403
+        assert response.json()["type"] == "ForbiddenError"
         service.list_by_organization.assert_not_awaited()
