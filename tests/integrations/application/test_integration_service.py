@@ -82,12 +82,16 @@ class TestProcessImport:
     async def test_returns_false_on_invalid_token(self):
         provider = AsyncMock()
         provider.get_file_metadata.side_effect = InvalidCloudTokenError()
+        ingestion = AsyncMock()
 
-        service = _make_service(provider=provider)
-        files = [{"file_id": "abc", "document": {}}]
+        service = _make_service(provider=provider, ingestion=ingestion)
+        files = [{"file_id": "unselected-file-id", "document": {}}]
 
         result = await service.process_import(token={}, files=files, organization_id=1)
         assert result is False
+        provider.get_file_metadata.assert_awaited_once_with({}, "unselected-file-id")
+        provider.download_file.assert_not_awaited()
+        ingestion.ingest_drive_file.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_skips_file_not_found_and_continues(self):
