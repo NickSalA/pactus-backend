@@ -76,4 +76,5 @@ class TestContractActivityRouter:
             response = await client.get("/audit/contracts")
 
         assert response.status_code == 403
+        assert response.json()["type"] == "ForbiddenError"
         service.list_by_organization.assert_not_awaited()
