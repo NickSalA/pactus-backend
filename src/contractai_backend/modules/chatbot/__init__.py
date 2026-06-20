@@ -1,9 +1,8 @@
-from .api import chat_router, conversation_router, usage_router
+from .api import chat_router, conversation_router
 from .application import ChatbotService, ConversationService, IConversationRepository, ILLMProvider, VectorRepository
 from .domain import (
     ChatbotDatabaseUnavailableError,
     ChatbotTimeoutError,
-    ChatbotTokenUsage,
     ChatbotValidationError,
     ConversationNotFoundError,
     ConversationTable,
@@ -14,7 +13,7 @@ from .domain import (
     VectorDatabaseUnavailableError,
     VectorSearchError,
 )
-from .infrastructure import ConversationRepository, QdrantVectorRepository, TokenUsageRepository
+from .infrastructure import ConversationRepository, QdrantVectorRepository
 from .infrastructure.agent import (
     ContractAgentGraph,
     LangGraphLLMAdapter,
@@ -29,7 +28,6 @@ __all__ = [
     "ChatbotDatabaseUnavailableError",
     "ChatbotService",
     "ChatbotTimeoutError",
-    "ChatbotTokenUsage",
     "ChatbotValidationError",
     "ContractAgentGraph",
     "ConversationNotFoundError",
@@ -44,7 +42,6 @@ __all__ = [
     "LangGraphLLMAdapter",
     "Message",
     "QdrantVectorRepository",
-    "TokenUsageRepository",
     "VectorDatabaseUnavailableError",
     "VectorRepository",
     "VectorSearchError",
@@ -55,5 +52,4 @@ __all__ = [
     "conversation_router",
     "get_llm",
     "init_checkpointer",
-    "usage_router",
 ]

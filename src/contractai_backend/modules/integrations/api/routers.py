@@ -1,6 +1,6 @@
 """HTTP endpoints for third-party integrations."""
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
@@ -66,6 +66,15 @@ async def import_drive_files(request: ImportRequest, background_tasks: Backgroun
         )
 
     files_payload = [file_item.model_dump(mode="python", exclude_unset=True, exclude_none=True) for file_item in request.files]
+
+    imported_by: dict[str, Any] = {
+        "id": current_user.id,
+        "organization_id": current_user.organization_id,
+        "email": current_user.email,
+        "full_name": getattr(current_user, "full_name", None),
+        "role": str(current_user.role) if current_user.role else None,
+        "is_active": True,
+    }
     tracker = create_job(files_payload, current_user.organization_id, current_user.id)
 
     background_tasks.add_task(
@@ -75,6 +84,7 @@ async def import_drive_files(request: ImportRequest, background_tasks: Backgroun
         files_payload,
         current_user.organization_id,
         current_user.id,
+        imported_by,
     )
 
     return ImportResponse(

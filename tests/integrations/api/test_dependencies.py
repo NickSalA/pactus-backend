@@ -43,7 +43,7 @@ class TestBuildBackgroundIntegrationService:
         mock_session = MagicMock()
         mock_document_service = MagicMock()
         mock_ingestion_target = MagicMock()
-        mock_integration_service = MagicMock()
+        mock_contract_activity_service = MagicMock()
 
         with (
             patch("contractai_backend.modules.integrations.api.dependencies.get_cloud_storage_provider", return_value=mock_provider),
@@ -66,12 +66,14 @@ class TestBuildBackgroundIntegrationService:
                 return_value=mock_ingestion_target,
             ) as mock_get_document_ingestion_target,
             patch(
-                "contractai_backend.modules.integrations.api.dependencies.get_integration_service",
-                return_value=mock_integration_service,
-            ) as mock_get_integration_service,
+                "contractai_backend.modules.integrations.api.dependencies.build_default_contract_activity_service",
+                return_value=mock_contract_activity_service,
+            ) as mock_build_contract_activity_service,
         ):
             async with build_background_integration_service() as service:
-                assert service is mock_integration_service
+                assert service.provider is mock_provider
+                assert service.ingestion_target is mock_ingestion_target
+                assert service.contract_activity_service is mock_contract_activity_service
 
         mock_build_document_command_service.assert_called_once_with(
             session=mock_session,
@@ -80,7 +82,7 @@ class TestBuildBackgroundIntegrationService:
             http_client=mock_http_client,
         )
         mock_get_document_ingestion_target.assert_called_once_with(document_service=mock_document_service)
-        mock_get_integration_service.assert_called_once_with(provider=mock_provider, ingestion_target=mock_ingestion_target)
+        mock_build_contract_activity_service.assert_called_once_with(session=mock_session)
         mock_async_qdrant.close.assert_awaited_once()
         mock_sync_qdrant.close.assert_called_once_with()
         mock_http_client.aclose.assert_awaited_once()
@@ -136,12 +138,14 @@ class TestProcessDriveImportInBackground:
             files=[first_file],
             organization_id=7,
             imported_by_user_id=3,
+            imported_by=None,
         )
         second_service.process_import.assert_awaited_once_with(
             token=token,
             files=[second_file],
             organization_id=7,
             imported_by_user_id=3,
+            imported_by=None,
         )
 
     @pytest.mark.asyncio
@@ -179,6 +183,7 @@ class TestProcessDriveImportInBackground:
             files=[first_file],
             organization_id=7,
             imported_by_user_id=3,
+            imported_by=None,
         )
         second_service.process_import.assert_not_called()
 

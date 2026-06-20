@@ -1,6 +1,6 @@
-"""Adaptador para conectar el módulo de plantillas con el módulo de documentos."""
+from typing import Any
 
-from ...documents.application.dto import CreateDocumentRequest, DocumentResponse, FileRequest
+from ...documents.application.dto import CreateDocumentRequest, FileRequest
 from ...documents.application.services import DocumentCommandService
 from ...documents.domain import DocumentState
 from ...users.domain.value_objs import UserRole
@@ -11,8 +11,7 @@ class DocumentModuleAdapter(IDocumentModuleAdapter):
     def __init__(self, doc_service: DocumentCommandService):
         self.doc_service: DocumentCommandService = doc_service
 
-    async def save_generated_document(self, document_payload: dict, file: bytes, user_role: UserRole | None):
-        """Implementación del método para guardar el documento generado."""
+    async def save_generated_document(self, document_payload: dict, file: bytes, user_role: UserRole | None, actor: Any | None = None):
         doc_request = CreateDocumentRequest(
             name=document_payload.get("name"),
             client=document_payload.get("client"),
@@ -30,7 +29,7 @@ class DocumentModuleAdapter(IDocumentModuleAdapter):
 
         file_request = FileRequest(filename=document_payload["file_name"], content=file, content_type="application/pdf")
 
-        nuevo_documento: DocumentResponse = await self.doc_service.create_document(
+        nuevo_documento = await self.doc_service.create_document(
             data=doc_request,
             file_data=file_request,
             organization_id=document_payload["organization_id"],

@@ -11,13 +11,15 @@ from googleapiclient.http import MediaIoBaseDownload
 from contractai_backend.modules.integrations.application import ICloudIntegrationProvider
 from contractai_backend.modules.integrations.domain import CloudFileNotFoundError, CloudStorageIntegrationError, InvalidCloudTokenError
 
+GOOGLE_DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file"
+
 
 class GoogleDriveProvider(ICloudIntegrationProvider):
     def __init__(self, client_id: str, client_secret: str, redirect_uri: str):
         self.client_id = client_id
         self.client_secret = client_secret
         self.redirect_uri = redirect_uri
-        self.scopes = ["https://www.googleapis.com/auth/drive.readonly"]
+        self.scopes = [GOOGLE_DRIVE_FILE_SCOPE]
         self.client_config = {
             "web": {
                 "client_id": self.client_id,

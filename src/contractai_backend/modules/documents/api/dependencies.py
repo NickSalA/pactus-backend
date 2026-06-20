@@ -24,6 +24,8 @@ from ..application.repositories import (
     DocumentStructuredExtractor,
     VectorRepository,
 )
+from ...audit.application.services import ContractActivityService
+from ...audit.composition import build_default_contract_activity_service
 from ..application.services import DocumentCommandService, DocumentQueryService
 from ..composition import build_document_command_service, build_document_query_service
 from ..infrastructure import (
@@ -134,3 +136,7 @@ async def get_document_command_service(
 async def get_document_query_service(sql_repo: DocumentQueryRepoDep) -> DocumentQueryService:
     """Construye un servicio de lectura para documentos."""
     return build_document_query_service(query_repo=sql_repo)
+
+
+async def get_contract_activity_service_for_documents(session: SessionDep) -> ContractActivityService:
+    return build_default_contract_activity_service(session=session)

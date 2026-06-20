@@ -8,11 +8,18 @@ from fastapi import APIRouter, Depends, Form, Query, Response, UploadFile, statu
 from pydantic import ValidationError
 
 from ....shared.api.dependencies.security import CurrentUserDep
+from ...audit.application.services import ContractActivityService
+from ...audit.domain.value_objs import AuditContractAction
 from ...catalog.application.services import ServiceCatalogService
 from ...users.domain.value_objs import UserRole
 from ..application.services import DocumentCommandService, DocumentQueryService
 from ..domain.exceptions import DocumentNotFoundError, DocumentValidationError, InvalidDocumentFileError
-from .dependencies import get_document_command_service, get_document_query_service, get_service_catalog_service
+from .dependencies import (
+    get_contract_activity_service_for_documents,
+    get_document_command_service,
+    get_document_query_service,
+    get_service_catalog_service,
+)
 from .schemas import (
     CreateDocumentDraftRequest,
     DocumentCatalogServiceResponse,
@@ -45,6 +52,7 @@ async def create_document(
     file: UploadFile,
     service: Annotated[DocumentCommandService, Depends(get_document_command_service)],
     current_user: CurrentUserDep,
+    contract_activity_service: Annotated[ContractActivityService, Depends(get_contract_activity_service_for_documents)],
     document: str = Form("{}"),
 ) -> DocumentResponse:
     """Endpoint to create a new document."""
@@ -67,7 +75,18 @@ async def create_document(
         organization_id=current_user.organization_id,
         user_role=user_role,
     )
-    return DocumentResponse.model_validate(saved_document)
+    response = DocumentResponse.model_validate(saved_document)
+    await contract_activity_service.record(
+        action=AuditContractAction.MANUAL_UPLOAD,
+        actor=current_user,
+        document_id=response.id,
+        company_contract_id=getattr(response.company_contract, "id", None) if response.company_contract else None,
+        labor_contract_id=getattr(response.labor_contract, "id", None) if response.labor_contract else None,
+        document_name=response.file_name,
+        document_type=response.type,
+        state=str(response.state) if response.state else None,
+    )
+    return response
 
 
 @router.get(path="/", response_model=Sequence[DocumentResponse])
@@ -127,6 +146,8 @@ async def update_document(
     document_id: int,
     service: Annotated[DocumentCommandService, Depends(get_document_command_service)],
     current_user: CurrentUserDep,
+    query_service: Annotated[DocumentQueryService, Depends(get_document_query_service)],
+    contract_activity_service: Annotated[ContractActivityService, Depends(get_contract_activity_service_for_documents)],
     document: str = Form(...),
     file: UploadFile | None = None,
 ) -> DocumentResponse:
@@ -136,6 +157,9 @@ async def update_document(
         doc_obj = UpdateDocumentRequest(**doc_data)
     except (json.JSONDecodeError, ValidationError) as e:
         raise DocumentValidationError(f"Datos del documento invalidos: {e}") from e
+
+    previous_doc = await query_service.get_document(id=document_id, organization_id=current_user.organization_id, user_role=getattr(current_user, "role", None))
+    previous_state = str(getattr(previous_doc, "state", "")) if previous_doc else None
 
     file_data = None
     if file:
@@ -153,7 +177,19 @@ async def update_document(
         user_role=user_role,
         file_data=file_data,
     )
-    return DocumentResponse.model_validate(updated_doc)
+    response = DocumentResponse.model_validate(updated_doc)
+    await contract_activity_service.record(
+        action=AuditContractAction.UPDATED,
+        actor=current_user,
+        document_id=response.id,
+        company_contract_id=getattr(response.company_contract, "id", None) if response.company_contract else None,
+        labor_contract_id=getattr(response.labor_contract, "id", None) if response.labor_contract else None,
+        document_name=response.file_name,
+        document_type=response.type,
+        previous_state=previous_state,
+        state=str(response.state) if response.state else None,
+    )
+    return response
 
 
 @router.delete(path="/{document_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
@@ -161,7 +197,29 @@ async def delete_document(
     document_id: int,
     service: Annotated[DocumentCommandService, Depends(get_document_command_service)],
     current_user: CurrentUserDep,
+    query_service: Annotated[DocumentQueryService, Depends(get_document_query_service)],
+    contract_activity_service: Annotated[ContractActivityService, Depends(get_contract_activity_service_for_documents)],
 ) -> None:
     """Endpoint to delete a document by its ID."""
     user_role = getattr(current_user, "role", None)
+    previous_doc = await query_service.get_document(id=document_id, organization_id=current_user.organization_id, user_role=user_role)
+    pre_document_name = getattr(previous_doc, "file_name", None) if previous_doc else None
+    pre_document_type = getattr(previous_doc, "type", None) if previous_doc else None
+    pre_state = str(getattr(previous_doc, "state", "")) if previous_doc else None
+    pre_cc = getattr(previous_doc, "company_contract", None) if previous_doc else None
+    pre_lc = getattr(previous_doc, "labor_contract", None) if previous_doc else None
+    pre_company_contract_id = getattr(pre_cc, "id", None) if pre_cc else None
+    pre_labor_contract_id = getattr(pre_lc, "id", None) if pre_lc else None
+
     await service.delete_document(id=document_id, organization_id=current_user.organization_id, user_role=user_role)
+    await contract_activity_service.record(
+        action=AuditContractAction.DELETED,
+        actor=current_user,
+        document_id=document_id,
+        company_contract_id=pre_company_contract_id,
+        labor_contract_id=pre_labor_contract_id,
+        document_name=pre_document_name,
+        document_type=pre_document_type,
+        previous_state=pre_state,
+        state=pre_state,
+    )

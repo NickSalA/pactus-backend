@@ -9,13 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-from contractai_backend.modules.audit.api import chatbot_activity_router, user_activity_router
+from contractai_backend.modules.audit.api import audit_router
 from contractai_backend.modules.integrations.api import integrations_router
 from contractai_backend.modules.organizations.api import organizations_router
 
 from .core.exceptions.base import AppError
 from .modules.catalog.api.routers import router as services_router
-from .modules.chatbot.api import chat_router, conversation_router, usage_router
+from .modules.chatbot.api import chat_router, conversation_router
 from .modules.chatbot.infrastructure.agent import init_checkpointer
 from .modules.dashboard.api import dashboard_router
 from .modules.documents.api.routers import router as documents_router
@@ -56,12 +56,10 @@ def create() -> FastAPI:
     app.include_router(router=users_router, prefix="/user", tags=["Usuarios"])
     app.include_router(router=chat_router, prefix="/chatbot", tags=["Chatbot"])
     app.include_router(router=conversation_router, prefix="/conversations", tags=["Conversaciones"])
-    app.include_router(router=usage_router, prefix="/chatbot/usage", tags=["Chatbot Usage"])
     app.include_router(router=dashboard_router, prefix="/dashboard", tags=["Dashboard"])
     app.include_router(router=integrations_router, prefix="/integrations", tags=["Integraciones"])
     app.include_router(router=organizations_router, prefix="/organizations", tags=["Organizaciones"])
-    app.include_router(router=user_activity_router, prefix="/audit", tags=["Auditoría"])
-    app.include_router(router=chatbot_activity_router, prefix="/audit", tags=["Auditoría"])
+    app.include_router(router=audit_router, prefix="/audit", tags=["Auditoría"])
     app.include_router(router=notifications_router, prefix="/notifications", tags=["Notificaciones"])
     app.include_router(router=templates_router, prefix="/templates", tags=["Plantillas"])
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
@@ -82,5 +80,30 @@ def create() -> FastAPI:
     def home():
         """Endpoint raíz para verificar que la aplicación está funcionando."""
         return {"message": "¡Bienvenido a ContractAI-Backend!", "version": __version__}
+
+    @app.get(path="/perf-test-data")
+    def perf_test_data():
+        """Endpoint simple de prueba de rendimiento sin base de datos ni autenticación."""
+        return {
+            "status": "ok",
+            "message": "Performance test mock data",
+            "data": [
+                {"id": 1, "name": "Item 1", "category": "General"},
+                {"id": 2, "name": "Item 2", "category": "Special"},
+                {"id": 3, "name": "Item 3", "category": "Advanced"},
+            ],
+        }
+
+    @app.post(path="/perf-render-template")
+    def perf_render_template(payload: dict):
+        """Simula el renderizado de un contrato sustituyendo variables."""
+        template = "CONTRATO DE SERVICIOS entre la empresa {company} y el cliente {client}. Valor: {value} {currency}."
+        rendered = template.format(
+            company=payload.get("company", "Empresa A"),
+            client=payload.get("client", "Cliente B"),
+            value=payload.get("value", "5000"),
+            currency=payload.get("currency", "USD")
+        )
+        return {"rendered": rendered}
 
     return app

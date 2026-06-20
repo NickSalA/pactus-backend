@@ -4,6 +4,8 @@ from typing import Any
 
 from loguru import logger
 
+from contractai_backend.modules.audit.application.services import ContractActivityService
+from contractai_backend.modules.audit.domain.value_objs import AuditContractAction
 from contractai_backend.modules.integrations.application.repositories import ICloudIntegrationProvider, IDocumentIngestionTarget
 from contractai_backend.modules.integrations.domain import (
     CloudFileNotFoundError,
@@ -13,10 +15,11 @@ from contractai_backend.modules.integrations.domain import (
 
 
 class IntegrationService:
-    def __init__(self, provider: ICloudIntegrationProvider, ingestion_target: IDocumentIngestionTarget, index_name: str):
+    def __init__(self, provider: ICloudIntegrationProvider, ingestion_target: IDocumentIngestionTarget, index_name: str, contract_activity_service: ContractActivityService | None = None):
         self.provider = provider
         self.ingestion_target = ingestion_target
         self.index_name = index_name
+        self.contract_activity_service = contract_activity_service
 
     @staticmethod
     def _resolve_content_type(metadata: dict[str, Any]) -> str:
@@ -59,6 +62,7 @@ class IntegrationService:
         files: list[dict[str, Any]],
         organization_id: int,
         imported_by_user_id: int | None = None,
+        imported_by: dict[str, Any] | None = None,
     ) -> bool:
         logger.info(f"Iniciando importación directa. Organización: {organization_id}. Archivos: {len(files)}")
         token_is_valid = True
@@ -94,6 +98,18 @@ class IntegrationService:
                 logger.success(
                     f"¡Importación exitosa! Archivo: {file_name} | Tamaño: {len(file_bytes)} bytes | Documento: {getattr(created_document, 'id', None)}"
                 )
+
+                if self.contract_activity_service is not None and imported_by is not None:
+                    from types import SimpleNamespace
+                    actor = SimpleNamespace(**imported_by)
+                    await self.contract_activity_service.record(
+                        action=AuditContractAction.IMPORTED_FROM_GOOGLE_DRIVE,
+                        actor=actor,
+                        document_id=getattr(created_document, "id", None),
+                        document_name=file_name,
+                        document_type=document_payload.get("contract_type", None),
+                        state=getattr(created_document, "state", None),
+                    )
 
                 if index < total_files - 1:
                     await asyncio.sleep(1)

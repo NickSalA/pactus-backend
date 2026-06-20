@@ -29,7 +29,7 @@ async def list_chatbot_activity(
     records = await service.list_by_organization(organization_id=current_user.organization_id, limit=limit, offset=offset)
     return [
         ChatbotActivityResponse(
-            id=record.id,
+            id=record.id or 0,
             organization_id=record.organization_id,
             actor_user_id=record.actor_user_id,
             actor_name=record.actor_name,

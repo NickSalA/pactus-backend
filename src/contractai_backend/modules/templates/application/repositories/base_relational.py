@@ -57,6 +57,5 @@ class IOrganizationRepository(ABC):
 
 class IDocumentModuleAdapter(ABC):
     @abstractmethod
-    async def save_generated_document(self, document_payload: dict, file: bytes, user_role: UserRole | None) -> Any:
-        """Envía los datos del PDF generado al módulo de Documentos para que él lo guarde."""
+    async def save_generated_document(self, document_payload: dict, file: bytes, user_role: UserRole | None, actor: Any | None = None) -> Any:
         pass

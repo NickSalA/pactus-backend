@@ -1,11 +1,27 @@
 """Synchronizes template fields with the markdown placeholders."""
 
 import re
-import unicodedata
-from typing import ClassVar
 
+from .....shared.text import remove_accents
 from ...domain.entities import TemplateContent, TemplateContractDateMapping, TemplateField
 from ...domain.exceptions import TemplateValidationError
+from ...domain.patterns import (
+    BRACKET_PLACEHOLDER_PATTERN,
+    CONTRACT_DATE_HINTS,
+    DATE_COMPONENT_FILTER_PATTERN,
+    DATE_VALUE_HINTS,
+    END_DATE_HINTS,
+    END_DATE_KEYS,
+    IGNORED_BRACKET_MARKERS,
+    LEGACY_DATE_FILTER_PATTERN,
+    MARKDOWN_IMAGE_PATTERN_MULTILINE,
+    PLACEHOLDER_KEY_ALIASES,
+    REFERENCE_IMAGE_ARTIFACT_PATTERN_MULTILINE,
+    SERVICE_HINTS,
+    SHORTHAND_DATE_FILTER_PATTERN,
+    START_DATE_HINTS,
+    START_DATE_KEYS,
+)
 from .template_placeholder_generator import TemplatePlaceholderGenerator
 from .template_placeholder_validator import (
     EXPRESSION_PATTERN,
@@ -16,56 +32,6 @@ from .template_placeholder_validator import (
 
 class TemplateContentSynchronizer:
     """Keeps template fields aligned with body_md placeholders."""
-
-    BRACKET_PLACEHOLDER_PATTERN = re.compile(r"\[([^\[\]\n]{2,200})\]")
-    TIME_PLACEHOLDER_PATTERN = re.compile(r"^(?:[01]?\d|2[0-3]):[0-5]\d(?:\s?(?:AM|PM|am|pm))?$")
-    MARKDOWN_IMAGE_PATTERN = re.compile(r"^\s*!\[[^\]]*\]\([^\)]+\)\s*$", re.MULTILINE)
-    REFERENCE_IMAGE_ARTIFACT_PATTERN = re.compile(r"^\s*!{{[^{}\n]+}}\([^\)]+\)\s*$", re.MULTILINE)
-    LEGACY_DATE_FILTER_PATTERN = re.compile(r"{{\s*(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*\|\s*date\s*:\s*(?P<quote>['\"])(?P<fmt>.*?)\2\s*}}")
-    SHORTHAND_DATE_FILTER_PATTERN = re.compile(r"{{\s*(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*\|\s*date\s*\(\s*(?P<quote>['\"])(?P<fmt>.*?)\2\s*\)\s*}}")
-    DATE_COMPONENT_FILTER_PATTERN = re.compile(r"{{\s*(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*\|\s*(?P<component>day|month|year)\s*}}")
-    IGNORED_BRACKET_MARKERS: frozenset[str] = frozenset({"cierre_documento"})
-    AUTO_VARIABLE_ALIASES: ClassVar[dict[str, str]] = {
-        "representante_nombre_empresa": "representante_nombre",
-        "representante_nombre_empleador": "representante_nombre",
-        "representante_dni_empresa": "representante_dni",
-        "representante_dni_empleador": "representante_dni",
-        "ruc_empresa": "empleador_ruc",
-        "empresa_ruc": "empleador_ruc",
-        "razon_social_empresa": "empleador_razon_social",
-        "empresa_razon_social": "empleador_razon_social",
-        "domicilio_empresa": "empleador_domicilio",
-        "empresa_domicilio": "empleador_domicilio",
-        "objeto_social_empresa": "empleador_objeto_social",
-        "empresa_objeto_social": "empleador_objeto_social",
-        "empleador_tipo_sociedad": "empleador_descripcion",
-        "tipo_sociedad_empresa": "empleador_descripcion",
-    }
-    MANUAL_FIELD_ALIASES: ClassVar[dict[str, str]] = {
-        "remuneracion_mensual_fija": "remuneracion_mensual",
-    }
-    PLACEHOLDER_KEY_ALIASES: ClassVar[dict[str, str]] = {
-        **AUTO_VARIABLE_ALIASES,
-        **MANUAL_FIELD_ALIASES,
-    }
-
-    START_DATE_KEYS: tuple[str, ...] = (
-        "contrato_fecha_inicio",
-        "contract_start_date",
-        "fecha_inicio",
-        "start_date",
-    )
-    END_DATE_KEYS: tuple[str, ...] = (
-        "contrato_fecha_fin",
-        "contract_end_date",
-        "fecha_fin",
-        "end_date",
-    )
-    CONTRACT_DATE_HINTS: frozenset[str] = frozenset({"contrato", "contract", "vigencia", "plazo", "periodo"})
-    START_DATE_HINTS: frozenset[str] = frozenset({"inicio", "start", "desde", "inicial", "comienzo", "inicio_real"})
-    END_DATE_HINTS: frozenset[str] = frozenset({"fin", "end", "hasta", "final", "termino", "terminacion", "vencimiento"})
-    DATE_VALUE_HINTS: frozenset[str] = frozenset({"fecha", "date"})
-    SERVICE_HINTS: frozenset[str] = frozenset({"servicio", "service", "prestacion", "item"})
 
     def sync(self, content: TemplateContent) -> TemplateContent:
         """Rebuilds fields from the placeholders present in body_md."""
@@ -147,27 +113,27 @@ class TemplateContentSynchronizer:
         def replace_marker(match: re.Match[str]) -> str:
             raw_marker = match.group(1).strip()
             marker_key = self._build_reference_marker_key(raw_marker)
-            if marker_key in self.IGNORED_BRACKET_MARKERS:
+            if marker_key in IGNORED_BRACKET_MARKERS:
                 return ""
             return "{{ " + marker_key + " }}"
 
         normalized_body_md = self._remove_reference_artifacts(body_md)
-        normalized_body_md = self.BRACKET_PLACEHOLDER_PATTERN.sub(replace_marker, normalized_body_md)
+        normalized_body_md = BRACKET_PLACEHOLDER_PATTERN.sub(replace_marker, normalized_body_md)
         normalized_body_md = self._canonicalize_placeholder_aliases(normalized_body_md)
         normalized_body_md = self._normalize_supported_jinja_filters(normalized_body_md)
         return re.sub(r"\n{3,}", "\n\n", normalized_body_md)
 
     def _remove_reference_artifacts(self, body_md: str) -> str:
         """Removes markdown image artifacts copied from source documents."""
-        normalized_body_md = self.MARKDOWN_IMAGE_PATTERN.sub("", body_md)
-        normalized_body_md = self.REFERENCE_IMAGE_ARTIFACT_PATTERN.sub("", normalized_body_md)
+        normalized_body_md = MARKDOWN_IMAGE_PATTERN_MULTILINE.sub("", body_md)
+        normalized_body_md = REFERENCE_IMAGE_ARTIFACT_PATTERN_MULTILINE.sub("", normalized_body_md)
         return normalized_body_md
 
     def _normalize_supported_jinja_filters(self, body_md: str) -> str:
         """Normalizes legacy date filters to the supported format_date filter."""
-        normalized_body_md = self.LEGACY_DATE_FILTER_PATTERN.sub(self._build_format_date_placeholder, body_md)
-        normalized_body_md = self.SHORTHAND_DATE_FILTER_PATTERN.sub(self._build_format_date_placeholder, normalized_body_md)
-        normalized_body_md = self.DATE_COMPONENT_FILTER_PATTERN.sub(self._build_date_component_placeholder, normalized_body_md)
+        normalized_body_md = LEGACY_DATE_FILTER_PATTERN.sub(self._build_format_date_placeholder, body_md)
+        normalized_body_md = SHORTHAND_DATE_FILTER_PATTERN.sub(self._build_format_date_placeholder, normalized_body_md)
+        normalized_body_md = DATE_COMPONENT_FILTER_PATTERN.sub(self._build_date_component_placeholder, normalized_body_md)
         return normalized_body_md
 
     def _build_format_date_placeholder(self, match: re.Match[str]) -> str:
@@ -182,14 +148,14 @@ class TemplateContentSynchronizer:
     def _canonicalize_placeholder_aliases(self, body_md: str) -> str:
         """Replaces known placeholder aliases with their canonical keys."""
         normalized_body_md = body_md
-        for alias, canonical_key in self.PLACEHOLDER_KEY_ALIASES.items():
+        for alias, canonical_key in PLACEHOLDER_KEY_ALIASES.items():
             pattern = re.compile(r"{{\s*" + re.escape(alias) + r"\s*}}")
             normalized_body_md = pattern.sub("{{ " + canonical_key + " }}", normalized_body_md)
         return normalized_body_md
 
     def _canonicalize_placeholder_key(self, key: str) -> str:
         """Returns the canonical key for supported aliases."""
-        return self.PLACEHOLDER_KEY_ALIASES.get(key, key)
+        return PLACEHOLDER_KEY_ALIASES.get(key, key)
 
     def _build_reference_marker_key(self, raw_marker: str) -> str:
         """Builds a stable snake_case key from a bracket marker."""
@@ -233,9 +199,10 @@ class TemplateContentSynchronizer:
     def _normalize_operational_field(self, field: TemplateField, *, is_contract_date_field: bool) -> TemplateField:
         """Contract-date operational fields must stay required and typed as dates."""
         updates: dict[str, str | bool] = {}
+        inferred_type = "date" if is_contract_date_field else field.type
         inferred_type = "date" if is_contract_date_field else self._normalize_existing_field_type(field)
-        if is_contract_date_field:
-            updates["required"] = True
+        if inferred_type != "date" and is_contract_date_field:
+            inferred_type = "date"
         self._sync_field_type_and_placeholder(inferred_type, field, updates)
         return TemplateField.model_validate({**field.model_dump(), **updates}) if updates else field
 
@@ -250,7 +217,6 @@ class TemplateContentSynchronizer:
         resolved_type = str(updates.get("type", field.type))
         if TemplatePlaceholderGenerator.should_autogenerate_placeholder(field.placeholder) or resolved_type != field.type:
             updates["placeholder"] = TemplatePlaceholderGenerator.build_placeholder(key=field.key, label=field.label, field_type=resolved_type)
-
     def _normalize_existing_field_type(self, field: TemplateField) -> str:
         """Fixes obvious type mismatches returned by the draft generator."""
         inferred_type = self._infer_field_type(field.key, field.label, field.placeholder)
@@ -281,15 +247,15 @@ class TemplateContentSynchronizer:
 
     def _infer_contract_date_mapping(self, fields: list[TemplateField]) -> TemplateContractDateMapping | None:
         """Infers contract date fields when placeholders are semantically clear."""
-        start_date_field = self._find_exact_field_key(fields, self.START_DATE_KEYS) or self._select_best_field_key(
+        start_date_field = self._find_exact_field_key(fields, START_DATE_KEYS) or self._select_best_field_key(
             fields,
-            boundary_hints=self.START_DATE_HINTS,
-            opposite_hints=self.END_DATE_HINTS,
+            boundary_hints=START_DATE_HINTS,
+            opposite_hints=END_DATE_HINTS,
         )
-        end_date_field = self._find_exact_field_key(fields, self.END_DATE_KEYS) or self._select_best_field_key(
+        end_date_field = self._find_exact_field_key(fields, END_DATE_KEYS) or self._select_best_field_key(
             fields,
-            boundary_hints=self.END_DATE_HINTS,
-            opposite_hints=self.START_DATE_HINTS,
+            boundary_hints=END_DATE_HINTS,
+            opposite_hints=START_DATE_HINTS,
         )
         if start_date_field is None or end_date_field is None or start_date_field == end_date_field:
             return None
@@ -331,15 +297,15 @@ class TemplateContentSynchronizer:
         if not tokens or not (tokens & boundary_hints):
             return None
 
-        has_contract_context = bool(tokens & self.CONTRACT_DATE_HINTS)
-        has_service_context = bool(tokens & self.SERVICE_HINTS)
+        has_contract_context = bool(tokens & CONTRACT_DATE_HINTS)
+        has_service_context = bool(tokens & SERVICE_HINTS)
         if has_service_context and not has_contract_context:
             return None
 
         score = 0
         if has_contract_context:
             score += 10
-        if tokens & self.DATE_VALUE_HINTS:
+        if tokens & DATE_VALUE_HINTS:
             score += 3
         if field.type == "date":
             score += 2
@@ -353,8 +319,7 @@ class TemplateContentSynchronizer:
         return {token for token in f"{normalized_key}_{normalized_label}".split("_") if token}
 
     def _normalize_text(self, value: str) -> str:
-        normalized = unicodedata.normalize("NFD", value)
-        normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+        normalized = remove_accents(value)
         return re.sub(r"[^a-zA-Z0-9]+", "_", normalized).strip("_").lower()
 
     def _extract_manual_keys(self, expressions: list[str]) -> list[str]:
@@ -410,10 +375,12 @@ class TemplateContentSynchronizer:
     def _infer_field_type(self, key: str, label: str, placeholder: str | None) -> str:
         """Infers a sensible field type from key and label semantics."""
         tokens = self._tokenize_field(TemplateField(key=key, label=label, placeholder=placeholder))
-        if tokens & {"literal", "letras"}:
+        if tokens & {"literal", "letras", "ruc", "dni", "telefono"}:
             return "text"
-        if placeholder and self.TIME_PLACEHOLDER_PATTERN.fullmatch(placeholder.strip()):
-            return "time"
+        if tokens & {"moneda", "divisa"}:
+            if tokens & {"monto", "valor", "cantidad", "precio", "costo"}:
+                return "number"
+            return "text"
         if tokens & {"hora", "horario"} and not tokens & {"duracion", "dias", "laborales"}:
             return "time"
         if tokens & {"ingreso", "salida", "entrada"}:

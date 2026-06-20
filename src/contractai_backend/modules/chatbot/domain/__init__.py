@@ -1,4 +1,4 @@
-from .entities import ChatbotTokenUsage, ConversationTable, Message
+from .entities import ConversationTable, Message
 from .exceptions import (
     ChatbotDatabaseUnavailableError,
     ChatbotTimeoutError,
@@ -14,7 +14,6 @@ from .exceptions import (
 __all__ = [
     "ChatbotDatabaseUnavailableError",
     "ChatbotTimeoutError",
-    "ChatbotTokenUsage",
     "ChatbotValidationError",
     "ConversationNotFoundError",
     "ConversationTable",
