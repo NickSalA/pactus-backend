@@ -6,6 +6,7 @@ from contractai_backend.core.exceptions.base import ServiceUnavailableError
 from contractai_backend.modules.billing.application.dto import PayPalSubscriptionDetails
 from contractai_backend.modules.billing.application.repositories import PayPalSubscriptionGateway
 from contractai_backend.modules.billing.domain.exceptions import PayPalServiceError, PayPalSubscriptionValidationError
+from loguru import logger
 
 
 class PayPalSubscriptionAdapter(PayPalSubscriptionGateway):
@@ -43,21 +44,20 @@ class PayPalSubscriptionAdapter(PayPalSubscriptionGateway):
 
     async def get_subscription_status(self, subscription_id: str) -> str:
         """Return the current status of a PayPal subscription."""
-        token = await self._get_access_token()
         try:
+            token = await self._get_access_token()
             response = await self.client.get(
                 f"{self.base_url}/v1/billing/subscriptions/{subscription_id}",
                 headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
                 timeout=15.0,
             )
-        except httpx.RequestError:
+            if response.status_code != httpx.codes.OK:
+                return "UNKNOWN"
+            data = response.json()
+            return str(data.get("status", "UNKNOWN")).strip().upper()
+        except (httpx.RequestError, PayPalServiceError, ServiceUnavailableError):
+            logger.warning("No se pudo verificar el estado de la suscripción en PayPal")
             return "UNKNOWN"
-
-        if response.status_code != httpx.codes.OK:
-            return "UNKNOWN"
-
-        data = response.json()
-        return str(data.get("status", "UNKNOWN")).strip().upper()
 
     async def _get_access_token(self) -> str:
         if not self.client_id or not self.client_secret:
