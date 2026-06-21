@@ -81,6 +81,9 @@ class Settings(BaseSettings):
     GMAIL_APP_PASSWORD: str | None = Field(default=None)
 
     CRON_SECRET: str | None = Field(default=None)
+    PAYPAL_CLIENT_ID: str | None = Field(default=None)
+    PAYPAL_CLIENT_SECRET: str | None = Field(default=None)
+    PAYPAL_BASE_URL: str = Field(default="https://api-m.sandbox.paypal.com")
 
     @property
     def DATABASE_URL(self) -> str:  # noqa: N802

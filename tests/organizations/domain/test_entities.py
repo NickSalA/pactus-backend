@@ -18,3 +18,4 @@ def test_organization_optional_fields_default_none():
     assert org.ruc is None
     assert org.email is None
     assert org.phone is None
+    assert org.paypal_subscription_id is None

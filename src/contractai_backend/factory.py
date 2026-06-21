@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from contractai_backend.modules.audit.api import audit_router
+from contractai_backend.modules.billing.api import billing_router
 from contractai_backend.modules.integrations.api import integrations_router
 from contractai_backend.modules.organizations.api import organizations_router
 
@@ -59,6 +60,7 @@ def create() -> FastAPI:
     app.include_router(router=dashboard_router, prefix="/dashboard", tags=["Dashboard"])
     app.include_router(router=integrations_router, prefix="/integrations", tags=["Integraciones"])
     app.include_router(router=organizations_router, prefix="/organizations", tags=["Organizaciones"])
+    app.include_router(router=billing_router, prefix="/billing", tags=["Facturación"])
     app.include_router(router=audit_router, prefix="/audit", tags=["Auditoría"])
     app.include_router(router=notifications_router, prefix="/notifications", tags=["Notificaciones"])
     app.include_router(router=templates_router, prefix="/templates", tags=["Plantillas"])

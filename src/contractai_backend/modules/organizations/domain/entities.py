@@ -37,3 +37,4 @@ class OrganizationTable(BaseTable, table=True):
     autorizacion_emitida_por: str | None = Field(default=None, sa_column=Column("autorizacion_emitida_por", Text, nullable=True))
     email: str | None = Field(default=None, sa_column=Column("email", String(255), nullable=True))
     phone: str | None = Field(default=None, sa_column=Column("phone", String(20), nullable=True))
+    paypal_subscription_id: str | None = Field(default=None, sa_column=Column("paypal_subscription_id", String(128), nullable=True))
