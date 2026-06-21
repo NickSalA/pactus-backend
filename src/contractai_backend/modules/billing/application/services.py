@@ -39,6 +39,14 @@ class PayPalSubscriptionService:
         )
         return self._build_response(organization=organization, admin_email=payload.email)
 
+    async def check_subscription_active(self, organization_id: int) -> bool:
+        """Check if an organization has an active PayPal subscription."""
+        organization = await self.provisioning_repository.get_organization_by_id(organization_id)
+        if not organization or not organization.paypal_subscription_id:
+            return False
+        status = await self.paypal_gateway.get_subscription_status(organization.paypal_subscription_id)
+        return status == "ACTIVE"
+
     @staticmethod
     def _build_response(organization: OrganizationTable, admin_email: str) -> ConfirmPayPalSubscriptionResponse:
         return ConfirmPayPalSubscriptionResponse(

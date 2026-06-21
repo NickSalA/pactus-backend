@@ -41,6 +41,24 @@ class PayPalSubscriptionAdapter(PayPalSubscriptionGateway):
             raise PayPalSubscriptionValidationError("La suscripción de PayPal no contiene los datos esperados.")
         return PayPalSubscriptionDetails(id=paypal_id, custom_id=custom_id)
 
+    async def get_subscription_status(self, subscription_id: str) -> str:
+        """Return the current status of a PayPal subscription."""
+        token = await self._get_access_token()
+        try:
+            response = await self.client.get(
+                f"{self.base_url}/v1/billing/subscriptions/{subscription_id}",
+                headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+                timeout=15.0,
+            )
+        except httpx.RequestError:
+            return "UNKNOWN"
+
+        if response.status_code != httpx.codes.OK:
+            return "UNKNOWN"
+
+        data = response.json()
+        return str(data.get("status", "UNKNOWN")).strip().upper()
+
     async def _get_access_token(self) -> str:
         if not self.client_id or not self.client_secret:
             raise ServiceUnavailableError("PayPal no está configurado en el backend.")

@@ -19,6 +19,16 @@ class SQLModelBillingProvisioningRepository(BillingProvisioningRepository):
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    async def get_organization_by_id(self, organization_id: int) -> OrganizationTable | None:
+        query = select(OrganizationTable).where(OrganizationTable.id == organization_id)
+        try:
+            result = await self.session.exec(query)
+            return result.first()
+        except (SQLAlchemyTimeoutError, OperationalError) as exc:
+            raise ServiceUnavailableError("La base de datos relacional no esta disponible") from exc
+        except SQLAlchemyError as exc:
+            raise InternalServerError("Error al acceder a la base de datos relacional") from exc
+
     async def get_organization_by_paypal_subscription_id(self, subscription_id: str) -> OrganizationTable | None:
         query = select(OrganizationTable).where(OrganizationTable.paypal_subscription_id == subscription_id.strip())
         try:
