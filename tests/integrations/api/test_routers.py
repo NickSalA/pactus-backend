@@ -429,7 +429,7 @@ class TestImportDriveFiles:
                 second_response = await client.post("/integrations/drive/import", json=payload)
 
         assert second_response.status_code == 409
-        assert second_response.json()["detail"] == "Ya existe una importación en progreso. Espere a que termine."
+        assert second_response.json()["message"] == "Ya existe una importación en progreso. Espere a que termine."
 
     @pytest.mark.asyncio
     async def test_import_events_returns_404_for_unknown_job(self):
@@ -439,7 +439,7 @@ class TestImportDriveFiles:
             response = await client.get("/integrations/drive/import/fake-job-id/events")
 
         assert response.status_code == 404
-        assert response.json()["detail"] == "Trabajo no encontrado."
+        assert response.json()["message"] == "Trabajo no encontrado."
 
     @pytest.mark.asyncio
     async def test_import_events_returns_403_for_wrong_user(self):
@@ -464,4 +464,4 @@ class TestImportDriveFiles:
             response = await client.get(f"/integrations/drive/import/{job_id}/events")
 
         assert response.status_code == 403
-        assert response.json()["detail"] == "No tiene acceso a este trabajo."
+        assert response.json()["message"] == "No tiene acceso a este trabajo."

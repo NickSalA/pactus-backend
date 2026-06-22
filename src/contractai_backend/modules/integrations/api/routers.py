@@ -2,9 +2,10 @@
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Response
 from fastapi.responses import StreamingResponse
 
+from contractai_backend.core.exceptions.base import ForbiddenError
 from contractai_backend.modules.documents.domain.access_policy import can_write_document_type
 from contractai_backend.modules.integrations.application import IntegrationService
 from contractai_backend.shared.api.dependencies.security import CurrentUserDep
@@ -12,6 +13,7 @@ from contractai_backend.shared.config import settings
 
 from ..application.jobs import create_job, get_job, get_user_active_job
 from ..application.services.job_orchestrator import process_drive_import_in_background
+from ..domain.exceptions import DuplicateJobError, JobAccessDeniedError, JobNotFoundError
 from .dependencies import get_integration_service
 from .schemas import AuthURLResponse, DriveRequest, ImportRequest, ImportResponse, TokenResponse
 from .sse import generate_import_sse_events
@@ -49,17 +51,10 @@ async def import_drive_files(request: ImportRequest, background_tasks: Backgroun
         file_item.document.contract_type is not None and not can_write_document_type(user_role, file_item.document.contract_type)
         for file_item in request.files
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tiene permisos para importar este tipo de contrato",
-        )
+        raise ForbiddenError("No tiene permisos para importar este tipo de contrato")
 
-    active_job = get_user_active_job(current_user.id)
-    if active_job:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Ya existe una importación en progreso. Espere a que termine.",
-        )
+    if get_user_active_job(current_user.id):
+        raise DuplicateJobError()
 
     files_payload = [file_item.model_dump(mode="python", exclude_unset=True, exclude_none=True) for file_item in request.files]
 
@@ -96,16 +91,10 @@ async def stream_import_events(job_id: str, current_user: CurrentUserDep):
     """SSE endpoint for tracking import progress."""
     tracker = get_job(job_id)
     if not tracker:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Trabajo no encontrado.",
-        )
+        raise JobNotFoundError()
 
     if tracker.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tiene acceso a este trabajo.",
-        )
+        raise JobAccessDeniedError()
 
     return StreamingResponse(
         generate_import_sse_events(tracker),
