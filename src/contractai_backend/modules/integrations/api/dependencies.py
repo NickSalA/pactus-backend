@@ -17,6 +17,7 @@ from contractai_backend.modules.audit.composition import build_default_contract_
 from contractai_backend.modules.documents.application.services import DocumentCommandService
 from contractai_backend.modules.documents.composition import build_default_document_command_service
 from contractai_backend.modules.integrations.application import IntegrationService
+from contractai_backend.modules.integrations.domain.exceptions import InvalidCloudTokenError
 from contractai_backend.modules.integrations.infrastructure import DocumentIngestionAdapter, GoogleDriveProvider
 from contractai_backend.shared.config import settings
 from contractai_backend.shared.infrastructure.database import get_aclient, get_client, get_session, get_session_context
@@ -235,7 +236,7 @@ async def _process_single_file(
 
     try:
         async with build_background_integration_service() as service:
-            token_is_valid = await service.process_import(
+            await service.process_import(
                 token=token,
                 files=[file_item],
                 organization_id=organization_id,
@@ -243,14 +244,15 @@ async def _process_single_file(
                 imported_by=imported_by,
             )
 
-        if not token_is_valid:
-            await tracker.complete("FAILED")
-            await job_registry.schedule_cleanup(tracker)
-            return False
-
         await tracker.set_phase(file_id, FilePhase.KNOWLEDGE_BASE)
         await tracker.set_phase(file_id, FilePhase.COMPLETED)
         return True
+
+    except InvalidCloudTokenError as e:
+        logger.error(f"Fallo de autenticación: {e}")
+        await tracker.complete("FAILED")
+        await job_registry.schedule_cleanup(tracker)
+        return False
 
     except Exception as e:
         logger.error(f"Error processing file {file_id}: {e}")

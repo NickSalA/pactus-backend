@@ -11,6 +11,7 @@ from contractai_backend.modules.integrations.api.dependencies import (
     process_drive_import_in_background,
 )
 from contractai_backend.modules.integrations.api.schemas import FilePhase
+from contractai_backend.modules.integrations.domain.exceptions import InvalidCloudTokenError
 
 
 class _AsyncContextManager:
@@ -151,9 +152,9 @@ class TestProcessDriveImportInBackground:
     @pytest.mark.asyncio
     async def test_process_import_stops_batch_when_token_becomes_invalid(self):
         first_service = MagicMock()
-        first_service.process_import = AsyncMock(return_value=False)
+        first_service.process_import = AsyncMock(side_effect=InvalidCloudTokenError())
         second_service = MagicMock()
-        second_service.process_import = AsyncMock(return_value=True)
+        second_service.process_import = AsyncMock(return_value=None)
         token = {"token": "expired"}
         first_file = {"file_id": "file-1", "document": {"name": "Contrato 1"}}
         second_file = {"file_id": "file-2", "document": {"name": "Contrato 2"}}

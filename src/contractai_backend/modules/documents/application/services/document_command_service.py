@@ -11,8 +11,8 @@ from loguru import logger
 from .....core.exceptions.base import ForbiddenError
 from ....audit.application.services import AITokenTrackingService
 from ....audit.domain.value_objs import AITokenSource
+from ....audit.infrastructure.token_cost_calculator import TokenCostCalculator
 from ....catalog.application.repositories import ServiceRepository
-from ....chatbot.infrastructure.token_cost_calculator import TokenCostCalculator
 from ....folders.application.repositories import FolderRepository
 from ....users.domain.entities import UserTable
 from ....users.domain.value_objs import UserRole

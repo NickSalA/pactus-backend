@@ -8,7 +8,6 @@ from ....core.exceptions.base import (
     ServiceUnavailableError,
     ValidationError,
 )
-from ...audit.domain.exceptions import LLMQuotaExceededError
 
 
 class ChatbotValidationError(ValidationError):

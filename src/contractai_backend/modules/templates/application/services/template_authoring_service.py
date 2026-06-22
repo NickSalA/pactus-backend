@@ -5,7 +5,7 @@ from typing import Any
 
 from ....audit.application.services import AITokenTrackingService, TemplateActivityService
 from ....audit.domain.value_objs import AITokenSource
-from ....chatbot.infrastructure.token_cost_calculator import TokenCostCalculator
+from ....audit.infrastructure.token_cost_calculator import TokenCostCalculator
 from ....documents.application.repositories import DocumentExtractor
 from ....documents.domain import DocumentType
 from ....documents.domain.access_policy import can_write_document_type

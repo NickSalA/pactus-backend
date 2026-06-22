@@ -4,14 +4,15 @@ from typing import Any
 
 from loguru import logger
 
+from ....audit.application.dto import TokenCostResult
 from ....audit.application.services import AITokenTrackingService, ChatbotActivityService
 from ....audit.domain.value_objs import AITokenSource
+from ....audit.infrastructure.token_cost_calculator import TokenCostCalculator
 from ....documents.domain.access_policy import get_readable_document_types
-from ...application.dto import ChartData, LLMResult, TokenCostResult
+from ...application.dto import ChartData, LLMResult
 from ...application.repositories.base_llm import ILLMProvider
 from ...domain.entities import ConversationTable, Message
 from ...domain.exceptions import ConversationNotFoundError
-from ...infrastructure.token_cost_calculator import TokenCostCalculator
 from .conversation_service import ConversationService
 
 LIMIT_TITLE = 30

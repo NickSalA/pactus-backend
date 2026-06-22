@@ -4,9 +4,10 @@ from typing import Any
 from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph, RunnableConfig
 
+from contractai_backend.modules.audit.domain.exceptions import LLMQuotaExceededError
 from contractai_backend.modules.chatbot.application.dto import ChartData, LLMResult
 from contractai_backend.modules.chatbot.application.repositories.base_llm import ILLMProvider
-from contractai_backend.modules.chatbot.domain import LLMExecutionError, LLMQuotaExceededError
+from contractai_backend.modules.chatbot.domain import LLMExecutionError
 from contractai_backend.shared.config import settings
 
 _CHART_TOOL_NAME = "dashboard_chart_tool"
