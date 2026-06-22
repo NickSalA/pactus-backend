@@ -1,7 +1,9 @@
 """Application service for tracking AI token usage globally."""
 
+from collections.abc import Sequence
+from datetime import datetime
 from decimal import Decimal
-from typing import Protocol
+from typing import Any, Protocol
 
 from contractai_backend.modules.audit.application.repositories import AITokenUsageRepository
 from contractai_backend.modules.audit.domain.entities import AITokenUsageTable
@@ -57,3 +59,41 @@ class AITokenTrackingService:
             model_used=cost.model_used,
         )
         return await self.repository.record(usage)
+
+    async def list_usage(
+        self,
+        *,
+        organization_id: int,
+        limit: int = 50,
+        offset: int = 0,
+        actor_user_id: int | None = None,
+        source: AITokenSource | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> Sequence[AITokenUsageTable]:
+        """Retrieves history of AI token usage for an organization."""
+        return await self.repository.list_by_organization(
+            organization_id=organization_id,
+            limit=limit,
+            offset=offset,
+            actor_user_id=actor_user_id,
+            source=source,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+    async def get_summary(
+        self,
+        *,
+        organization_id: int,
+        actor_user_id: int | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Retrieves total tokens and cost aggregated for an organization or user."""
+        return await self.repository.get_summary_by_organization(
+            organization_id=organization_id,
+            actor_user_id=actor_user_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
