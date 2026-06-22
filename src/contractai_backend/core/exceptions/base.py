@@ -58,6 +58,13 @@ class ConflictError(AppError):
         super().__init__(message, status_code=status.HTTP_409_CONFLICT)
 
 
+class TooManyRequestsError(AppError):
+    """Excepción para cuotas de uso excedidas o límite de peticiones (HTTP 429)."""
+
+    def __init__(self, message: str = "Demasiadas peticiones o cuota excedida"):
+        super().__init__(message, status_code=status.HTTP_429_TOO_MANY_REQUESTS)
+
+
 # 5XX - Errores de servidor (infraestructura o dependencias)
 
 

@@ -37,7 +37,7 @@ def _make_app(service, role: UserRole = UserRole.ADMIN) -> FastAPI:
 def _make_activity(
     *,
     id: int = 1,
-    action: AuditContractAction = AuditContractAction.CREATED,
+    action: AuditContractAction = AuditContractAction.MANUAL_UPLOAD,
     document_id: int | None = 100,
     company_contract_id: int | None = None,
     labor_contract_id: int | None = None,
@@ -72,7 +72,7 @@ def _expected_activity_payload() -> dict:
         "actor_user_id": 1,
         "actor_name": "Admin User",
         "actor_role": "ADMIN",
-        "action": "CREATED",
+        "action": "MANUAL_UPLOAD",
         "document_id": 100,
         "company_contract_id": None,
         "labor_contract_id": None,

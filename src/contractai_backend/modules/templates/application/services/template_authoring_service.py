@@ -3,7 +3,9 @@
 from datetime import datetime
 from typing import Any
 
-from ....audit.application.services import TemplateActivityService
+from ....audit.application.services import AITokenTrackingService, TemplateActivityService
+from ....audit.domain.value_objs import AITokenSource
+from ....chatbot.infrastructure.token_cost_calculator import TokenCostCalculator
 from ....documents.application.repositories import DocumentExtractor
 from ....documents.domain import DocumentType
 from ....documents.domain.access_policy import can_write_document_type
@@ -56,6 +58,7 @@ class TemplateAuthoringService:
         activity_service: TemplateActivityService,
         draft_service: TemplateDraftService,
         reference_service: TemplateReferenceService,
+        ai_token_tracking_service: AITokenTrackingService | None = None,
     ):
         """Stores dependencies for template authoring."""
         self.template_repo = template_repo
@@ -66,11 +69,13 @@ class TemplateAuthoringService:
         self.activity_service = activity_service
         self.draft_service = draft_service
         self.reference_service = reference_service
+        self.ai_token_tracking_service = ai_token_tracking_service
 
         self.content_synchronizer = TemplateContentSynchronizer()
         self.validator = TemplatePlaceholderValidator()
         self.reference_preprocessor = TemplateReferencePreprocessor()
         self.rendered_contract_formatter = RenderedContractFormatter()
+        self._cost_calculator = TokenCostCalculator()
 
     async def list_available_formats(
         self,
@@ -121,6 +126,9 @@ class TemplateAuthoringService:
         actor: UserTable,
     ) -> PersistedTemplateDraftResponse:
         """Generates and persists a draft from prompt data."""
+        if self.ai_token_tracking_service:
+            await self.ai_token_tracking_service.check_rate_limit(actor=actor)
+
         draft, document_type = await self.generate_draft_from_prompt(
             request=request,
             organization_id=actor.organization_id,
@@ -132,6 +140,14 @@ class TemplateAuthoringService:
             document_type=document_type,
             format_code=request.format_code,
         )
+        if self.ai_token_tracking_service and draft.usage:
+            cost = self._cost_calculator.calculate(
+                input_tokens=draft.usage.input_tokens,
+                output_tokens=draft.usage.output_tokens,
+            )
+            await self.ai_token_tracking_service.record_usage(
+                source=AITokenSource.TEMPLATES, actor=actor, cost=cost
+            )
         return PersistedTemplateDraftResponse(template=template, warnings=draft.warnings, source=draft.source, usage=draft.usage)
 
     async def generate_draft_from_file(
@@ -175,6 +191,9 @@ class TemplateAuthoringService:
         actor: UserTable,
     ) -> PersistedTemplateDraftResponse:
         """Generates and persists a draft from a reference file."""
+        if self.ai_token_tracking_service:
+            await self.ai_token_tracking_service.check_rate_limit(actor=actor)
+
         draft, document_type = await self.generate_draft_from_file(
             request=request,
             file_content=file_content,
@@ -188,6 +207,14 @@ class TemplateAuthoringService:
             document_type=document_type,
             format_code=request.format_code,
         )
+        if self.ai_token_tracking_service and draft.usage:
+            cost = self._cost_calculator.calculate(
+                input_tokens=draft.usage.input_tokens,
+                output_tokens=draft.usage.output_tokens,
+            )
+            await self.ai_token_tracking_service.record_usage(
+                source=AITokenSource.TEMPLATES, actor=actor, cost=cost
+            )
         return PersistedTemplateDraftResponse(template=template, warnings=draft.warnings, source=draft.source, usage=draft.usage)
 
     async def preview_template(

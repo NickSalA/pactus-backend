@@ -74,6 +74,7 @@ async def create_document(
         file_data=file_data,
         organization_id=current_user.organization_id,
         user_role=user_role,
+        actor=current_user,
     )
     response = DocumentResponse.model_validate(saved_document)
     await contract_activity_service.record(

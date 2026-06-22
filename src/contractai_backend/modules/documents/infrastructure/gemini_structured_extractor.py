@@ -45,6 +45,15 @@ class GeminiDocumentStructuredExtractor(DocumentStructuredExtractor):
         )
         response = await self.llm.ainvoke(prompt)
         payload = self._parse_json(self._coerce_content_to_text(response=response))
+
+        usage_metadata = getattr(response, "usage_metadata", {})
+        if usage_metadata:
+            payload["usage"] = {
+                "input_tokens": usage_metadata.get("input_tokens", 0),
+                "output_tokens": usage_metadata.get("output_tokens", 0),
+                "total_tokens": usage_metadata.get("total_tokens", 0),
+            }
+
         return ExtractedDocumentData.model_validate(payload)
 
     @staticmethod

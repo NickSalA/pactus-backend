@@ -36,13 +36,6 @@ async def list_chatbot_activity(
             actor_role=record.actor_role,
             action=record.action,
             conversation_title=conversation_title,
-            input_tokens=record.input_tokens,
-            output_tokens=record.output_tokens,
-            total_tokens=record.total_tokens,
-            input_cost_usd=record.input_cost_usd,
-            output_cost_usd=record.output_cost_usd,
-            total_cost_usd=record.total_cost_usd,
-            model_used=record.model_used,
             created_at=record.created_at,
         )
         for record, conversation_title in records

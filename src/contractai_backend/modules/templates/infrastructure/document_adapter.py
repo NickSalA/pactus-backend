@@ -11,7 +11,7 @@ class DocumentModuleAdapter(IDocumentModuleAdapter):
     def __init__(self, doc_service: DocumentCommandService):
         self.doc_service: DocumentCommandService = doc_service
 
-    async def save_generated_document(self, document_payload: dict, file: bytes, user_role: UserRole | None, actor: Any | None = None):
+    async def save_generated_document(self, document_payload: dict, file: bytes, user_role: UserRole | None, actor: Any | None = None):  # noqa: ARG002
         doc_request = CreateDocumentRequest(
             name=document_payload.get("name"),
             client=document_payload.get("client"),

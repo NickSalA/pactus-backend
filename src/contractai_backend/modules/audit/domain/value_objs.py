@@ -28,3 +28,9 @@ class AuditTemplateAction(StrEnum):
     UPDATED = "UPDATED"
     PUBLISHED = "PUBLISHED"
     ARCHIVED = "ARCHIVED"
+
+
+class AITokenSource(StrEnum):
+    CHATBOT = "CHATBOT"
+    TEMPLATES = "TEMPLATES"
+    INTEGRATIONS = "INTEGRATIONS"

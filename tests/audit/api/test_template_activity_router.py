@@ -143,7 +143,7 @@ class TestTemplateActivityRouter:
         service = AsyncMock()
         service.list_by_organization.return_value = [
             _make_activity(
-                action=AuditTemplateAction.DELETED,
+                action=AuditTemplateAction.ARCHIVED,
                 template_id=None,
                 template_format_id=None,
                 template_name=None,
@@ -161,7 +161,7 @@ class TestTemplateActivityRouter:
         assert response.json() == [
             {
                 **_expected_activity_payload(),
-                "action": "DELETED",
+                "action": "ARCHIVED",
                 "template_id": None,
                 "template_format_id": None,
                 "template_name": None,

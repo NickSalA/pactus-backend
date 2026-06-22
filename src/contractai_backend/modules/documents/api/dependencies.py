@@ -9,6 +9,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ....shared.infrastructure.database import get_aclient, get_client, get_session
 from ....shared.infrastructure.http import get_http_client
+from ...audit.application.services import AITokenTrackingService, ContractActivityService
+from ...audit.composition import build_default_ai_token_tracking_service, build_default_contract_activity_service
 from ...catalog.application.repositories import ServiceRepository
 from ...catalog.application.services import ServiceCatalogService
 from ...catalog.composition import build_service_catalog_service
@@ -24,8 +26,6 @@ from ..application.repositories import (
     DocumentStructuredExtractor,
     VectorRepository,
 )
-from ...audit.application.services import ContractActivityService
-from ...audit.composition import build_default_contract_activity_service
 from ..application.services import DocumentCommandService, DocumentQueryService
 from ..composition import build_document_command_service, build_document_query_service
 from ..infrastructure import (
@@ -108,6 +108,17 @@ ChunkEnricherDep = Annotated[DocumentChunkEnricher, Depends(get_chunk_enricher)]
 StructuredExtractorDep = Annotated[DocumentStructuredExtractor, Depends(get_structured_extractor)]
 
 
+async def get_contract_activity_service_for_documents(session: SessionDep) -> ContractActivityService:
+    return build_default_contract_activity_service(session=session)
+
+
+async def get_ai_token_tracking_service_for_documents(session: SessionDep) -> AITokenTrackingService:
+    return build_default_ai_token_tracking_service(session=session)
+
+
+AITokenTrackingServiceDep = Annotated[AITokenTrackingService, Depends(get_ai_token_tracking_service_for_documents)]
+
+
 async def get_document_command_service(
     command_repo: DocumentCommandRepoDep,
     query_repo: DocumentQueryRepoDep,
@@ -118,6 +129,7 @@ async def get_document_command_service(
     storage_repo: StorageRepoDep,
     chunk_enricher: ChunkEnricherDep,
     structured_extractor: StructuredExtractorDep,
+    ai_token_tracking_service: AITokenTrackingServiceDep,
 ) -> DocumentCommandService:
     """Construye el servicio de comandos para documentos."""
     return build_document_command_service(
@@ -130,13 +142,10 @@ async def get_document_command_service(
         chunk_enricher=chunk_enricher,
         folder_repo=folder_repo,
         structured_extractor=structured_extractor,
+        ai_token_tracking_service=ai_token_tracking_service,
     )
 
 
 async def get_document_query_service(sql_repo: DocumentQueryRepoDep) -> DocumentQueryService:
     """Construye un servicio de lectura para documentos."""
     return build_document_query_service(query_repo=sql_repo)
-
-
-async def get_contract_activity_service_for_documents(session: SessionDep) -> ContractActivityService:
-    return build_default_contract_activity_service(session=session)

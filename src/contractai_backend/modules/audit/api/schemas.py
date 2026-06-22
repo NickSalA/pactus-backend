@@ -1,7 +1,6 @@
 """HTTP schemas for audit APIs."""
 
 from datetime import datetime
-from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -20,13 +19,6 @@ class ChatbotActivityResponse(BaseModel):
     actor_role: str
     action: AuditChatbotAction
     conversation_title: str | None
-    input_tokens: int | None
-    output_tokens: int | None
-    total_tokens: int | None
-    input_cost_usd: Decimal | None
-    output_cost_usd: Decimal | None
-    total_cost_usd: Decimal | None
-    model_used: str | None
     created_at: datetime
 
 

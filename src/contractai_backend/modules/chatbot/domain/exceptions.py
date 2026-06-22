@@ -8,6 +8,7 @@ from ....core.exceptions.base import (
     ServiceUnavailableError,
     ValidationError,
 )
+from ...audit.domain.exceptions import LLMQuotaExceededError
 
 
 class ChatbotValidationError(ValidationError):
@@ -34,10 +35,6 @@ class LLMExecutionError(BadGatewayError):
     def __init__(self, message: str = "Error en la generación de la respuesta por parte del agente."):
         super().__init__(message)
 
-
-class LLMQuotaExceededError(ServiceUnavailableError):
-    def __init__(self, message: str = "Se ha excedido la cuota de peticiones al modelo de lenguaje."):
-        super().__init__(message)
 
 
 class VectorDatabaseUnavailableError(ServiceUnavailableError):

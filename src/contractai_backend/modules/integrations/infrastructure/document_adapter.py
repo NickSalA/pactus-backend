@@ -31,6 +31,7 @@ class DocumentIngestionAdapter(IDocumentIngestionTarget):
         organization_id: int,
         source_metadata: dict[str, Any],
         index_name: str,
+        actor: Any | None = None,
     ) -> Any:
         payload = dict(document_payload)
         payload["form_data"] = self._build_form_data(document_payload=document_payload, source_metadata=source_metadata)
@@ -43,4 +44,5 @@ class DocumentIngestionAdapter(IDocumentIngestionTarget):
             file_data=file_request,
             organization_id=organization_id,
             index_name=index_name,
+            actor=actor,
         )

@@ -43,3 +43,4 @@ class ExtractedDocumentData(BaseModel):
     contract_modality: str | None = None
     form_data: ExtractedDocumentFormData = Field(default_factory=ExtractedDocumentFormData)
     service_items: list[ExtractedDocumentServiceItem] = Field(default_factory=list)
+    usage: dict[str, int] | None = None

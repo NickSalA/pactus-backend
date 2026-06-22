@@ -25,7 +25,7 @@ class TestContractActivityService:
         )
 
         result = await service.record(
-            action=AuditContractAction.CREATED,
+            action=AuditContractAction.MANUAL_UPLOAD,
             actor=actor,
             document_id=100,
             document_name="contrato.pdf",

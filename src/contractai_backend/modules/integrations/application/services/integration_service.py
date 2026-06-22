@@ -1,5 +1,6 @@
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from loguru import logger
@@ -84,6 +85,10 @@ class IntegrationService:
 
                 logger.debug(f"Extrayendo metadatos de: {file_name} | Link: {web_link}")
 
+                actor = None
+                if imported_by is not None:
+                    actor = SimpleNamespace(**imported_by)
+
                 file_bytes = await self.retrieve_file(token, file_id)
                 created_document = await self.ingestion_target.ingest_drive_file(
                     document_payload=document_payload,
@@ -93,15 +98,14 @@ class IntegrationService:
                     organization_id=organization_id,
                     source_metadata=source_metadata,
                     index_name=self.index_name,
+                    actor=actor,
                 )
 
                 logger.success(
                     f"¡Importación exitosa! Archivo: {file_name} | Tamaño: {len(file_bytes)} bytes | Documento: {getattr(created_document, 'id', None)}"
                 )
 
-                if self.contract_activity_service is not None and imported_by is not None:
-                    from types import SimpleNamespace
-                    actor = SimpleNamespace(**imported_by)
+                if self.contract_activity_service is not None and actor is not None:
                     await self.contract_activity_service.record(
                         action=AuditContractAction.IMPORTED_FROM_GOOGLE_DRIVE,
                         actor=actor,
