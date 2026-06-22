@@ -10,7 +10,7 @@ from httpx import ASGITransport, AsyncClient
 
 from contractai_backend.core.exceptions.base import AppError
 from contractai_backend.modules.integrations.api.dependencies import get_integration_service
-from contractai_backend.modules.integrations.api.dependencies import job_registry
+from contractai_backend.modules.integrations.application.jobs import job_registry
 from contractai_backend.modules.integrations.api.routers import router
 from contractai_backend.modules.integrations.api.schemas import ImportRequest
 from contractai_backend.modules.integrations.application.services.integration_service import IntegrationService

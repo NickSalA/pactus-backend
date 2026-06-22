@@ -10,15 +10,11 @@ from contractai_backend.modules.integrations.application import IntegrationServi
 from contractai_backend.shared.api.dependencies.security import CurrentUserDep
 from contractai_backend.shared.config import settings
 
-from .dependencies import (
-    create_job,
-    generate_import_sse_events,
-    get_integration_service,
-    get_job,
-    get_user_active_job,
-    process_drive_import_in_background,
-)
+from ..application.jobs import create_job, get_job, get_user_active_job
+from ..application.services.job_orchestrator import process_drive_import_in_background
+from .dependencies import get_integration_service
 from .schemas import AuthURLResponse, DriveRequest, ImportRequest, ImportResponse, TokenResponse
+from .sse import generate_import_sse_events
 
 router = APIRouter(prefix="/drive")
 IntegrationServiceDep = Annotated[IntegrationService, Depends(get_integration_service)]

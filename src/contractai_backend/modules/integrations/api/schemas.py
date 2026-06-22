@@ -1,11 +1,11 @@
 """HTTP schemas for third-party integration endpoints."""
 
-from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from ...documents.api.schemas import CreateDocumentDraftRequest
+from ..application.jobs import FileStatus
 
 
 class AuthURLResponse(BaseModel):
@@ -40,20 +40,6 @@ class ImportResponse(BaseModel):
     queued_files: int
     index_name: str
     job_id: str
-
-
-class FilePhase(StrEnum):
-    PENDING = "PENDING"
-    DATABASE = "DATABASE"
-    KNOWLEDGE_BASE = "KNOWLEDGE_BASE"
-    COMPLETED = "COMPLETED"
-    FAILED = "FAILED"
-
-
-class FileStatus(BaseModel):
-    file_id: str
-    phase: FilePhase = FilePhase.PENDING
-    error: str | None = None
 
 
 class ImportEvent(BaseModel):
