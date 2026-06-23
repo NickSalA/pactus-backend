@@ -4,6 +4,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 
+from contractai_backend.modules.audit.domain.exceptions import LLMQuotaExceededError
 from contractai_backend.modules.chatbot.application.repositories.base_llm import LLMResult
 from contractai_backend.modules.chatbot.application.services.chatbot_service import ChatbotService
 from contractai_backend.modules.chatbot.domain.entities import ConversationTable
@@ -144,3 +145,23 @@ class TestProcessUserMessage:
         service = _make_service(llm=llm, conv_service=conv_service)
         with pytest.raises(ConversationNotFoundError):
             await service.process_user_message("Hola", thread_id=None, current_user=_make_user())
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_error_stops_before_llm_invocation_and_usage_recording(self):
+        conv = _make_conv(id=5)
+        conv_service = AsyncMock()
+        conv_service.create_conversation.return_value = conv
+        conv_service.append_messages.return_value = conv
+        llm = AsyncMock()
+        ai_token_service = AsyncMock()
+        ai_token_service.check_rate_limit.side_effect = LLMQuotaExceededError()
+
+        service = _make_service(llm=llm, conv_service=conv_service, ai_token_service=ai_token_service)
+
+        with pytest.raises(LLMQuotaExceededError):
+            await service.process_user_message("Hola", thread_id=None, current_user=_make_user())
+
+        ai_token_service.check_rate_limit.assert_awaited_once()
+        llm.invoke.assert_not_awaited()
+        ai_token_service.record_usage.assert_not_awaited()
+        conv_service.append_messages.assert_not_awaited()

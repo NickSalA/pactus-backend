@@ -11,13 +11,19 @@ from contractai_backend.modules.users.domain.value_objs import UserRole
 
 
 class FakePayPalGateway:
-    def __init__(self, custom_id: str = "admin@example.com"):
+    def __init__(self, custom_id: str = "admin@example.com", status: str = "ACTIVE"):
         self.custom_id = custom_id
+        self.status = status
         self.subscription_ids: list[str] = []
+        self.status_subscription_ids: list[str] = []
 
     async def get_subscription(self, subscription_id: str) -> PayPalSubscriptionDetails:
         self.subscription_ids.append(subscription_id)
         return PayPalSubscriptionDetails(id=subscription_id, custom_id=self.custom_id)
+
+    async def get_subscription_status(self, subscription_id: str) -> str:
+        self.status_subscription_ids.append(subscription_id)
+        return self.status
 
 
 class FakeProvisioningRepository:
@@ -27,6 +33,9 @@ class FakeProvisioningRepository:
         self.created_payload: dict[str, str] | None = None
 
     async def get_organization_by_paypal_subscription_id(self, _subscription_id: str) -> OrganizationTable | None:
+        return self.existing_organization
+
+    async def get_organization_by_id(self, _organization_id: int) -> OrganizationTable | None:
         return self.existing_organization
 
     async def get_user_by_email(self, _email: str) -> UserTable | None:
@@ -103,3 +112,51 @@ class TestPayPalSubscriptionService:
         assert result.admin_email == "admin@example.com"
         assert result.paypal_subscription_id == "I-6Y983831YP445233M"
         assert repository.created_payload is None
+
+    @pytest.mark.asyncio
+    async def test_check_subscription_active_returns_true_for_active_paypal_subscription(self):
+        organization = OrganizationTable(id=7, name="Acme", paypal_subscription_id="I-ACTIVE123")
+        gateway = FakePayPalGateway(status="ACTIVE")
+        repository = FakeProvisioningRepository(existing_organization=organization)
+        service = PayPalSubscriptionService(paypal_gateway=gateway, provisioning_repository=repository)
+
+        result = await service.check_subscription_active(organization_id=7)
+
+        assert result is True
+        assert gateway.status_subscription_ids == ["I-ACTIVE123"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("paypal_status", ["CANCELLED", "SUSPENDED"])
+    async def test_check_subscription_active_returns_false_for_inactive_paypal_statuses(self, paypal_status: str):
+        organization = OrganizationTable(id=7, name="Acme", paypal_subscription_id="I-INACTIVE123")
+        gateway = FakePayPalGateway(status=paypal_status)
+        repository = FakeProvisioningRepository(existing_organization=organization)
+        service = PayPalSubscriptionService(paypal_gateway=gateway, provisioning_repository=repository)
+
+        result = await service.check_subscription_active(organization_id=7)
+
+        assert result is False
+        assert gateway.status_subscription_ids == ["I-INACTIVE123"]
+
+    @pytest.mark.asyncio
+    async def test_check_subscription_active_returns_false_when_organization_does_not_exist(self):
+        gateway = FakePayPalGateway(status="ACTIVE")
+        repository = FakeProvisioningRepository(existing_organization=None)
+        service = PayPalSubscriptionService(paypal_gateway=gateway, provisioning_repository=repository)
+
+        result = await service.check_subscription_active(organization_id=999)
+
+        assert result is False
+        assert gateway.status_subscription_ids == []
+
+    @pytest.mark.asyncio
+    async def test_check_subscription_active_returns_false_when_organization_has_no_subscription_id(self):
+        organization = OrganizationTable(id=7, name="Acme", paypal_subscription_id=None)
+        gateway = FakePayPalGateway(status="ACTIVE")
+        repository = FakeProvisioningRepository(existing_organization=organization)
+        service = PayPalSubscriptionService(paypal_gateway=gateway, provisioning_repository=repository)
+
+        result = await service.check_subscription_active(organization_id=7)
+
+        assert result is False
+        assert gateway.status_subscription_ids == []
