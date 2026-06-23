@@ -15,9 +15,19 @@ class PayPalSubscriptionGateway(ABC):
         """Return subscription data from PayPal."""
         pass
 
+    @abstractmethod
+    async def get_subscription_status(self, subscription_id: str) -> str:
+        """Return the current status of a PayPal subscription (e.g. ACTIVE, CANCELLED)."""
+        pass
+
 
 class BillingProvisioningRepository(ABC):
     """Persistence port for subscription-driven organization provisioning."""
+
+    @abstractmethod
+    async def get_organization_by_id(self, organization_id: int) -> OrganizationTable | None:
+        """Return an organization by its ID."""
+        pass
 
     @abstractmethod
     async def get_organization_by_paypal_subscription_id(self, subscription_id: str) -> OrganizationTable | None:

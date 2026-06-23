@@ -28,3 +28,5 @@ class UserResponse(BaseModel):
 
 class CurrentUserResponse(UserResponse):
     """Authenticated user read model."""
+
+    subscription_active: bool

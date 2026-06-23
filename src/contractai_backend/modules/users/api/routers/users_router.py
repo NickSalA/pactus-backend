@@ -4,6 +4,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
 
+from contractai_backend.modules.billing.api.dependencies import get_paypal_subscription_service
+from contractai_backend.modules.billing.application.services import PayPalSubscriptionService
 from contractai_backend.modules.users.api.dependencies import get_user_application_service
 from contractai_backend.modules.users.api.schemas import CurrentUserResponse, UserResponse
 from contractai_backend.modules.users.application.dto.user_request import UserUpdateRequest
@@ -15,9 +17,16 @@ router = APIRouter()
 
 
 @router.get("/me", response_model=CurrentUserResponse)
-async def get_me(current_user: CurrentUserDep) -> CurrentUserResponse:
+async def get_me(
+    current_user: CurrentUserDep,
+    subscription_service: Annotated[PayPalSubscriptionService, Depends(get_paypal_subscription_service)],
+) -> CurrentUserResponse:
     """Endpoint para obtener los datos del usuario autenticado."""
-    return CurrentUserResponse.model_validate(current_user)
+    subscription_active = await subscription_service.check_subscription_active(current_user.organization_id)
+    return CurrentUserResponse(
+        **current_user.model_dump(),
+        subscription_active=subscription_active,
+    )
 
 
 @router.patch("/{user_id}", response_model=UserResponse)
