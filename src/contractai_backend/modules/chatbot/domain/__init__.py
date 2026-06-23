@@ -6,7 +6,6 @@ from .exceptions import (
     ConversationNotFoundError,
     LLMExecutionError,
     LLMInitializationError,
-    LLMQuotaExceededError,
     VectorDatabaseUnavailableError,
     VectorSearchError,
 )
@@ -19,7 +18,6 @@ __all__ = [
     "ConversationTable",
     "LLMExecutionError",
     "LLMInitializationError",
-    "LLMQuotaExceededError",
     "Message",
     "VectorDatabaseUnavailableError",
     "VectorSearchError",

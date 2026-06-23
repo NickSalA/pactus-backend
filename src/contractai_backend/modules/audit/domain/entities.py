@@ -11,7 +11,7 @@ from sqlmodel import Field
 from contractai_backend.core.domain.base import BigIntBaseTable
 from contractai_backend.core.domain.db_schemas import AUDIT_SCHEMA, CHATBOT_SCHEMA, CONTRACTS_SCHEMA, IDENTITY_SCHEMA, TEMPLATES_SCHEMA
 
-from .value_objs import AuditChatbotAction, AuditContractAction, AuditTemplateAction, AuditUserAction
+from .value_objs import AITokenSource, AuditChatbotAction, AuditContractAction, AuditTemplateAction, AuditUserAction
 
 
 class UserActivityTable(BigIntBaseTable, table=True):
@@ -110,13 +110,7 @@ class ChatbotActivityTable(BigIntBaseTable, table=True):
             index=True,
         ),
     )
-    input_tokens: int | None = Field(default=None, sa_column=Column("input_tokens", Integer, nullable=True))
-    output_tokens: int | None = Field(default=None, sa_column=Column("output_tokens", Integer, nullable=True))
-    total_tokens: int | None = Field(default=None, sa_column=Column("total_tokens", Integer, nullable=True))
-    input_cost_usd: Decimal | None = Field(default=None, sa_column=Column("input_cost_usd", Numeric, nullable=True))
-    output_cost_usd: Decimal | None = Field(default=None, sa_column=Column("output_cost_usd", Numeric, nullable=True))
-    total_cost_usd: Decimal | None = Field(default=None, sa_column=Column("total_cost_usd", Numeric, nullable=True))
-    model_used: str | None = Field(default=None, sa_column=Column("model_used", String, nullable=True))
+
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column("created_at", DateTime(timezone=True), nullable=False),
@@ -251,4 +245,47 @@ class ContractActivityTable(BigIntBaseTable, table=True):
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column("created_at", DateTime(timezone=True), nullable=False),
+    )
+
+class AITokenUsageTable(BigIntBaseTable, table=True):
+    """Audit trail for global AI token usage."""
+
+    __tablename__ = "ai_token_usage"
+    __table_args__: ClassVar[dict[str, str]] = {"schema": AUDIT_SCHEMA}
+    organization_id: int = Field(
+        sa_column=Column(
+            "organization_id",
+            BigInteger,
+            ForeignKey(f"{IDENTITY_SCHEMA}.organizations.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
+    actor_user_id: int = Field(
+        sa_column=Column(
+            "actor_user_id",
+            BigInteger,
+            ForeignKey(f"{IDENTITY_SCHEMA}.users.id"),
+            nullable=False,
+            index=True,
+        )
+    )
+    source: AITokenSource = Field(
+        sa_column=Column(
+            "source",
+            ENUM(AITokenSource, name="ai_token_source", schema=AUDIT_SCHEMA, create_type=False),
+            nullable=False,
+            index=True,
+        )
+    )
+    input_tokens: int | None = Field(default=None, sa_column=Column("input_tokens", Integer, nullable=True))
+    output_tokens: int | None = Field(default=None, sa_column=Column("output_tokens", Integer, nullable=True))
+    total_tokens: int | None = Field(default=None, sa_column=Column("total_tokens", Integer, nullable=True))
+    input_cost_usd: Decimal | None = Field(default=None, sa_column=Column("input_cost_usd", Numeric, nullable=True))
+    output_cost_usd: Decimal | None = Field(default=None, sa_column=Column("output_cost_usd", Numeric, nullable=True))
+    total_cost_usd: Decimal | None = Field(default=None, sa_column=Column("total_cost_usd", Numeric, nullable=True))
+    model_used: str | None = Field(default=None, sa_column=Column("model_used", String, nullable=True))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column("created_at", DateTime(timezone=True), nullable=False, index=True),
     )

@@ -3,7 +3,10 @@
 from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
+from typing import Any as AnyType
 
+from ....audit.application.services import ContractActivityService
+from ....audit.domain.value_objs import AuditContractAction
 from ....documents.domain import DocumentType
 from ....documents.domain.access_policy import can_write_document_type
 from ....users.domain.value_objs import UserRole
@@ -18,12 +21,6 @@ from ..repositories.base_render import ITemplateRenderer
 from .rendered_contract_formatter import RenderedContractFormatter
 from .template_content_synchronizer import TemplateContentSynchronizer
 from .template_runtime_payloads import build_signature_time_payload
-
-
-from typing import Any as AnyType
-
-from ....audit.application.services import ContractActivityService
-from ....audit.domain.value_objs import AuditContractAction
 
 
 class TemplateService:

@@ -22,3 +22,5 @@ class AgentState(TypedDict, total=False):
     permission_response: str | None
     resolved_document_ids: list[int] | None
     resolved_contract_candidates: list[dict[str, object]] | None
+    accumulated_input_tokens: int
+    accumulated_output_tokens: int

@@ -77,13 +77,6 @@ def _make_chatbot_activity() -> ChatbotActivityTable:
         actor_role="WORKER",
         action=AuditChatbotAction.RESPONSE_GENERATED,
         conversation_id=5,
-        input_tokens=100,
-        output_tokens=50,
-        total_tokens=150,
-        input_cost_usd="0.0001",
-        output_cost_usd="0.0002",
-        total_cost_usd="0.0003",
-        model_used="gemini-test",
         created_at=datetime(2026, 6, 8, tzinfo=UTC),
     )
 
@@ -129,7 +122,6 @@ class TestChatbotActivityRouter:
         assert response.json()[0]["action"] == "RESPONSE_GENERATED"
         assert response.json()[0]["conversation_title"] == "Contrato de servicios"
         assert "conversation_id" not in response.json()[0]
-        assert response.json()[0]["total_tokens"] == 150
         service.list_by_organization.assert_awaited_once_with(organization_id=10, limit=10, offset=2)
 
     @pytest.mark.asyncio

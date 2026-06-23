@@ -1,11 +1,16 @@
 """HTTP schemas for audit APIs."""
 
 from datetime import datetime
-from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
-from contractai_backend.modules.audit.domain.value_objs import AuditChatbotAction, AuditContractAction, AuditTemplateAction, AuditUserAction
+from contractai_backend.modules.audit.domain.value_objs import (
+    AITokenSource,
+    AuditChatbotAction,
+    AuditContractAction,
+    AuditTemplateAction,
+    AuditUserAction,
+)
 
 
 class ChatbotActivityResponse(BaseModel):
@@ -20,13 +25,6 @@ class ChatbotActivityResponse(BaseModel):
     actor_role: str
     action: AuditChatbotAction
     conversation_title: str | None
-    input_tokens: int | None
-    output_tokens: int | None
-    total_tokens: int | None
-    input_cost_usd: Decimal | None
-    output_cost_usd: Decimal | None
-    total_cost_usd: Decimal | None
-    model_used: str | None
     created_at: datetime
 
 
@@ -69,8 +67,6 @@ class TemplateActivityResponse(BaseModel):
     created_at: datetime
 
 
-
-
 class ContractActivityResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -90,4 +86,39 @@ class ContractActivityResponse(BaseModel):
     created_at: datetime
 
 
-__all__ = ["ChatbotActivityResponse", "ContractActivityResponse", "TemplateActivityResponse", "UserActivityResponse"]
+class AITokenUsageResponse(BaseModel):
+    """Response model for individual AI token usage audit entries."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    organization_id: int
+    actor_user_id: int
+    source: AITokenSource
+    input_tokens: int | None
+    output_tokens: int | None
+    total_tokens: int | None
+    input_cost_usd: float | None
+    output_cost_usd: float | None
+    total_cost_usd: float | None
+    model_used: str | None
+    created_at: datetime
+
+
+class AITokenUsageSummaryResponse(BaseModel):
+    """Response model for aggregated AI token usage stats."""
+
+    total_tokens: int
+    total_cost_usd: float
+    input_tokens: int
+    output_tokens: int
+
+
+__all__ = [
+    "AITokenUsageResponse",
+    "AITokenUsageSummaryResponse",
+    "ChatbotActivityResponse",
+    "ContractActivityResponse",
+    "TemplateActivityResponse",
+    "UserActivityResponse",
+]

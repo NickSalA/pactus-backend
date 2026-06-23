@@ -25,7 +25,7 @@ class TestContractActivityService:
         )
 
         result = await service.record(
-            action=AuditContractAction.CREATED,
+            action=AuditContractAction.MANUAL_UPLOAD,
             actor=actor,
             document_id=100,
             document_name="contrato.pdf",
@@ -33,7 +33,7 @@ class TestContractActivityService:
             state="ACTIVE",
         )
 
-        assert result.action == AuditContractAction.CREATED
+        assert result.action == AuditContractAction.MANUAL_UPLOAD
         assert result.organization_id == 10
         assert result.actor_user_id == 1
         assert result.actor_name == "Admin User"

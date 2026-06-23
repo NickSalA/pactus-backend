@@ -4,13 +4,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from contractai_backend.modules.integrations.api.dependencies import (
+from contractai_backend.modules.integrations.composition import (
     build_background_integration_service,
+)
+from contractai_backend.modules.integrations.application.jobs import (
     create_job,
     job_registry,
+    FilePhase,
+)
+from contractai_backend.modules.integrations.application.services.job_orchestrator import (
     process_drive_import_in_background,
 )
-from contractai_backend.modules.integrations.api.schemas import FilePhase
+from contractai_backend.modules.integrations.domain.exceptions import InvalidCloudTokenError
 
 
 class _AsyncContextManager:
@@ -41,32 +46,27 @@ class TestBuildBackgroundIntegrationService:
         mock_async_qdrant = AsyncMock()
         mock_sync_qdrant = MagicMock()
         mock_session = MagicMock()
-        mock_document_service = MagicMock()
         mock_ingestion_target = MagicMock()
         mock_contract_activity_service = MagicMock()
 
         with (
-            patch("contractai_backend.modules.integrations.api.dependencies.get_cloud_storage_provider", return_value=mock_provider),
-            patch("contractai_backend.modules.integrations.api.dependencies.build_http_client", return_value=mock_http_client),
+            patch("contractai_backend.modules.integrations.composition.build_cloud_storage_provider", return_value=mock_provider),
+            patch("contractai_backend.modules.integrations.composition.build_http_client", return_value=mock_http_client),
             patch(
-                "contractai_backend.modules.integrations.api.dependencies.get_aclient",
+                "contractai_backend.modules.integrations.composition.get_aclient",
                 new=AsyncMock(return_value=mock_async_qdrant),
             ),
-            patch("contractai_backend.modules.integrations.api.dependencies.get_client", return_value=mock_sync_qdrant),
+            patch("contractai_backend.modules.integrations.composition.get_client", return_value=mock_sync_qdrant),
             patch(
-                "contractai_backend.modules.integrations.api.dependencies.get_session_context",
+                "contractai_backend.modules.integrations.composition.get_session_context",
                 return_value=_AsyncContextManager(mock_session),
             ),
             patch(
-                "contractai_backend.modules.integrations.api.dependencies.build_default_document_command_service",
-                return_value=mock_document_service,
-            ) as mock_build_document_command_service,
-            patch(
-                "contractai_backend.modules.integrations.api.dependencies.get_document_ingestion_target",
+                "contractai_backend.modules.integrations.composition.build_document_ingestion_target",
                 return_value=mock_ingestion_target,
             ) as mock_get_document_ingestion_target,
             patch(
-                "contractai_backend.modules.integrations.api.dependencies.build_default_contract_activity_service",
+                "contractai_backend.modules.integrations.composition.build_default_contract_activity_service",
                 return_value=mock_contract_activity_service,
             ) as mock_build_contract_activity_service,
         ):
@@ -75,13 +75,12 @@ class TestBuildBackgroundIntegrationService:
                 assert service.ingestion_target is mock_ingestion_target
                 assert service.contract_activity_service is mock_contract_activity_service
 
-        mock_build_document_command_service.assert_called_once_with(
+        mock_get_document_ingestion_target.assert_called_once_with(
             session=mock_session,
             async_qdrant=mock_async_qdrant,
             sync_qdrant=mock_sync_qdrant,
             http_client=mock_http_client,
         )
-        mock_get_document_ingestion_target.assert_called_once_with(document_service=mock_document_service)
         mock_build_contract_activity_service.assert_called_once_with(session=mock_session)
         mock_async_qdrant.close.assert_awaited_once()
         mock_sync_qdrant.close.assert_called_once_with()
@@ -103,7 +102,7 @@ class TestProcessDriveImportInBackground:
 
         with (
             patch(
-                "contractai_backend.modules.integrations.api.dependencies.build_background_integration_service",
+                "contractai_backend.modules.integrations.application.services.job_orchestrator.build_background_integration_service",
                 side_effect=[_AsyncContextManager(first_service), _AsyncContextManager(second_service)],
             ) as mock_builder,
             patch.object(job_registry, "schedule_cleanup", new=AsyncMock()) as mock_schedule_cleanup,
@@ -151,9 +150,9 @@ class TestProcessDriveImportInBackground:
     @pytest.mark.asyncio
     async def test_process_import_stops_batch_when_token_becomes_invalid(self):
         first_service = MagicMock()
-        first_service.process_import = AsyncMock(return_value=False)
+        first_service.process_import = AsyncMock(side_effect=InvalidCloudTokenError())
         second_service = MagicMock()
-        second_service.process_import = AsyncMock(return_value=True)
+        second_service.process_import = AsyncMock(return_value=None)
         token = {"token": "expired"}
         first_file = {"file_id": "file-1", "document": {"name": "Contrato 1"}}
         second_file = {"file_id": "file-2", "document": {"name": "Contrato 2"}}
@@ -162,7 +161,7 @@ class TestProcessDriveImportInBackground:
 
         with (
             patch(
-                "contractai_backend.modules.integrations.api.dependencies.build_background_integration_service",
+                "contractai_backend.modules.integrations.application.services.job_orchestrator.build_background_integration_service",
                 side_effect=[_AsyncContextManager(first_service), _AsyncContextManager(second_service)],
             ) as mock_builder,
             patch.object(job_registry, "schedule_cleanup", new=AsyncMock()) as mock_schedule_cleanup,
@@ -198,7 +197,7 @@ class TestProcessDriveImportInBackground:
 
         with (
             patch(
-                "contractai_backend.modules.integrations.api.dependencies.build_background_integration_service",
+                "contractai_backend.modules.integrations.application.services.job_orchestrator.build_background_integration_service",
                 side_effect=[_AsyncContextManager(service)],
             ) as mock_builder,
             patch.object(job_registry, "schedule_cleanup", new=AsyncMock()) as mock_schedule_cleanup,
@@ -226,11 +225,11 @@ class TestProcessDriveImportInBackground:
 
         with (
             patch(
-                "contractai_backend.modules.integrations.api.dependencies.build_background_integration_service",
+                "contractai_backend.modules.integrations.application.services.job_orchestrator.build_background_integration_service",
                 side_effect=[_AsyncContextManager(service)],
             ),
             patch.object(job_registry, "schedule_cleanup", new=AsyncMock()),
-            patch("contractai_backend.modules.integrations.api.dependencies.logger.error") as mock_logger_error,
+            patch("contractai_backend.modules.integrations.application.services.job_orchestrator.logger.error") as mock_logger_error,
         ):
             await process_drive_import_in_background(
                 tracker.job_id,

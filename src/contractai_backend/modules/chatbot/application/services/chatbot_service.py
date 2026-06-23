@@ -4,13 +4,15 @@ from typing import Any
 
 from loguru import logger
 
-from ....audit.application.services import ChatbotActivityService
+from ....audit.application.dto import TokenCostResult
+from ....audit.application.services import AITokenTrackingService, ChatbotActivityService
+from ....audit.domain.value_objs import AITokenSource
+from ....audit.infrastructure.token_cost_calculator import TokenCostCalculator
 from ....documents.domain.access_policy import get_readable_document_types
-from ...application.dto import ChartData, LLMResult, TokenCostResult
+from ...application.dto import ChartData, LLMResult
 from ...application.repositories.base_llm import ILLMProvider
 from ...domain.entities import ConversationTable, Message
 from ...domain.exceptions import ConversationNotFoundError
-from ...infrastructure.token_cost_calculator import TokenCostCalculator
 from .conversation_service import ConversationService
 
 LIMIT_TITLE = 30
@@ -22,10 +24,12 @@ class ChatbotService:
         llm_provider: ILLMProvider,
         conv_service: ConversationService,
         chatbot_activity_service: ChatbotActivityService | None = None,
+        ai_token_tracking_service: AITokenTrackingService | None = None,
     ):
         self.llm_provider: ILLMProvider = llm_provider
         self.conv_service: ConversationService = conv_service
         self.chatbot_activity_service = chatbot_activity_service
+        self.ai_token_tracking_service = ai_token_tracking_service
         self._cost_calculator = TokenCostCalculator()
 
     @staticmethod
@@ -164,6 +168,9 @@ class ChatbotService:
             current_user=current_user,
         )
 
+        if self.ai_token_tracking_service:
+            await self.ai_token_tracking_service.check_rate_limit(actor=current_user)
+
         llm_result = await self.llm_provider.invoke(
             message=message,
             thread_id=thread_id,
@@ -175,7 +182,9 @@ class ChatbotService:
             llm_result=llm_result,
         )
         if self.chatbot_activity_service:
-            await self.chatbot_activity_service.record_response_generated(actor=current_user, conversation_id=thread_id, cost=cost)
+            await self.chatbot_activity_service.record_response_generated(actor=current_user, conversation_id=thread_id)
+        if self.ai_token_tracking_service:
+            await self.ai_token_tracking_service.record_usage(source=AITokenSource.CHATBOT, actor=current_user, cost=cost)
 
         await self._append_bot_message(
             response_text=llm_result.response,

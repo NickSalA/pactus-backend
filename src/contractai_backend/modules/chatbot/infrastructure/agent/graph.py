@@ -65,21 +65,41 @@ async def run_context_agent(state: AgentState, llm: BaseChatModel):
         payload={"user_message": message},
     )
 
+    input_tokens = 0
+    output_tokens = 0
+    if hasattr(response, "usage_metadata") and response.usage_metadata:
+        input_tokens = response.usage_metadata.get("input_tokens", 0)
+        output_tokens = response.usage_metadata.get("output_tokens", 0)
+
+    state_input = state.get("accumulated_input_tokens", 0) or 0
+    state_output = state.get("accumulated_output_tokens", 0) or 0
+    accumulated_input = state_input + input_tokens
+    accumulated_output = state_output + output_tokens
+
     try:
         decision = parse_structured_decision(response.content, ContextAgentDecision)
     except Exception:
         fallback_response = coerce_content_to_text(response.content).strip()
         if fallback_response and not fallback_response.lstrip().startswith("{"):
-            return {"context_route": "n1_early_response", "early_response": fallback_response}
+            return {
+                "context_route": "n1_early_response",
+                "early_response": fallback_response,
+                "accumulated_input_tokens": accumulated_input,
+                "accumulated_output_tokens": accumulated_output,
+            }
 
         return {
             "context_route": "n1_early_response",
             "early_response": "No pude interpretar la solicitud inicial. Reformulala brevemente por favor.",
+            "accumulated_input_tokens": accumulated_input,
+            "accumulated_output_tokens": accumulated_output,
         }
 
     return {
         "context_route": decision.route,
         "early_response": decision.response if decision.route == "n1_early_response" else None,
+        "accumulated_input_tokens": accumulated_input,
+        "accumulated_output_tokens": accumulated_output,
     }
 
 
@@ -212,7 +232,21 @@ async def call_model(state: AgentState, llm: Runnable):
     messages = [system_message, access_message] + resolution_messages + state["messages"]
 
     response = await llm.ainvoke(messages)
-    return {"messages": [response]}
+
+    input_tokens = 0
+    output_tokens = 0
+    if hasattr(response, "usage_metadata") and response.usage_metadata:
+        input_tokens = response.usage_metadata.get("input_tokens", 0)
+        output_tokens = response.usage_metadata.get("output_tokens", 0)
+
+    state_input = state.get("accumulated_input_tokens", 0) or 0
+    state_output = state.get("accumulated_output_tokens", 0) or 0
+
+    return {
+        "messages": [response],
+        "accumulated_input_tokens": state_input + input_tokens,
+        "accumulated_output_tokens": state_output + output_tokens,
+    }
 
 
 def finalize_response(state: AgentState):

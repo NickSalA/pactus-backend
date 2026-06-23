@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from ...audit.application.dto import TokenCostResult  # noqa: F401
 from ...documents.domain.value_objs import DocumentType
 
 # ---------------------------------------------------------------------------
@@ -50,16 +51,6 @@ class LLMResult:
     total_tokens: int = 0
     model_used: str = ""
 
-
-@dataclass
-class TokenCostResult:
-    input_tokens: int
-    output_tokens: int
-    total_tokens: int
-    input_cost_usd: float
-    output_cost_usd: float
-    total_cost_usd: float
-    model_used: str
 
 
 @dataclass

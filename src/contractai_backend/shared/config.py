@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = Field(default=...)
     # MODEL_SECOND_API_KEY: str = Field(default="your-second-model-api-key")
     MODEL_TEMPERATURE: float = Field(default=0.7)
+    MAX_DAILY_TOKENS_PER_USER: int = Field(default=1000000)
 
     GEMINI_INPUT_PRICE_PER_M: float = Field(default=0.00125)
     GEMINI_OUTPUT_PRICE_PER_M: float = Field(default=0.005)

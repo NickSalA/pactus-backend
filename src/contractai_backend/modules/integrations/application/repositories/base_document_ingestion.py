@@ -13,5 +13,6 @@ class IDocumentIngestionTarget(ABC):
         organization_id: int,
         source_metadata: dict[str, Any],
         index_name: str,
+        actor: Any | None = None,
     ) -> Any:
         pass

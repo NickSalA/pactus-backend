@@ -6,8 +6,8 @@ from fastapi import Depends, Request
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from ....modules.audit.application.services import ChatbotActivityService
-from ....modules.audit.composition import build_default_chatbot_activity_service
+from ....modules.audit.application.services import AITokenTrackingService, ChatbotActivityService
+from ....modules.audit.composition import build_default_ai_token_tracking_service, build_default_chatbot_activity_service
 from ....modules.catalog.composition import build_default_service_repository
 from ....modules.dashboard.application.services import DashboardService
 from ....modules.dashboard.infrastructure import SQLModelDashboardRepository
@@ -129,8 +129,10 @@ async def get_chatbot_service(
 ) -> ChatbotService:
     """Construye el servicio principal del chatbot, inyectando el LLM y el servicio de conversaciones."""
     chatbot_activity_service: ChatbotActivityService = build_default_chatbot_activity_service(session=session)
+    ai_token_tracking_service: AITokenTrackingService = build_default_ai_token_tracking_service(session=session)
     return ChatbotService(
         llm_provider=llm_provider,
         conv_service=conv_service,
         chatbot_activity_service=chatbot_activity_service,
+        ai_token_tracking_service=ai_token_tracking_service,
     )

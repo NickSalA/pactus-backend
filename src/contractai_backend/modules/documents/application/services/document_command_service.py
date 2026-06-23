@@ -9,8 +9,12 @@ from typing import Any
 from loguru import logger
 
 from .....core.exceptions.base import ForbiddenError
+from ....audit.application.services import AITokenTrackingService
+from ....audit.domain.value_objs import AITokenSource
+from ....audit.infrastructure.token_cost_calculator import TokenCostCalculator
 from ....catalog.application.repositories import ServiceRepository
 from ....folders.application.repositories import FolderRepository
+from ....users.domain.entities import UserTable
 from ....users.domain.value_objs import UserRole
 from ...domain import DocumentTable, validate_service_currency_alignment, validate_service_periods
 from ...domain.access_policy import can_manage_folder, can_read_document_type, can_write_document_type
@@ -70,6 +74,7 @@ class DocumentCommandService:
         chunk_enricher: DocumentChunkEnricher,
         folder_repo: FolderRepository | None = None,
         structured_extractor: DocumentStructuredExtractor | None = None,
+        ai_token_tracking_service: AITokenTrackingService | None = None,
     ):
         """Stores dependencies needed by document commands."""
         self.command_repo = command_repo
@@ -85,6 +90,8 @@ class DocumentCommandService:
         self.response_assembler = DocumentResponseAssembler(sql_repo=query_repo)
         self.external_resources = DocumentExternalResourceService(storage_repo=storage_repo, vector_repo=vector_repo)
         self.creation_compensation = DocumentCreationCompensationService(external_resources=self.external_resources)
+        self.ai_token_tracking_service = ai_token_tracking_service
+        self._cost_calculator = TokenCostCalculator()
 
     async def _validate_folder_access(
         self,
@@ -467,9 +474,12 @@ class DocumentCommandService:
         file_data: FileRequest,
         organization_id: int,
         user_role: UserRole | None = None,
+        actor: UserTable | Any | None = None,
         index_name: str = "contracts_index",
     ) -> DocumentResponse:
         """Creates a document and syncs all external stores."""
+        if self.ai_token_tracking_service and actor:
+            await self.ai_token_tracking_service.check_rate_limit(actor=actor)
         parsed_document = await self.extractor.extract(file=file_data.content, filename=file_data.filename)
         if not parsed_document:
             raise DocumentExtractionError()
@@ -480,6 +490,15 @@ class DocumentCommandService:
             parsed_document=parsed_document,
             organization_id=organization_id,
         )
+
+        if self.ai_token_tracking_service and actor and extracted_data.usage:
+            cost = self._cost_calculator.calculate(
+                input_tokens=extracted_data.usage.get("input_tokens", 0),
+                output_tokens=extracted_data.usage.get("output_tokens", 0),
+            )
+            await self.ai_token_tracking_service.record_usage(
+                source=AITokenSource.INTEGRATIONS, actor=actor, cost=cost
+            )
 
         new_document, resolved_service_items, normalized_form_data, resolved_contract_kind = await self._prepare_create_data(
             data=data,
