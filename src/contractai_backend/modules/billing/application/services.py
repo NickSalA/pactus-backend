@@ -1,5 +1,7 @@
 """Application services for billing workflows."""
 
+import time
+
 from contractai_backend.modules.billing.application.dto import ConfirmPayPalSubscriptionRequest, ConfirmPayPalSubscriptionResponse
 from contractai_backend.modules.billing.application.repositories import BillingProvisioningRepository, PayPalSubscriptionGateway
 from contractai_backend.modules.billing.domain.exceptions import PayPalSubscriptionConflictError, PayPalSubscriptionValidationError
@@ -7,6 +9,10 @@ from contractai_backend.modules.organizations.domain.entities import Organizatio
 from contractai_backend.modules.users.domain.entities import UserTable
 from contractai_backend.modules.users.domain.value_objs import UserRole
 
+_cache: dict[int, tuple[bool, float]] = {}
+
+# Tiempo por minutos
+_TTL = 10 * 60
 
 class PayPalSubscriptionService:
     """Confirms PayPal subscriptions and provisions the first organization admin."""
@@ -40,12 +46,28 @@ class PayPalSubscriptionService:
         return self._build_response(organization=organization, admin_email=payload.email)
 
     async def check_subscription_active(self, organization_id: int) -> bool:
-        """Check if an organization has an active PayPal subscription."""
+        """Check if an organization has an active PayPal subscription.
+
+        Results are cached in memory for 5 minutes to avoid hitting PayPal on every request.
+        Legacy organizations (no paypal_subscription_id) pass through if they are active.
+        """
+        now = time.time()
+        cached = _cache.get(organization_id)
+        if cached and now - cached[1] < _TTL:
+            return cached[0]
+
         organization = await self.provisioning_repository.get_organization_by_id(organization_id)
-        if not organization or not organization.paypal_subscription_id:
+        if not organization:
+            _cache[organization_id] = (False, now)
             return False
+        if not organization.paypal_subscription_id:
+            _cache[organization_id] = (organization.is_active, now)
+            return organization.is_active
+
         status = await self.paypal_gateway.get_subscription_status(organization.paypal_subscription_id)
-        return status == "ACTIVE"
+        is_active = status == "ACTIVE"
+        _cache[organization_id] = (is_active, now)
+        return is_active
 
     @staticmethod
     def _build_response(organization: OrganizationTable, admin_email: str) -> ConfirmPayPalSubscriptionResponse:

@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 from importlib.metadata import version as get_version
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -11,6 +11,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from contractai_backend.modules.audit.api import audit_router
 from contractai_backend.modules.billing.api import billing_router
+from contractai_backend.modules.billing.api.dependencies import require_active_subscription
 from contractai_backend.modules.integrations.api import integrations_router
 from contractai_backend.modules.organizations.api import organizations_router
 
@@ -29,6 +30,8 @@ from .shared.api.error_handlers import app_error_handler, global_exception_handl
 from .shared.api.middlewares import LoguruMiddleware
 from .shared.config import settings
 from .shared.infrastructure.http import build_http_client
+
+_guard = Depends(require_active_subscription)
 
 __version__: str = get_version(distribution_name="contractai-backend")
 
@@ -50,20 +53,20 @@ def create() -> FastAPI:
 
     app = FastAPI(title=settings.PROJECT_NAME, version=__version__, lifespan=lifespan)
 
-    app.include_router(router=documents_router, prefix="/documents", tags=["Documentos"])
-    app.include_router(router=services_router, prefix="/services", tags=["Servicios"])
-    app.include_router(router=folders_router, prefix="/folders", tags=["Carpetas"])
+    app.include_router(router=documents_router, prefix="/documents", tags=["Documentos"], dependencies=[_guard])
+    app.include_router(router=services_router, prefix="/services", tags=["Servicios"], dependencies=[_guard])
+    app.include_router(router=folders_router, prefix="/folders", tags=["Carpetas"], dependencies=[_guard])
     app.include_router(router=auth_router, prefix="/login", tags=["Autenticación"])
     app.include_router(router=users_router, prefix="/user", tags=["Usuarios"])
-    app.include_router(router=chat_router, prefix="/chatbot", tags=["Chatbot"])
-    app.include_router(router=conversation_router, prefix="/conversations", tags=["Conversaciones"])
-    app.include_router(router=dashboard_router, prefix="/dashboard", tags=["Dashboard"])
-    app.include_router(router=integrations_router, prefix="/integrations", tags=["Integraciones"])
-    app.include_router(router=organizations_router, prefix="/organizations", tags=["Organizaciones"])
+    app.include_router(router=chat_router, prefix="/chatbot", tags=["Chatbot"], dependencies=[_guard])
+    app.include_router(router=conversation_router, prefix="/conversations", tags=["Conversaciones"], dependencies=[_guard])
+    app.include_router(router=dashboard_router, prefix="/dashboard", tags=["Dashboard"], dependencies=[_guard])
+    app.include_router(router=integrations_router, prefix="/integrations", tags=["Integraciones"], dependencies=[_guard])
+    app.include_router(router=organizations_router, prefix="/organizations", tags=["Organizaciones"], dependencies=[_guard])
     app.include_router(router=billing_router, prefix="/billing", tags=["Facturación"])
-    app.include_router(router=audit_router, prefix="/audit", tags=["Auditoría"])
-    app.include_router(router=notifications_router, prefix="/notifications", tags=["Notificaciones"])
-    app.include_router(router=templates_router, prefix="/templates", tags=["Plantillas"])
+    app.include_router(router=audit_router, prefix="/audit", tags=["Auditoría"], dependencies=[_guard])
+    app.include_router(router=notifications_router, prefix="/notifications", tags=["Notificaciones"], dependencies=[_guard])
+    app.include_router(router=templates_router, prefix="/templates", tags=["Plantillas"], dependencies=[_guard])
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
     app.add_middleware(
         middleware_class=CORSMiddleware,

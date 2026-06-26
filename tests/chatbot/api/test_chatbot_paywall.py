@@ -3,15 +3,17 @@
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from contractai_backend.modules.billing.api.dependencies import get_paypal_subscription_service
+from contractai_backend.core.exceptions.base import AppError
+from contractai_backend.modules.billing.api.dependencies import get_paypal_subscription_service, require_active_subscription
 from contractai_backend.modules.chatbot.api.dependencies import get_chatbot_service
 from contractai_backend.modules.chatbot.api.routers.chat_router import router
 from contractai_backend.modules.users.domain.entities import UserTable
 from contractai_backend.modules.users.domain.value_objs import UserRole
 from contractai_backend.shared.api.dependencies.security import get_current_user
+from contractai_backend.shared.api.error_handlers import app_error_handler
 
 
 def _make_user() -> UserTable:
@@ -27,7 +29,8 @@ def _make_user() -> UserTable:
 
 def _make_app(chatbot_service, subscription_service) -> FastAPI:
     app = FastAPI()
-    app.include_router(router, prefix="/chatbot")
+    app.add_exception_handler(AppError, app_error_handler)
+    app.include_router(router, prefix="/chatbot", dependencies=[Depends(require_active_subscription)])
     app.dependency_overrides[get_current_user] = lambda: _make_user()
     app.dependency_overrides[get_chatbot_service] = lambda: chatbot_service
     app.dependency_overrides[get_paypal_subscription_service] = lambda: subscription_service
