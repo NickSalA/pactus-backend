@@ -9,13 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-from contractai_backend.modules.audit.api import audit_router
-from contractai_backend.modules.billing.api import billing_router
-from contractai_backend.modules.billing.api.dependencies import require_active_subscription
-from contractai_backend.modules.integrations.api import integrations_router
-from contractai_backend.modules.organizations.api import organizations_router
-
 from .core.exceptions.base import AppError
+from .modules.audit.api import audit_router
+from .modules.billing.api import billing_router
 from .modules.catalog.api.routers import router as services_router
 from .modules.chatbot.api import chat_router, conversation_router
 from .modules.chatbot.infrastructure.agent import init_checkpointer
@@ -23,7 +19,9 @@ from .modules.dashboard.api import dashboard_router
 from .modules.documents.api.routers import router as documents_router
 from .modules.documents.infrastructure import configure_embedding
 from .modules.folders.api.routers import router as folders_router
+from .modules.integrations.api import integrations_router
 from .modules.notifications.api.routers import router as notifications_router
+from .modules.organizations.api import organizations_router
 from .modules.templates.api.routers import router as templates_router
 from .modules.users.api.routers import auth_router, users_router
 from .shared.api.error_handlers import app_error_handler, global_exception_handler, http_exception_handler, validation_exception_handler
@@ -33,7 +31,7 @@ from .shared.infrastructure.http import build_http_client
 
 _guard = Depends(require_active_subscription)
 
-__version__: str = get_version(distribution_name="contractai-backend")
+__version__: str = get_version(distribution_name="pactus-backend")
 
 
 def create() -> FastAPI:
@@ -85,30 +83,5 @@ def create() -> FastAPI:
     def home():
         """Endpoint raíz para verificar que la aplicación está funcionando."""
         return {"message": "¡Bienvenido a ContractAI-Backend!", "version": __version__}
-
-    @app.get(path="/perf-test-data")
-    def perf_test_data():
-        """Endpoint simple de prueba de rendimiento sin base de datos ni autenticación."""
-        return {
-            "status": "ok",
-            "message": "Performance test mock data",
-            "data": [
-                {"id": 1, "name": "Item 1", "category": "General"},
-                {"id": 2, "name": "Item 2", "category": "Special"},
-                {"id": 3, "name": "Item 3", "category": "Advanced"},
-            ],
-        }
-
-    @app.post(path="/perf-render-template")
-    def perf_render_template(payload: dict):
-        """Simula el renderizado de un contrato sustituyendo variables."""
-        template = "CONTRATO DE SERVICIOS entre la empresa {company} y el cliente {client}. Valor: {value} {currency}."
-        rendered = template.format(
-            company=payload.get("company", "Empresa A"),
-            client=payload.get("client", "Cliente B"),
-            value=payload.get("value", "5000"),
-            currency=payload.get("currency", "USD")
-        )
-        return {"rendered": rendered}
 
     return app
