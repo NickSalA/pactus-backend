@@ -4,6 +4,8 @@ from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ..core.domain.db_schemas import CHECKPOINT_SCHEMA
+from .application.secret import SecretsRegistry
+from .infrastructure.azure_provider import AzureKeyVaultProvider
 
 
 class Settings(BaseSettings):
@@ -85,6 +87,7 @@ class Settings(BaseSettings):
     PAYPAL_CLIENT_ID: str | None = Field(default=None)
     PAYPAL_CLIENT_SECRET: str | None = Field(default=None)
     PAYPAL_BASE_URL: str = Field(default="https://api-m.sandbox.paypal.com")
+    AZURE_KEYVAULT_URL: str | None = Field(default=None)
 
     @property
     def DATABASE_URL(self) -> str:  # noqa: N802
@@ -105,5 +108,12 @@ class Settings(BaseSettings):
 
 try:
     settings = Settings()
+    if settings.AZURE_KEYVAULT_URL:
+        SecretsRegistry.set_provider(AzureKeyVaultProvider(vault_url=settings.AZURE_KEYVAULT_URL))
 except ValidationError as e:
     raise RuntimeError(f"Error de validación en la configuración: {e}") from e
+
+
+
+
+

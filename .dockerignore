@@ -7,7 +7,24 @@
 .vscode/
 __pycache__/
 *.py[codz]
+*.pyc
+*.pyo
+*.pyd
+
+# Entornos y logs
 .env
+.env.*
 logs/
-tests/
 files/
+
+# Archivos de desarrollo, tests y scripts
+tests/
+scripts/
+requirements.txt
+
+# Documentación innecesaria en la imagen de producción
+CHANGELOG.md
+GEMINI.md
+Dockerfile
+.dockerignore
+

@@ -85,4 +85,9 @@ def create() -> FastAPI:
         """Endpoint raíz para verificar que la aplicación está funcionando."""
         return {"message": "¡Bienvenido a ContractAI-Backend!", "version": __version__}
 
+    @app.get(path="/health")
+    def health():
+        """Endpoint de salud para verificar que la aplicación está funcionando."""
+        return {"status": "ok"}
+
     return app
