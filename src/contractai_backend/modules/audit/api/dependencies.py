@@ -5,35 +5,35 @@ from typing import Annotated
 from fastapi import Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from contractai_backend.modules.audit.application.repositories import (
+from ....modules.audit.application.repositories import (
     AITokenUsageRepository,
     ChatbotActivityRepository,
     ContractActivityRepository,
     TemplateActivityRepository,
     UserActivityRepository,
 )
-from contractai_backend.modules.audit.application.services import (
+from ....modules.audit.application.services import (
     AITokenTrackingService,
     ChatbotActivityService,
     ContractActivityService,
     TemplateActivityService,
     UserActivityService,
 )
-from contractai_backend.modules.audit.composition import (
+from ....modules.audit.composition import (
     build_ai_token_tracking_service,
     build_chatbot_activity_service,
     build_contract_activity_service,
     build_template_activity_service,
     build_user_activity_service,
 )
-from contractai_backend.modules.audit.infrastructure import (
+from ....modules.audit.infrastructure import (
     SQLModelAITokenUsageRepository,
     SQLModelChatbotActivityRepository,
     SQLModelContractActivityRepository,
     SQLModelTemplateActivityRepository,
     SQLModelUserActivityRepository,
 )
-from contractai_backend.shared.infrastructure.database import get_session
+from ....shared.infrastructure.database import get_session
 
 
 async def get_user_activity_repository(session: Annotated[AsyncSession, Depends(get_session)]) -> UserActivityRepository:

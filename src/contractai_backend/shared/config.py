@@ -3,7 +3,7 @@
 from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from contractai_backend.core.domain.db_schemas import CHECKPOINT_SCHEMA
+from ..core.domain.db_schemas import CHECKPOINT_SCHEMA
 
 
 class Settings(BaseSettings):

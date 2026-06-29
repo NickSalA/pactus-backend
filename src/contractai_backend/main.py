@@ -10,7 +10,7 @@ from .shared.logger import setup
 setup()
 
 try:
-    from contractai_backend.factory import create
+    from .factory import create
 
     app: FastAPI = create()
 except Exception as e:

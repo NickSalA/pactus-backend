@@ -6,13 +6,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from contractai_backend.core.exceptions.base import ForbiddenError
-from contractai_backend.modules.audit.api.dependencies import get_ai_token_tracking_service
-from contractai_backend.modules.audit.api.schemas import AITokenUsageResponse, AITokenUsageSummaryResponse
-from contractai_backend.modules.audit.application.services import AITokenTrackingService
-from contractai_backend.modules.audit.domain.value_objs import AITokenSource
-from contractai_backend.modules.users.domain.value_objs import UserRole
-from contractai_backend.shared.api.dependencies.security import CurrentUserDep
+from .....core.exceptions.base import ForbiddenError
+from .....shared.api.dependencies.security import CurrentUserDep
+from ....users.domain.value_objs import UserRole
+from ...application.services import AITokenTrackingService
+from ...domain.value_objs import AITokenSource
+from ..dependencies import get_ai_token_tracking_service
+from ..schemas import AITokenUsageResponse, AITokenUsageSummaryResponse
 
 router = APIRouter()
 

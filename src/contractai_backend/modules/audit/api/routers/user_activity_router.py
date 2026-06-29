@@ -5,12 +5,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from contractai_backend.core.exceptions.base import ForbiddenError
-from contractai_backend.modules.audit.api.dependencies import get_user_activity_service
-from contractai_backend.modules.audit.api.schemas import UserActivityResponse
-from contractai_backend.modules.audit.application.services import UserActivityService
-from contractai_backend.modules.users.domain.value_objs import UserRole
-from contractai_backend.shared.api.dependencies.security import CurrentUserDep
+from .....core.exceptions.base import ForbiddenError
+from .....shared.api.dependencies.security import CurrentUserDep
+from ....users.domain.value_objs import UserRole
+from ...api.schemas import UserActivityResponse
+from ...application.services import UserActivityService
+from ..dependencies import get_user_activity_service
 
 router = APIRouter()
 

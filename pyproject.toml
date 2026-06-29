@@ -1,7 +1,7 @@
 [project]
-name = "contractai-backend"
+name = "pactus-backend"
 version = "0.6.0"
-description = "Backend para ContractIA - Gestión de Contratos"
+description = "Backend para Pactus - Gestión de Contratos"
 readme = "README.md"
 requires-python = "==3.12.*"
 dependencies = [
@@ -23,7 +23,6 @@ dependencies = [
     "llama-index-vector-stores-qdrant>=0.10.0",
     "llama-index-embeddings-openai>=0.6.0",
     "python-multipart>=0.0.22",
-    "logtail-python>=0.3.4",
     "psycopg-pool>=3.3.0",
     "langgraph-checkpoint-postgres>=3.0.5",
     "psycopg-binary>=3.3.3",
@@ -33,11 +32,10 @@ dependencies = [
     "markdown2",
     "weasyprint",
     "langchain-openai>=1.1.12",
-    "locust>=2.44.1",
 ]
 
 [project.scripts]
-start = "contractai_backend.main:main"
+start = "pactus_backend.main:main"
 
 [build-system]
 requires = ["uv_build>=0.10.9,<0.11.0"]

@@ -7,12 +7,7 @@ from typing import Any, cast
 
 from loguru import logger
 
-from contractai_backend.shared.config import settings
-
-try:
-    from logtail import LogtailHandler
-except ImportError:
-    LogtailHandler: Any = None
+from .config import settings
 
 
 class InterceptHandler(logging.Handler):
@@ -79,17 +74,5 @@ def setup() -> None:
                 "backtrace": True,
             }
         )
-    # if LogtailHandler and settings.BETTER_STACK_TOKEN and not settings.DEBUG:
-    #     handler_better_stack = LogtailHandler(
-    #         source_token=settings.BETTER_STACK_TOKEN,
-    #         host=settings.BETTER_STACK_HOST
-    #     )
-    #     handlers.append(
-    #         {
-    #             "sink": handler_better_stack,
-    #             "level": "INFO",
-    #             "format": "{message}",
-    #         }
-    #     )
 
     logger.configure(handlers=cast(Any, handlers))

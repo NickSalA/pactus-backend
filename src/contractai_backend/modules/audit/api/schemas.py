@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from contractai_backend.modules.audit.domain.value_objs import (
+from ....modules.audit.domain.value_objs import (
     AITokenSource,
     AuditChatbotAction,
     AuditContractAction,
