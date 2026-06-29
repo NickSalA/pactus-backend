@@ -4,16 +4,16 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from contractai_backend.modules.documents.domain import DocumentType
-from contractai_backend.modules.templates.api.schemas import GenerateTemplateDraftRequest, PreviewTemplateRequest, TemplateDraftResponse
-from contractai_backend.modules.templates.application.services.template_authoring_service import TemplateAuthoringService
-from contractai_backend.modules.templates.domain.entities import TemplateContent, TemplateField, TemplateFormatTable, TemplateTable
-from contractai_backend.modules.templates.domain.value_objs import TemplateGenerationMode, TemplateState
-from contractai_backend.modules.templates.domain.exceptions import TemplateValidationError
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
-from contractai_backend.modules.templates.application.services.template_draft_service import TemplateDraftService
-from contractai_backend.modules.templates.application.services.template_reference_service import TemplateReferenceService
+from pactus_backend.modules.documents.domain import DocumentType
+from pactus_backend.modules.templates.api.schemas import GenerateTemplateDraftRequest, PreviewTemplateRequest, TemplateDraftResponse
+from pactus_backend.modules.templates.application.services.template_authoring_service import TemplateAuthoringService
+from pactus_backend.modules.templates.domain.entities import TemplateContent, TemplateField, TemplateFormatTable, TemplateTable
+from pactus_backend.modules.templates.domain.value_objs import TemplateGenerationMode, TemplateState
+from pactus_backend.modules.templates.domain.exceptions import TemplateValidationError
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.modules.templates.application.services.template_draft_service import TemplateDraftService
+from pactus_backend.modules.templates.application.services.template_reference_service import TemplateReferenceService
 
 
 def _make_format(document_type: DocumentType = DocumentType.COMPANY) -> TemplateFormatTable:
@@ -1000,7 +1000,7 @@ class TestReferenceDocumentClassifier:
 
 class TestTemplateFieldTypeInference:
     def test_infers_correct_type_for_currency_and_amount_fields(self):
-        from contractai_backend.modules.templates.application.services.template_content_synchronizer import TemplateContentSynchronizer
+        from pactus_backend.modules.templates.application.services.template_content_synchronizer import TemplateContentSynchronizer
 
         synchronizer = TemplateContentSynchronizer()
 

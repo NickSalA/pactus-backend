@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from contractai_backend.modules.catalog.domain.entities import ServiceTable
-from contractai_backend.modules.documents.api.schemas import (
+from pactus_backend.modules.catalog.domain.entities import ServiceTable
+from pactus_backend.modules.documents.api.schemas import (
     CompanyContractResponse,
     CreateDocumentDraftRequest,
     CreateDocumentRequest,
@@ -17,31 +17,31 @@ from contractai_backend.modules.documents.api.schemas import (
     LaborContractResponse,
     UpdateDocumentRequest,
 )
-from contractai_backend.modules.documents.application.dto import (
+from pactus_backend.modules.documents.application.dto import (
     CompanyContractQueryDTO,
     ExtractedDocumentData,
     ExtractedDocumentFormData,
     ExtractedDocumentServiceItem,
     LaborContractQueryDTO,
 )
-from contractai_backend.modules.documents.application.services.contract_query_service import ContractQueryService
-from contractai_backend.modules.documents.application.services.document_command_service import DocumentCommandService
-from contractai_backend.modules.documents.application.services.document_external_resource_service import (
+from pactus_backend.modules.documents.application.services.contract_query_service import ContractQueryService
+from pactus_backend.modules.documents.application.services.document_command_service import DocumentCommandService
+from pactus_backend.modules.documents.application.services.document_external_resource_service import (
     DocumentCreationCompensationService,
     DocumentExternalResourceService,
 )
-from contractai_backend.modules.documents.application.services.document_query_service import DocumentQueryService
-from contractai_backend.modules.documents.application.services.service_catalog_service import ServiceCatalogService
-from contractai_backend.modules.documents.domain import CompanyContractTable, DocumentServiceTable, DocumentTable
-from contractai_backend.modules.documents.domain.exceptions import (
+from pactus_backend.modules.documents.application.services.document_query_service import DocumentQueryService
+from pactus_backend.modules.documents.application.services.service_catalog_service import ServiceCatalogService
+from pactus_backend.modules.documents.domain import CompanyContractTable, DocumentServiceTable, DocumentTable
+from pactus_backend.modules.documents.domain.exceptions import (
     DocumentExtractionError,
     DocumentFileMissingError,
     DocumentNotFoundError,
     DocumentTransactionError,
     DocumentValidationError,
 )
-from contractai_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
-from contractai_backend.modules.documents.infrastructure.chunk_metadata_enricher import VectorChunkMetadataEnricher
+from pactus_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
+from pactus_backend.modules.documents.infrastructure.chunk_metadata_enricher import VectorChunkMetadataEnricher
 
 _UNSET = object()
 

@@ -11,7 +11,7 @@ from sqlalchemy.pool import NullPool
 from sqlmodel import text
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from contractai_backend.core.domain.db_schemas import (
+from pactus_backend.core.domain.db_schemas import (
     APP_TYPES_SCHEMA,
     CATALOG_SCHEMA,
     CHATBOT_SCHEMA,
@@ -21,7 +21,7 @@ from contractai_backend.core.domain.db_schemas import (
     TELEMETRY_SCHEMA,
     TEMPLATES_SCHEMA,
 )
-from contractai_backend.modules.dashboard.infrastructure.postgres_repo import SQLModelDashboardRepository
+from pactus_backend.modules.dashboard.infrastructure.postgres_repo import SQLModelDashboardRepository
 
 
 def _async_database_url(url: str) -> str:

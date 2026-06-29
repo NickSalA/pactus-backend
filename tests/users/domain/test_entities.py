@@ -1,7 +1,7 @@
 """Tests para entidades del dominio de usuarios."""
 
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
 
 
 def test_user_default_role_is_worker():

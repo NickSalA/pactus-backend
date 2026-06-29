@@ -2,11 +2,11 @@
 
 import pytest
 
-from contractai_backend.core.exceptions.base import ForbiddenError
-from contractai_backend.modules.dashboard.domain.access_policy import ensure_dashboard_access
-from contractai_backend.modules.documents.domain.value_objs import DocumentType
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.core.exceptions.base import ForbiddenError
+from pactus_backend.modules.dashboard.domain.access_policy import ensure_dashboard_access
+from pactus_backend.modules.documents.domain.value_objs import DocumentType
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
 
 
 def _make_user(role: UserRole) -> UserTable:

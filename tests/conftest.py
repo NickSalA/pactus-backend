@@ -13,7 +13,7 @@ def anyio_backend():
 @pytest.fixture
 def app() -> FastAPI:
     """Crea la app FastAPI sin lifespan (sin efectos secundarios de infra)."""
-    from contractai_backend.factory import create
+    from pactus_backend.factory import create
     return create()
 
 

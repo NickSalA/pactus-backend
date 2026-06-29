@@ -2,7 +2,7 @@
 
 import pytest
 
-from contractai_backend.modules.chatbot.domain.entities import ConversationTable, Message
+from pactus_backend.modules.chatbot.domain.entities import ConversationTable, Message
 
 
 def _make_conv(**kwargs) -> ConversationTable:

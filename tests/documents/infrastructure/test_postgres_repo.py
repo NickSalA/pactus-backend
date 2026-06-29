@@ -7,14 +7,14 @@ import pytest
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
-from contractai_backend.core.exceptions.base import ServiceUnavailableError
-from contractai_backend.modules.catalog.domain.entities import ServiceTable
-from contractai_backend.modules.documents.application.dto import CompanyContractQueryDTO
-from contractai_backend.modules.documents.domain import CompanyContractTable, DocumentServiceTable, DocumentTable
-from contractai_backend.modules.documents.domain.exceptions import DocumentDatabaseError, DocumentDatabaseUnavailableError
-from contractai_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState
-from contractai_backend.modules.documents.infrastructure.command_repo import SQLModelDocumentCommandRepository
-from contractai_backend.modules.documents.infrastructure.query_repo import SQLModelDocumentQueryRepository
+from pactus_backend.core.exceptions.base import ServiceUnavailableError
+from pactus_backend.modules.catalog.domain.entities import ServiceTable
+from pactus_backend.modules.documents.application.dto import CompanyContractQueryDTO
+from pactus_backend.modules.documents.domain import CompanyContractTable, DocumentServiceTable, DocumentTable
+from pactus_backend.modules.documents.domain.exceptions import DocumentDatabaseError, DocumentDatabaseUnavailableError
+from pactus_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState
+from pactus_backend.modules.documents.infrastructure.command_repo import SQLModelDocumentCommandRepository
+from pactus_backend.modules.documents.infrastructure.query_repo import SQLModelDocumentQueryRepository
 
 
 def _make_doc(id: int = 1) -> DocumentTable:

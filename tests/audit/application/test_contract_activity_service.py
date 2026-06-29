@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from contractai_backend.modules.audit.application.services import ContractActivityService
-from contractai_backend.modules.audit.domain.value_objs import AuditContractAction
+from pactus_backend.modules.audit.application.services import ContractActivityService
+from pactus_backend.modules.audit.domain.value_objs import AuditContractAction
 
 
 class TestContractActivityService:

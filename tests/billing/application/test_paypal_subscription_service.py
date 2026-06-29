@@ -2,12 +2,12 @@
 
 import pytest
 
-from contractai_backend.modules.billing.application.dto import ConfirmPayPalSubscriptionRequest, PayPalSubscriptionDetails
-from contractai_backend.modules.billing.application.services import PayPalSubscriptionService
-from contractai_backend.modules.billing.domain.exceptions import PayPalSubscriptionConflictError, PayPalSubscriptionValidationError
-from contractai_backend.modules.organizations.domain.entities import OrganizationTable
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.modules.billing.application.dto import ConfirmPayPalSubscriptionRequest, PayPalSubscriptionDetails
+from pactus_backend.modules.billing.application.services import PayPalSubscriptionService
+from pactus_backend.modules.billing.domain.exceptions import PayPalSubscriptionConflictError, PayPalSubscriptionValidationError
+from pactus_backend.modules.organizations.domain.entities import OrganizationTable
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
 
 
 class FakePayPalGateway:

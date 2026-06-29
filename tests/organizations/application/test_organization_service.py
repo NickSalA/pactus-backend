@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from contractai_backend.core.exceptions.base import NotFoundError
-from contractai_backend.modules.organizations.application.services.organization_service import OrganizationService
-from contractai_backend.modules.organizations.domain.entities import OrganizationTable
+from pactus_backend.core.exceptions.base import NotFoundError
+from pactus_backend.modules.organizations.application.services.organization_service import OrganizationService
+from pactus_backend.modules.organizations.domain.entities import OrganizationTable
 
 
 def _make_org(id: int = 1, is_active: bool = True) -> OrganizationTable:

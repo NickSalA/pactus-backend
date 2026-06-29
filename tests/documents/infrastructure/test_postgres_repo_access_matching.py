@@ -1,6 +1,6 @@
 """Tests for relational contract access matching heuristics."""
 
-from contractai_backend.modules.documents.infrastructure.query_repo import SQLModelDocumentQueryRepository
+from pactus_backend.modules.documents.infrastructure.query_repo import SQLModelDocumentQueryRepository
 
 
 def test_viable_party_match_accepts_small_name_typo() -> None:

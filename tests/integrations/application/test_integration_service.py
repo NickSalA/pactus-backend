@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from contractai_backend.modules.integrations.application.services.integration_service import IntegrationService
-from contractai_backend.modules.integrations.domain.exceptions import (
+from pactus_backend.modules.integrations.application.services.integration_service import IntegrationService
+from pactus_backend.modules.integrations.domain.exceptions import (
     CloudFileNotFoundError,
     CloudStorageIntegrationError,
     InvalidCloudTokenError,

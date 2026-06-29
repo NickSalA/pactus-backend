@@ -3,7 +3,7 @@
 import asyncio
 from pathlib import Path
 
-from contractai_backend.modules.documents.infrastructure.llama_parser import LlamaParseExtractor
+from pactus_backend.modules.documents.infrastructure.llama_parser import LlamaParseExtractor
 
 input_pdf = Path("/home/daminin/Documents/Repositorios/ContractAI-Backend/files/contrato_003-1.pdf")
 output_md = Path("/home/daminin/Documents/Repositorios/ContractAI-Backend/files/CONTRATO_BETA_003-1.md")

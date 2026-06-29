@@ -6,13 +6,13 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from contractai_backend.modules.documents.domain import DocumentType
-from contractai_backend.modules.templates.api.dependencies import get_template_authoring_service
-from contractai_backend.modules.templates.api.routers import router
-from contractai_backend.modules.templates.application.dto import TemplateFormatResponse
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
-from contractai_backend.shared.api.dependencies.security import get_current_user
+from pactus_backend.modules.documents.domain import DocumentType
+from pactus_backend.modules.templates.api.dependencies import get_template_authoring_service
+from pactus_backend.modules.templates.api.routers import router
+from pactus_backend.modules.templates.application.dto import TemplateFormatResponse
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.shared.api.dependencies.security import get_current_user
 
 
 def _make_app(mock_authoring_service) -> FastAPI:

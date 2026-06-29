@@ -9,20 +9,20 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from contractai_backend.core.exceptions.base import AppError
-from contractai_backend.modules.documents.api.dependencies import (
+from pactus_backend.core.exceptions.base import AppError
+from pactus_backend.modules.documents.api.dependencies import (
     get_contract_activity_service_for_documents,
     get_document_command_service,
     get_document_query_service,
     get_service_catalog_service,
 )
-from contractai_backend.modules.documents.api.routers import router
-from contractai_backend.modules.catalog.domain.entities import ServiceTable
-from contractai_backend.modules.documents.domain import DocumentTable
-from contractai_backend.modules.documents.domain.exceptions import DocumentFileMissingError, DocumentNotFoundError
-from contractai_backend.modules.documents.domain.value_objs import DocumentState, DocumentType
-from contractai_backend.shared.api.dependencies.security import get_current_user
-from contractai_backend.shared.api.error_handlers import app_error_handler
+from pactus_backend.modules.documents.api.routers import router
+from pactus_backend.modules.catalog.domain.entities import ServiceTable
+from pactus_backend.modules.documents.domain import DocumentTable
+from pactus_backend.modules.documents.domain.exceptions import DocumentFileMissingError, DocumentNotFoundError
+from pactus_backend.modules.documents.domain.value_objs import DocumentState, DocumentType
+from pactus_backend.shared.api.dependencies.security import get_current_user
+from pactus_backend.shared.api.error_handlers import app_error_handler
 
 
 def _make_app(mock_document_service=None, mock_query_service=None, mock_catalog_service=None, mock_contract_activity_service=None) -> FastAPI:

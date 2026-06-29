@@ -1,6 +1,6 @@
 """Tests for persistent table schema metadata."""
 
-from contractai_backend.core.domain.db_schemas import (
+from pactus_backend.core.domain.db_schemas import (
     APP_TYPES_SCHEMA,
     AUDIT_SCHEMA,
     CATALOG_SCHEMA,
@@ -11,20 +11,20 @@ from contractai_backend.core.domain.db_schemas import (
     TELEMETRY_SCHEMA,
     TEMPLATES_SCHEMA,
 )
-from contractai_backend.modules.audit.domain.entities import ChatbotActivityTable, TemplateActivityTable, UserActivityTable
-from contractai_backend.modules.catalog.domain.entities import ServiceTable
-from contractai_backend.modules.chatbot.domain.entities import ConversationTable
-from contractai_backend.modules.documents.domain import (
+from pactus_backend.modules.audit.domain.entities import ChatbotActivityTable, TemplateActivityTable, UserActivityTable
+from pactus_backend.modules.catalog.domain.entities import ServiceTable
+from pactus_backend.modules.chatbot.domain.entities import ConversationTable
+from pactus_backend.modules.documents.domain import (
     CompanyContractServiceTable,
     CompanyContractTable,
     DocumentTable,
     LaborContractTable,
 )
-from contractai_backend.modules.folders.domain.entities import FolderTable
-from contractai_backend.modules.notifications.domain import NotificationRuleTable, NotificationSendLog
-from contractai_backend.modules.organizations.domain.entities import OrganizationTable
-from contractai_backend.modules.templates.domain.entities import TemplateFormatTable, TemplateTable
-from contractai_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.folders.domain.entities import FolderTable
+from pactus_backend.modules.notifications.domain import NotificationRuleTable, NotificationSendLog
+from pactus_backend.modules.organizations.domain.entities import OrganizationTable
+from pactus_backend.modules.templates.domain.entities import TemplateFormatTable, TemplateTable
+from pactus_backend.modules.users.domain.entities import UserTable
 
 
 def test_application_tables_use_granular_schemas() -> None:

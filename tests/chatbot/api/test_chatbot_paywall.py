@@ -6,14 +6,14 @@ import pytest
 from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from contractai_backend.core.exceptions.base import AppError
-from contractai_backend.modules.billing.api.dependencies import get_paypal_subscription_service, require_active_subscription
-from contractai_backend.modules.chatbot.api.dependencies import get_chatbot_service
-from contractai_backend.modules.chatbot.api.routers.chat_router import router
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
-from contractai_backend.shared.api.dependencies.security import get_current_user
-from contractai_backend.shared.api.error_handlers import app_error_handler
+from pactus_backend.core.exceptions.base import AppError
+from pactus_backend.modules.billing.api.dependencies import get_paypal_subscription_service, require_active_subscription
+from pactus_backend.modules.chatbot.api.dependencies import get_chatbot_service
+from pactus_backend.modules.chatbot.api.routers.chat_router import router
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.shared.api.dependencies.security import get_current_user
+from pactus_backend.shared.api.error_handlers import app_error_handler
 
 
 def _make_user() -> UserTable:

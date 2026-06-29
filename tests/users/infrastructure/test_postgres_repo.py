@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
-from contractai_backend.core.exceptions.base import ServiceUnavailableError
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.infrastructure.postgres_repo import SQLModelUserRepository
+from pactus_backend.core.exceptions.base import ServiceUnavailableError
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.infrastructure.postgres_repo import SQLModelUserRepository
 
 
 def _make_repo() -> tuple[SQLModelUserRepository, AsyncMock]:

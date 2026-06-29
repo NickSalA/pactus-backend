@@ -4,12 +4,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from contractai_backend.modules.dashboard.application.repositories import DashboardClientRanking, DashboardServiceRanking
-from contractai_backend.modules.dashboard.application.services import TOP_RANKING_LIMIT, DashboardService
-from contractai_backend.modules.dashboard.domain.value_objs import TopRankingSortBy
-from contractai_backend.modules.documents.domain.value_objs import CurrencyType
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.modules.dashboard.application.repositories import DashboardClientRanking, DashboardServiceRanking
+from pactus_backend.modules.dashboard.application.services import TOP_RANKING_LIMIT, DashboardService
+from pactus_backend.modules.dashboard.domain.value_objs import TopRankingSortBy
+from pactus_backend.modules.documents.domain.value_objs import CurrencyType
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
 
 
 def _make_manager() -> UserTable:

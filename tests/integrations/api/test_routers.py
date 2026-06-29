@@ -8,17 +8,17 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from contractai_backend.core.exceptions.base import AppError
-from contractai_backend.modules.integrations.api.dependencies import get_integration_service
-from contractai_backend.modules.integrations.application.jobs import job_registry
-from contractai_backend.modules.integrations.api.routers import router
-from contractai_backend.modules.integrations.api.schemas import ImportRequest
-from contractai_backend.modules.integrations.application.services.integration_service import IntegrationService
-from contractai_backend.modules.integrations.domain.exceptions import InvalidCloudTokenError
-from contractai_backend.modules.integrations.infrastructure.google_drive_provider import GOOGLE_DRIVE_FILE_SCOPE, GoogleDriveProvider
-from contractai_backend.shared.api.dependencies.security import get_current_user
-from contractai_backend.shared.api.error_handlers import app_error_handler
-from contractai_backend.shared.config import settings
+from pactus_backend.core.exceptions.base import AppError
+from pactus_backend.modules.integrations.api.dependencies import get_integration_service
+from pactus_backend.modules.integrations.application.jobs import job_registry
+from pactus_backend.modules.integrations.api.routers import router
+from pactus_backend.modules.integrations.api.schemas import ImportRequest
+from pactus_backend.modules.integrations.application.services.integration_service import IntegrationService
+from pactus_backend.modules.integrations.domain.exceptions import InvalidCloudTokenError
+from pactus_backend.modules.integrations.infrastructure.google_drive_provider import GOOGLE_DRIVE_FILE_SCOPE, GoogleDriveProvider
+from pactus_backend.shared.api.dependencies.security import get_current_user
+from pactus_backend.shared.api.error_handlers import app_error_handler
+from pactus_backend.shared.config import settings
 
 
 def _make_app(user_id: int = 5, organization_id: int = 9) -> FastAPI:
@@ -273,7 +273,7 @@ class TestImportDriveFiles:
         expected_files_payload = [file_item.model_dump(mode="python", exclude_unset=True, exclude_none=True) for file_item in import_request.files]
 
         with patch(
-            "contractai_backend.modules.integrations.api.routers.process_drive_import_in_background",
+            "pactus_backend.modules.integrations.api.routers.process_drive_import_in_background",
             new_callable=AsyncMock,
         ) as mock_background_import:
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -313,7 +313,7 @@ class TestImportDriveFiles:
         expected_files_payload = [file_item.model_dump(mode="python", exclude_unset=True, exclude_none=True) for file_item in import_request.files]
 
         with patch(
-            "contractai_backend.modules.integrations.api.routers.process_drive_import_in_background",
+            "pactus_backend.modules.integrations.api.routers.process_drive_import_in_background",
             new_callable=AsyncMock,
         ) as mock_background_import:
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -346,7 +346,7 @@ class TestImportDriveFiles:
         }
 
         with patch(
-            "contractai_backend.modules.integrations.api.routers.process_drive_import_in_background",
+            "pactus_backend.modules.integrations.api.routers.process_drive_import_in_background",
             new_callable=AsyncMock,
         ) as mock_background_import:
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -385,7 +385,7 @@ class TestImportDriveFiles:
         }
 
         with patch(
-            "contractai_backend.modules.integrations.api.routers.process_drive_import_in_background",
+            "pactus_backend.modules.integrations.api.routers.process_drive_import_in_background",
             new_callable=AsyncMock,
         ) as mock_background_import:
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -413,7 +413,7 @@ class TestImportDriveFiles:
         }
 
         with patch(
-            "contractai_backend.modules.integrations.api.routers.process_drive_import_in_background",
+            "pactus_backend.modules.integrations.api.routers.process_drive_import_in_background",
             new_callable=AsyncMock,
         ):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -422,7 +422,7 @@ class TestImportDriveFiles:
         assert first_response.status_code == 200
 
         with patch(
-            "contractai_backend.modules.integrations.api.routers.process_drive_import_in_background",
+            "pactus_backend.modules.integrations.api.routers.process_drive_import_in_background",
             new_callable=AsyncMock,
         ):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -451,7 +451,7 @@ class TestImportDriveFiles:
         }
 
         with patch(
-            "contractai_backend.modules.integrations.api.routers.process_drive_import_in_background",
+            "pactus_backend.modules.integrations.api.routers.process_drive_import_in_background",
             new_callable=AsyncMock,
         ):
             async with AsyncClient(transport=ASGITransport(app=app_user5), base_url="http://test") as client:

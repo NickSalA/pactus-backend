@@ -6,11 +6,11 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from contractai_backend.modules.billing.api.dependencies import get_paypal_subscription_service
-from contractai_backend.modules.users.api.routers.users_router import router
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
-from contractai_backend.shared.api.dependencies.security import get_current_user
+from pactus_backend.modules.billing.api.dependencies import get_paypal_subscription_service
+from pactus_backend.modules.users.api.routers.users_router import router
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.shared.api.dependencies.security import get_current_user
 
 
 def _make_user(organization_id: int = 10) -> UserTable:

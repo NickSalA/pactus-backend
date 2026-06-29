@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from contractai_backend.modules.notifications.application.dto import NotificationDocument, NotificationEvent, NotificationRecipient
-from contractai_backend.modules.notifications.application.services.email_alert_service import EmailAlertService
-from contractai_backend.modules.notifications.domain.value_objs import NotificationType
+from pactus_backend.modules.notifications.application.dto import NotificationDocument, NotificationEvent, NotificationRecipient
+from pactus_backend.modules.notifications.application.services.email_alert_service import EmailAlertService
+from pactus_backend.modules.notifications.domain.value_objs import NotificationType
 
 
 def _make_doc(name: str = "Contrato", days_offset: int = 3) -> NotificationDocument:

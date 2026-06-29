@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from contractai_backend.modules.folders.domain.entities import FolderTable
-from contractai_backend.modules.folders.infrastructure.postgres_repo import SQLModelFolderRepository
-from contractai_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.modules.folders.domain.entities import FolderTable
+from pactus_backend.modules.folders.infrastructure.postgres_repo import SQLModelFolderRepository
+from pactus_backend.modules.users.domain.value_objs import UserRole
 
 
 def _make_repo() -> tuple[SQLModelFolderRepository, AsyncMock]:

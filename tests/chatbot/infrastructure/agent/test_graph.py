@@ -7,8 +7,8 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.tools import tool
 
-from contractai_backend.modules.chatbot.infrastructure.agent.tools.access import ROLE_PERMISSION_DENIED_RESPONSE
-from contractai_backend.modules.chatbot.infrastructure.agent.graph import ContractAgentGraph, DEFAULT_PERMISSION_DENIED_RESPONSE
+from pactus_backend.modules.chatbot.infrastructure.agent.tools.access import ROLE_PERMISSION_DENIED_RESPONSE
+from pactus_backend.modules.chatbot.infrastructure.agent.graph import ContractAgentGraph, DEFAULT_PERMISSION_DENIED_RESPONSE
 
 
 def _make_graph(*, a1_route: str, a1_response: str | None, a3_response: str = "Respuesta del agente", permission_tools: list | None = None):

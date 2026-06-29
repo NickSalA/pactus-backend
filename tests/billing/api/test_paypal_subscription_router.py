@@ -6,9 +6,9 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from contractai_backend.modules.billing.api.dependencies import get_paypal_subscription_service
-from contractai_backend.modules.billing.api.routers import router
-from contractai_backend.modules.billing.application.dto import ConfirmPayPalSubscriptionResponse
+from pactus_backend.modules.billing.api.dependencies import get_paypal_subscription_service
+from pactus_backend.modules.billing.api.routers import router
+from pactus_backend.modules.billing.application.dto import ConfirmPayPalSubscriptionResponse
 
 
 def _make_app(service) -> FastAPI:

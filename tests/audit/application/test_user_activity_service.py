@@ -4,11 +4,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from contractai_backend.modules.audit.application.services import ChatbotActivityService, UserActivityService
-from contractai_backend.modules.audit.domain.value_objs import AuditChatbotAction, AuditUserAction
-from contractai_backend.modules.chatbot.application.dto import TokenCostResult
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.modules.audit.application.services import ChatbotActivityService, UserActivityService
+from pactus_backend.modules.audit.domain.value_objs import AuditChatbotAction, AuditUserAction
+from pactus_backend.modules.chatbot.application.dto import TokenCostResult
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
 
 
 def _make_user(**kwargs) -> UserTable:

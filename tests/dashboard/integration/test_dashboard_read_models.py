@@ -6,9 +6,9 @@ import pytest
 from sqlmodel import text
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from contractai_backend.modules.dashboard.domain.value_objs import TopRankingSortBy
-from contractai_backend.modules.dashboard.infrastructure.postgres_repo import SQLModelDashboardRepository
-from contractai_backend.modules.documents.domain.value_objs import CurrencyType, DocumentType
+from pactus_backend.modules.dashboard.domain.value_objs import TopRankingSortBy
+from pactus_backend.modules.dashboard.infrastructure.postgres_repo import SQLModelDashboardRepository
+from pactus_backend.modules.documents.domain.value_objs import CurrencyType, DocumentType
 
 
 async def _seed_dashboard_data(session: AsyncSession) -> None:

@@ -2,7 +2,7 @@
 
 import pytest
 
-from contractai_backend.modules.templates.infrastructure.jinja_render import JinjaRenderer
+from pactus_backend.modules.templates.infrastructure.jinja_render import JinjaRenderer
 
 
 class TestJinjaRenderer:

@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from contractai_backend.modules.documents.domain.exceptions import DocumentVectorError, DocumentVectorUnavailableError
-from contractai_backend.modules.documents.infrastructure.qdrant_repo import LlamaIndexQdrantRepository
+from pactus_backend.modules.documents.domain.exceptions import DocumentVectorError, DocumentVectorUnavailableError
+from pactus_backend.modules.documents.infrastructure.qdrant_repo import LlamaIndexQdrantRepository
 
 
 def _make_repo() -> tuple[LlamaIndexQdrantRepository, AsyncMock, MagicMock]:
@@ -125,7 +125,7 @@ class TestAddVectors:
         chunk = _make_chunk()
         chunks = [chunk]
 
-        with patch("contractai_backend.modules.documents.infrastructure.qdrant_repo.run_in_threadpool", new_callable=AsyncMock) as mock_run:
+        with patch("pactus_backend.modules.documents.infrastructure.qdrant_repo.run_in_threadpool", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = MagicMock()
             await repo.add_vectors("contracts_index", document_id=42, chunks=chunks)
 
@@ -137,7 +137,7 @@ class TestAddVectors:
         repo, async_client, sync_client = _make_repo()
         async_client.collection_exists.return_value = True
 
-        with patch("contractai_backend.modules.documents.infrastructure.qdrant_repo.run_in_threadpool", new_callable=AsyncMock):
+        with patch("pactus_backend.modules.documents.infrastructure.qdrant_repo.run_in_threadpool", new_callable=AsyncMock):
             await repo.add_vectors("contracts_index", document_id=1, chunks=[_make_chunk()])
 
         # delete_vectors llama a async_client.delete
@@ -149,7 +149,7 @@ class TestAddVectors:
         async_client.collection_exists.return_value = True
 
         with patch(
-            "contractai_backend.modules.documents.infrastructure.qdrant_repo.run_in_threadpool",
+            "pactus_backend.modules.documents.infrastructure.qdrant_repo.run_in_threadpool",
             new_callable=AsyncMock,
             side_effect=Exception("embedding failed"),
         ):
@@ -161,7 +161,7 @@ class TestAddVectors:
         repo, async_client, sync_client = _make_repo()
         async_client.collection_exists.return_value = True
 
-        with patch("contractai_backend.modules.documents.infrastructure.qdrant_repo.run_in_threadpool", new_callable=AsyncMock):
+        with patch("pactus_backend.modules.documents.infrastructure.qdrant_repo.run_in_threadpool", new_callable=AsyncMock):
             await repo.add_vectors("contracts_index", document_id=1, chunks=[_make_chunk()])
             await repo.add_vectors("contracts_index", document_id=2, chunks=[_make_chunk()])
 

@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from contractai_backend.shared.config import Settings
+from pactus_backend.shared.config import Settings
 
 
 def _settings_values() -> dict[str, str]:

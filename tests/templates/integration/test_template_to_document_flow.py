@@ -4,9 +4,9 @@ import pytest
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock
 
-from contractai_backend.modules.documents.application.dto import CreateDocumentRequest, DocumentResponse, FileRequest
-from contractai_backend.modules.documents.domain import DocumentState, DocumentType, CurrencyType
-from contractai_backend.modules.templates.infrastructure.document_adapter import DocumentModuleAdapter
+from pactus_backend.modules.documents.application.dto import CreateDocumentRequest, DocumentResponse, FileRequest
+from pactus_backend.modules.documents.domain import DocumentState, DocumentType, CurrencyType
+from pactus_backend.modules.templates.infrastructure.document_adapter import DocumentModuleAdapter
 
 
 class TestTemplateToDocumentFlow:

@@ -1,6 +1,6 @@
 """Tests para entidades del dominio de organizaciones."""
 
-from contractai_backend.modules.organizations.domain.entities import OrganizationTable
+from pactus_backend.modules.organizations.domain.entities import OrganizationTable
 
 
 def test_organization_default_is_active():

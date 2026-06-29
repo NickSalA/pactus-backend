@@ -4,12 +4,12 @@ from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 
-from contractai_backend.modules.audit.domain.exceptions import LLMQuotaExceededError
-from contractai_backend.modules.chatbot.application.repositories.base_llm import LLMResult
-from contractai_backend.modules.chatbot.application.services.chatbot_service import ChatbotService
-from contractai_backend.modules.chatbot.domain.entities import ConversationTable
-from contractai_backend.modules.chatbot.domain.exceptions import ConversationNotFoundError
-from contractai_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.modules.audit.domain.exceptions import LLMQuotaExceededError
+from pactus_backend.modules.chatbot.application.repositories.base_llm import LLMResult
+from pactus_backend.modules.chatbot.application.services.chatbot_service import ChatbotService
+from pactus_backend.modules.chatbot.domain.entities import ConversationTable
+from pactus_backend.modules.chatbot.domain.exceptions import ConversationNotFoundError
+from pactus_backend.modules.users.domain.value_objs import UserRole
 
 
 def _make_user(id: int = 1, org_id: int = 1):

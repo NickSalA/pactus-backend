@@ -2,7 +2,7 @@
 
 from urllib.parse import parse_qs, urlparse
 
-from contractai_backend.modules.integrations.infrastructure.google_drive_provider import (
+from pactus_backend.modules.integrations.infrastructure.google_drive_provider import (
     GOOGLE_DRIVE_FILE_SCOPE,
     GoogleDriveProvider,
 )
