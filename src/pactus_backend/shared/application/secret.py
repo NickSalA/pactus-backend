@@ -19,15 +19,12 @@ class SecretsRegistry:
     @classmethod
     def set_provider(cls, provider: SecretsProvider) -> None:
         """Configura el proveedor de secretos a utilizar en la aplicación."""
-        cls._provider: SecretsProvider = provider
+        cls._provider = provider
 
     @classmethod
     def get_secret(cls, name: str) -> str:
         """Obtiene un secreto utilizando el proveedor configurado."""
-        if cls._provider is None:
-            raise RuntimeError("Proveedor de secretos no configurado.")
-        return cls._provider.get_secret(name)
-
+        return None if cls._provider is None else cls._provider.get_secret(name)  # type: ignore
 
 def get_secret(name: str) -> str:
     """Función de conveniencia para obtener secretos desde cualquier parte del código."""
