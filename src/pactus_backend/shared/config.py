@@ -37,13 +37,8 @@ class Settings(BaseSettings):
     GEMINI_INPUT_PRICE_PER_M: float = Field(default=0.00125)
     GEMINI_OUTPUT_PRICE_PER_M: float = Field(default=0.005)
 
-    AZURE_OPENAI_ENDPOINT: str = Field(default="https://your-resource.openai.azure.com/")
-    AZURE_OPENAI_API_VERSION: str = Field(default="2024-10-21")
-    AZURE_OPENAI_DEPLOYMENT: str = Field(default="your-agent-model")
-    OPENAI_CHAT_MODEL_NAME: str = Field(default="gpt-4.1-mini")
     OPENAI_EMBEDDING_MODEL_NAME: str = Field(default="text-embedding-3-small")
     OPENAI_API_KEY: str = Field(default_factory=lambda: get_secret("OPENAI-API-KEY"))
-    AZURE_OPENAI_API_KEY: str = Field(default_factory=lambda: get_secret("AZURE-OPENAI-API-KEY"))
     # BETTER_STACK_TOKEN: str = Field(default=...)
     # BETTER_STACK_HOST: str = Field(default=...)
 

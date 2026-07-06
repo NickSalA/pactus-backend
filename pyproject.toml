@@ -31,7 +31,6 @@ dependencies = [
     "google-auth-oauthlib>=1.3.0",
     "markdown2",
     "weasyprint",
-    "langchain-openai>=1.1.12",
 ]
 
 [project.scripts]

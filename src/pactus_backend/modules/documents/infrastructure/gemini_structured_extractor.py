@@ -1,11 +1,10 @@
-"""Azure OpenAI-based structured metadata extraction for uploaded documents."""
+"""Gemini-based structured metadata extraction for uploaded documents."""
 
 import json
 from collections.abc import Sequence
 from typing import Any
 
-from langchain_openai import AzureChatOpenAI
-from pydantic import SecretStr
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from ....modules.catalog.domain.entities import ServiceTable
 from ....shared.config import settings
@@ -14,15 +13,12 @@ from ..application.repositories import DocumentStructuredExtractor
 
 
 class GeminiDocumentStructuredExtractor(DocumentStructuredExtractor):
-    """Uses Azure OpenAI GPT to infer nullable metadata from parsed document chunks."""
+    """Uses Google Gemini to infer nullable metadata from parsed document chunks."""
 
     def __init__(self):
-        self.llm = AzureChatOpenAI(
-            model=settings.OPENAI_CHAT_MODEL_NAME,
-            api_key=SecretStr(settings.AZURE_OPENAI_API_KEY),
-            azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
-            azure_deployment=settings.AZURE_OPENAI_DEPLOYMENT,
-            api_version=settings.AZURE_OPENAI_API_VERSION,
+        self.llm = ChatGoogleGenerativeAI(
+            model=settings.GEMINI_MODEL_NAME,
+            api_key=settings.GEMINI_API_KEY,
             temperature=0,
             max_retries=1,
             timeout=30,
