@@ -26,7 +26,7 @@ from .modules.organizations.api import organizations_router
 from .modules.templates.api.routers import router as templates_router
 from .modules.users.api.routers import auth_router, users_router
 from .shared.api.error_handlers import app_error_handler, global_exception_handler, http_exception_handler, validation_exception_handler
-from .shared.api.middlewares import LoguruMiddleware
+from .shared.api.middlewares import ClientValidationMiddleware, LoguruMiddleware
 from .shared.config import settings
 from .shared.infrastructure.http import build_http_client
 
@@ -73,6 +73,7 @@ def create() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(middleware_class=ClientValidationMiddleware)
     app.add_middleware(middleware_class=LoguruMiddleware)
 
     app.add_exception_handler(exc_class_or_status_code=AppError, handler=app_error_handler)  # ty:ignore[invalid-argument-type]

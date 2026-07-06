@@ -8,6 +8,8 @@ from fastapi import Request, Response, status
 from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from ..config import is_debug, is_testing, settings
+
 
 class LoguruMiddleware(BaseHTTPMiddleware):
     async def dispatch(
@@ -48,3 +50,56 @@ class LoguruMiddleware(BaseHTTPMiddleware):
                     f"Duration: {process_time*1000:.2f}ms"
                 )
                 raise e
+
+
+class ClientValidationMiddleware(BaseHTTPMiddleware):
+    """Middleware para validar el origen y cabeceras de seguridad de las peticiones.
+
+    Asegura que las peticiones provengan únicamente del frontend oficial o que incluyan una clave
+    de API secreta (para solicitudes del servidor de Next.js u otras autorizadas).
+    """
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        path = request.url.path
+        if path in ["/", "/health", "/docs", "/redoc", "/openapi.json"] or path.startswith("/api/v1/health"):
+            return await call_next(request)
+
+        if is_testing or is_debug or settings.DEBUG:
+            return await call_next(request)
+
+        if origin := request.headers.get("origin"):
+            clean_origin = origin.rstrip("/")
+            allowed_origins = [o.rstrip("/") for o in settings.CORS_ORIGINS]
+            if clean_origin not in allowed_origins:
+                logger.warning(f"Acceso denegado por Origin no permitido: {origin}")
+                return Response(
+                    content='{"detail": "Acceso denegado: origen no permitido."}',
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    media_type="application/json",
+                )
+            return await call_next(request)
+
+        client_key = request.headers.get("X-App-Secret")
+        if settings.CLIENT_API_KEY:
+            if client_key != settings.CLIENT_API_KEY:
+                logger.warning("Acceso denegado: llamada directa sin token de cliente válido.")
+                return Response(
+                    content='{"detail": "Acceso denegado: se requiere token de cliente válido."}',
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    media_type="application/json",
+                )
+            return await call_next(request)
+
+        logger.warning("Acceso denegado: llamada directa en producción sin configuración de seguridad.")
+        return Response(
+            content='{"detail": "Acceso denegado: las llamadas directas no están permitidas."}',
+            status_code=status.HTTP_403_FORBIDDEN,
+            media_type="application/json",
+        )

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
         "http://localhost:8000",
         "http://localhost:3000",
         "http://localhost:9002",
-        "https://contractia-kappa.vercel.app",
+        "https://pactus-frontend.vercel.app/",
         "http://127.0.0.1:3000",
     ]
     DEBUG: bool = Field(default=False)
@@ -81,6 +81,7 @@ class Settings(BaseSettings):
     GMAIL_APP_PASSWORD: str | None = Field(default_factory=lambda: get_secret("GMAIL-APP-PASSWORD"))
 
     CRON_SECRET: str | None = Field(default_factory=lambda: get_secret("CRON-SECRET"))
+    CLIENT_API_KEY: str | None = Field(default_factory=lambda: get_secret("CLIENT-API-KEY"))
     PAYPAL_CLIENT_ID: str | None = Field(default_factory=lambda: get_secret("PAYPAL-CLIENT-ID"))
     PAYPAL_CLIENT_SECRET: str | None = Field(default_factory=lambda: get_secret("PAYPAL-CLIENT-SECRET"))
     PAYPAL_BASE_URL: str = Field(default="https://api-m.sandbox.paypal.com")
