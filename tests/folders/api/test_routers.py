@@ -7,12 +7,12 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from contractai_backend.modules.folders.api.dependencies import get_folder_service
-from contractai_backend.modules.folders.api.routers import router
-from contractai_backend.modules.folders.application.dto import FolderResponse
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
-from contractai_backend.shared.api.dependencies.security import get_current_user
+from pactus_backend.modules.folders.api.dependencies import get_folder_service
+from pactus_backend.modules.folders.api.routers import router
+from pactus_backend.modules.folders.application.dto import FolderResponse
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.shared.api.dependencies.security import get_current_user
 
 
 def _make_app(mock_service) -> FastAPI:

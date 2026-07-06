@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from contractai_backend.modules.organizations.domain.entities import OrganizationTable
-from contractai_backend.modules.organizations.infrastructure.postgres_repo import SQLModelOrganizationRepository
+from pactus_backend.modules.organizations.domain.entities import OrganizationTable
+from pactus_backend.modules.organizations.infrastructure.postgres_repo import SQLModelOrganizationRepository
 
 
 def _make_org(id: int = 1) -> OrganizationTable:

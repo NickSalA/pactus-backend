@@ -7,15 +7,15 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from contractai_backend.core.exceptions.base import AppError
-from contractai_backend.modules.audit.api.dependencies import get_contract_activity_service
-from contractai_backend.modules.audit.api.routers.contract_activity_router import router
-from contractai_backend.modules.audit.domain.entities import ContractActivityTable
-from contractai_backend.modules.audit.domain.value_objs import AuditContractAction
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
-from contractai_backend.shared.api.dependencies.security import get_current_user
-from contractai_backend.shared.api.error_handlers import app_error_handler
+from pactus_backend.core.exceptions.base import AppError
+from pactus_backend.modules.audit.api.dependencies import get_contract_activity_service
+from pactus_backend.modules.audit.api.routers.contract_activity_router import router
+from pactus_backend.modules.audit.domain.entities import ContractActivityTable
+from pactus_backend.modules.audit.domain.value_objs import AuditContractAction
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.shared.api.dependencies.security import get_current_user
+from pactus_backend.shared.api.error_handlers import app_error_handler
 
 
 def _make_app(service, role: UserRole = UserRole.ADMIN) -> FastAPI:
@@ -37,7 +37,7 @@ def _make_app(service, role: UserRole = UserRole.ADMIN) -> FastAPI:
 def _make_activity(
     *,
     id: int = 1,
-    action: AuditContractAction = AuditContractAction.CREATED,
+    action: AuditContractAction = AuditContractAction.MANUAL_UPLOAD,
     document_id: int | None = 100,
     company_contract_id: int | None = None,
     labor_contract_id: int | None = None,
@@ -72,7 +72,7 @@ def _expected_activity_payload() -> dict:
         "actor_user_id": 1,
         "actor_name": "Admin User",
         "actor_role": "ADMIN",
-        "action": "CREATED",
+        "action": "MANUAL_UPLOAD",
         "document_id": 100,
         "company_contract_id": None,
         "labor_contract_id": None,

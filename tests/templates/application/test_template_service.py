@@ -5,12 +5,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from contractai_backend.core.exceptions.base import ValidationError
-from contractai_backend.modules.documents.domain import DocumentType
-import contractai_backend.modules.templates.application.services.template_service as template_service_module
-from contractai_backend.modules.templates.application.services.template_service import TemplateService
-from contractai_backend.modules.templates.domain.entities import TemplateContent, TemplateContractDateMapping, TemplateField, TemplateTable
-from contractai_backend.modules.templates.domain.value_objs import TemplateState
+from pactus_backend.core.exceptions.base import ValidationError
+from pactus_backend.modules.documents.domain import DocumentType
+import pactus_backend.modules.templates.application.services.template_service as template_service_module
+from pactus_backend.modules.templates.application.services.template_service import TemplateService
+from pactus_backend.modules.templates.domain.entities import TemplateContent, TemplateContractDateMapping, TemplateField, TemplateTable
+from pactus_backend.modules.templates.domain.value_objs import TemplateState
 
 
 class _FixedDateTime(datetime):

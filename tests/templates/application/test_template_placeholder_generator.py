@@ -2,7 +2,7 @@
 
 import pytest
 
-from contractai_backend.modules.templates.application.services.template_placeholder_generator import TemplatePlaceholderGenerator
+from pactus_backend.modules.templates.application.services.template_placeholder_generator import TemplatePlaceholderGenerator
 
 
 class TestTemplatePlaceholderGenerator:

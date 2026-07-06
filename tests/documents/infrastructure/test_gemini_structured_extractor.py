@@ -1,7 +1,7 @@
 """Tests for GeminiDocumentStructuredExtractor prompt rules."""
 
-from contractai_backend.modules.catalog.domain.entities import ServiceTable
-from contractai_backend.modules.documents.infrastructure.gemini_structured_extractor import GeminiDocumentStructuredExtractor
+from pactus_backend.modules.catalog.domain.entities import ServiceTable
+from pactus_backend.modules.documents.infrastructure.gemini_structured_extractor import GeminiDocumentStructuredExtractor
 
 
 def test_build_prompt_includes_labor_worker_and_monthly_pay_rules() -> None:

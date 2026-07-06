@@ -6,12 +6,12 @@ from uuid import uuid4
 import httpx
 import pytest
 
-from contractai_backend.core.exceptions.base import BadGatewayError, UnauthorizedError
-from contractai_backend.modules.users.infrastructure.jwt_service import SupabaseAuthService
+from pactus_backend.core.exceptions.base import BadGatewayError, UnauthorizedError
+from pactus_backend.modules.users.infrastructure.jwt_service import SupabaseAuthService
 
 
 def _make_service(client=None) -> SupabaseAuthService:
-    with patch("contractai_backend.modules.users.infrastructure.jwt_service.settings") as s:
+    with patch("pactus_backend.modules.users.infrastructure.jwt_service.settings") as s:
         s.SUPABASE_URL = "https://fake.supabase.co"
         s.SUPABASE_SECRET_KEY = "fake-key"
         svc = SupabaseAuthService(client=client)

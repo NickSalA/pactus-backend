@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from contractai_backend.modules.chatbot.domain.entities import ConversationTable
-from contractai_backend.modules.chatbot.infrastructure.conversation_repo import ConversationRepository
+from pactus_backend.modules.chatbot.domain.entities import ConversationTable
+from pactus_backend.modules.chatbot.infrastructure.conversation_repo import ConversationRepository
 
 
 def _make_conv(id: int = 1) -> ConversationTable:

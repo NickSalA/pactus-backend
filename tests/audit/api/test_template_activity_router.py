@@ -7,15 +7,15 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from contractai_backend.core.exceptions.base import AppError
-from contractai_backend.modules.audit.api.dependencies import get_template_activity_service
-from contractai_backend.modules.audit.api.routers.template_activity_router import router
-from contractai_backend.modules.audit.domain.entities import TemplateActivityTable
-from contractai_backend.modules.audit.domain.value_objs import AuditTemplateAction
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
-from contractai_backend.shared.api.dependencies.security import get_current_user
-from contractai_backend.shared.api.error_handlers import app_error_handler
+from pactus_backend.core.exceptions.base import AppError
+from pactus_backend.modules.audit.api.dependencies import get_template_activity_service
+from pactus_backend.modules.audit.api.routers.template_activity_router import router
+from pactus_backend.modules.audit.domain.entities import TemplateActivityTable
+from pactus_backend.modules.audit.domain.value_objs import AuditTemplateAction
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.shared.api.dependencies.security import get_current_user
+from pactus_backend.shared.api.error_handlers import app_error_handler
 
 
 def _make_app(service, role: UserRole = UserRole.ADMIN) -> FastAPI:
@@ -143,7 +143,7 @@ class TestTemplateActivityRouter:
         service = AsyncMock()
         service.list_by_organization.return_value = [
             _make_activity(
-                action=AuditTemplateAction.DELETED,
+                action=AuditTemplateAction.ARCHIVED,
                 template_id=None,
                 template_format_id=None,
                 template_name=None,
@@ -161,7 +161,7 @@ class TestTemplateActivityRouter:
         assert response.json() == [
             {
                 **_expected_activity_payload(),
-                "action": "DELETED",
+                "action": "ARCHIVED",
                 "template_id": None,
                 "template_format_id": None,
                 "template_name": None,

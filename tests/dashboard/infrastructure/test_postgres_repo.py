@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy.dialects import postgresql
 
-from contractai_backend.modules.dashboard.domain.value_objs import TopRankingSortBy
-from contractai_backend.modules.dashboard.infrastructure.postgres_repo import SQLModelDashboardRepository
-from contractai_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
+from pactus_backend.modules.dashboard.domain.value_objs import TopRankingSortBy
+from pactus_backend.modules.dashboard.infrastructure.postgres_repo import SQLModelDashboardRepository
+from pactus_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
 
 
 class _ScalarResult:

@@ -5,11 +5,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from contractai_backend.modules.dashboard.application.repositories import DashboardMonthlyAmount
-from contractai_backend.modules.dashboard.application.services import AREA_CHART_FORECAST_MONTHS, AREA_CHART_HISTORY_MONTHS, DashboardService
-from contractai_backend.modules.documents.domain.value_objs import CurrencyType, DocumentType
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.modules.dashboard.application.repositories import DashboardMonthlyAmount
+from pactus_backend.modules.dashboard.application.services import AREA_CHART_FORECAST_MONTHS, AREA_CHART_HISTORY_MONTHS, DashboardService
+from pactus_backend.modules.documents.domain.value_objs import CurrencyType, DocumentType
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
 
 
 def _make_user(role: UserRole = UserRole.MANAGER) -> UserTable:

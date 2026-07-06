@@ -3,14 +3,13 @@
 import pytest
 from pydantic import ValidationError
 
-from contractai_backend.shared.config import Settings
+from pactus_backend.shared.config import Settings
 
 
 def _settings_values() -> dict[str, str]:
     return {
         "GEMINI_API_KEY": "env-gemini-key",
         "OPENAI_API_KEY": "env-openai-key",
-        "AZURE_OPENAI_API_KEY": "env-azure-openai-key",
         "QDRANT_API_KEY": "env-qdrant-key",
         "QDRANT_URL": "https://env.qdrant.example.com",
         "LLAMA_PARSE_API_KEY": "env-llama-key",
@@ -26,7 +25,6 @@ def _clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in (
         "GEMINI_API_KEY",
         "OPENAI_API_KEY",
-        "AZURE_OPENAI_API_KEY",
         "QDRANT_API_KEY",
         "QDRANT_URL",
         "LLAMA_PARSE_API_KEY",
@@ -68,7 +66,6 @@ class TestSettings:
 
         assert settings.GEMINI_API_KEY == "env-gemini-key"
         assert settings.OPENAI_API_KEY == "env-openai-key"
-        assert settings.AZURE_OPENAI_API_KEY == "env-azure-openai-key"
         assert settings.CRON_SECRET is None
 
     def test_database_settings_are_optional_without_key_vault(self, monkeypatch):

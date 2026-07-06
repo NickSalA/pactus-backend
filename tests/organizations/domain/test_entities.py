@@ -1,6 +1,6 @@
 """Tests para entidades del dominio de organizaciones."""
 
-from contractai_backend.modules.organizations.domain.entities import OrganizationTable
+from pactus_backend.modules.organizations.domain.entities import OrganizationTable
 
 
 def test_organization_default_is_active():
@@ -18,3 +18,4 @@ def test_organization_optional_fields_default_none():
     assert org.ruc is None
     assert org.email is None
     assert org.phone is None
+    assert org.paypal_subscription_id is None

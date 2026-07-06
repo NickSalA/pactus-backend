@@ -1,6 +1,6 @@
 """Tests for chatbot prompt routing rules."""
 
-from contractai_backend.modules.chatbot.infrastructure.agent.prompts import (
+from pactus_backend.modules.chatbot.infrastructure.agent.prompts import (
     get_context_agent_prompt,
     get_conversation_agent_prompt,
     get_permission_agent_prompt,

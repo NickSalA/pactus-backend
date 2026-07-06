@@ -21,7 +21,7 @@ if sys.platform == "win32":
 import uvicorn
 from fastapi import FastAPI
 
-from contractai_backend import factory
+from pactus_backend import factory
 
 
 # Mock init_checkpointer dynamically before calling create()
@@ -38,14 +38,14 @@ async def mock_init_checkpointer() -> MockPool:
 
 factory.init_checkpointer = mock_init_checkpointer
 
-from contractai_backend.modules.documents.domain import DocumentType
-from contractai_backend.modules.templates.api.dependencies import get_template_service
-from contractai_backend.modules.templates.application.dto import TemplateResponse
-from contractai_backend.modules.templates.domain.entities import TemplateContent
-from contractai_backend.modules.templates.domain.value_objs import TemplateState
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
-from contractai_backend.shared.api.dependencies.security import get_current_user
+from pactus_backend.modules.documents.domain import DocumentType
+from pactus_backend.modules.templates.api.dependencies import get_template_service
+from pactus_backend.modules.templates.application.dto import TemplateResponse
+from pactus_backend.modules.templates.domain.entities import TemplateContent
+from pactus_backend.modules.templates.domain.value_objs import TemplateState
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.shared.api.dependencies.security import get_current_user
 
 app: FastAPI = factory.create()
 

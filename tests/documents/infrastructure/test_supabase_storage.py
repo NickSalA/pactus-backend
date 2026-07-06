@@ -5,14 +5,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from contractai_backend.modules.documents.domain.exceptions import DocumentStorageError, DocumentStorageUnavailableError
-from contractai_backend.modules.documents.domain.value_objs import DocumentType
-from contractai_backend.modules.documents.infrastructure.supabase_storage import SupabaseStorageRepository
+from pactus_backend.modules.documents.domain.exceptions import DocumentStorageError, DocumentStorageUnavailableError
+from pactus_backend.modules.documents.domain.value_objs import DocumentType
+from pactus_backend.modules.documents.infrastructure.supabase_storage import SupabaseStorageRepository
 
 
 def _make_repo() -> SupabaseStorageRepository:
     mock_client = AsyncMock(spec=httpx.AsyncClient)
-    with patch("contractai_backend.modules.documents.infrastructure.supabase_storage.settings") as mock_settings:
+    with patch("pactus_backend.modules.documents.infrastructure.supabase_storage.settings") as mock_settings:
         mock_settings.SUPABASE_URL = "https://fake.supabase.co"
         mock_settings.SUPABASE_STORAGE_BUCKET = "documents"
         mock_settings.SUPABASE_SECRET_KEY = "fake-key"

@@ -8,14 +8,14 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from contractai_backend.core.exceptions.base import AppError, ForbiddenError
-from contractai_backend.modules.dashboard.api.dependencies import get_dashboard_service
-from contractai_backend.modules.dashboard.api.routers import router
-from contractai_backend.modules.dashboard.api.schemas import AreaChartProps, AreaChartResponse, AreaChartSeries, AreaChartYAxis
-from contractai_backend.modules.dashboard.domain.value_objs import TopRankingSortBy
-from contractai_backend.modules.documents.domain.value_objs import CurrencyType, DocumentType
-from contractai_backend.shared.api.dependencies.security import get_current_user
-from contractai_backend.shared.api.error_handlers import app_error_handler
+from pactus_backend.core.exceptions.base import AppError, ForbiddenError
+from pactus_backend.modules.dashboard.api.dependencies import get_dashboard_service
+from pactus_backend.modules.dashboard.api.routers import router
+from pactus_backend.modules.dashboard.api.schemas import AreaChartProps, AreaChartResponse, AreaChartSeries, AreaChartYAxis
+from pactus_backend.modules.dashboard.domain.value_objs import TopRankingSortBy
+from pactus_backend.modules.documents.domain.value_objs import CurrencyType, DocumentType
+from pactus_backend.shared.api.dependencies.security import get_current_user
+from pactus_backend.shared.api.error_handlers import app_error_handler
 
 
 def _make_app(mock_service) -> FastAPI:

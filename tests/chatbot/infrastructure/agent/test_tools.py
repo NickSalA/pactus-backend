@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from contractai_backend.modules.chatbot.infrastructure.agent.tools import build_bc_tool, build_company_contracts_query_tool, build_party_lookup_tool
-from contractai_backend.modules.documents.domain.value_objs import DocumentState
-from contractai_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.modules.chatbot.infrastructure.agent.tools import build_bc_tool, build_company_contracts_query_tool, build_party_lookup_tool
+from pactus_backend.modules.documents.domain.value_objs import DocumentState
+from pactus_backend.modules.users.domain.value_objs import UserRole
 
 
 class _FakeCounterpartyRepo:

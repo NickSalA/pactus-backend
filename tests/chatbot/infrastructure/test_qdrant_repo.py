@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from contractai_backend.modules.chatbot.infrastructure.qdrant_repo import QdrantVectorRepository
+from pactus_backend.modules.chatbot.infrastructure.qdrant_repo import QdrantVectorRepository
 
 
 def _make_repo(organization_id: int = 7) -> tuple[QdrantVectorRepository, AsyncMock]:
@@ -48,7 +48,7 @@ class TestRetrieveFromCollection:
         index = MagicMock()
         index.as_retriever.return_value = retriever
 
-        with patch("contractai_backend.modules.chatbot.infrastructure.qdrant_repo.VectorStoreIndex.from_vector_store", return_value=index):
+        with patch("pactus_backend.modules.chatbot.infrastructure.qdrant_repo.VectorStoreIndex.from_vector_store", return_value=index):
             await repo._retrieve_from_collection(
                 collection_name="contracts_index",
                 query="firmantes del contrato alpha",
@@ -75,7 +75,7 @@ class TestSearchDocuments:
         with patch.object(repo, "_retrieve_from_collection", new_callable=AsyncMock) as mock_retrieve:
             mock_retrieve.side_effect = [[node], []]
             with patch(
-                "contractai_backend.modules.chatbot.infrastructure.qdrant_repo.MetadataReplacementPostProcessor.postprocess_nodes",
+                "pactus_backend.modules.chatbot.infrastructure.qdrant_repo.MetadataReplacementPostProcessor.postprocess_nodes",
                 return_value=[node],
             ):
                 result = await repo.search_documents(query="firmantes", limit=5, document_ids=[42])

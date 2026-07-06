@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 from pydantic import ValidationError
 
-from contractai_backend.modules.documents.domain import (
+from pactus_backend.modules.documents.domain import (
     CompanyContractTable,
     CompanyContractServiceTable,
     DocumentServiceTable,
@@ -14,9 +14,9 @@ from contractai_backend.modules.documents.domain import (
     validate_service_currency_alignment,
     validate_service_periods,
 )
-from contractai_backend.modules.catalog.domain.entities import ServiceTable
-from contractai_backend.modules.documents.domain.exceptions import DocumentValidationError
-from contractai_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
+from pactus_backend.modules.catalog.domain.entities import ServiceTable
+from pactus_backend.modules.documents.domain.exceptions import DocumentValidationError
+from pactus_backend.modules.documents.domain.value_objs import CurrencyType, DocumentState, DocumentType
 
 
 def _valid_doc(**overrides) -> dict:

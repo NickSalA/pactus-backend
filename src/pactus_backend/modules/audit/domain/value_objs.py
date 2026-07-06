@@ -1,0 +1,36 @@
+"""Value objects for audit activity."""
+
+from enum import StrEnum
+
+
+class AuditUserAction(StrEnum):
+    CREATED = "CREATED"
+    UPDATED = "UPDATED"
+    DELETED = "DELETED"
+
+
+class AuditChatbotAction(StrEnum):
+    CONVERSATION_STARTED = "CONVERSATION_STARTED"
+    MESSAGE_SENT = "MESSAGE_SENT"
+    RESPONSE_GENERATED = "RESPONSE_GENERATED"
+
+
+class AuditContractAction(StrEnum):
+    MANUAL_UPLOAD = "MANUAL_UPLOAD"
+    GENERATED_FROM_TEMPLATE = "GENERATED_FROM_TEMPLATE"
+    IMPORTED_FROM_GOOGLE_DRIVE = "IMPORTED_FROM_GOOGLE_DRIVE"
+    UPDATED = "UPDATED"
+    DELETED = "DELETED"
+
+
+class AuditTemplateAction(StrEnum):
+    CREATED = "CREATED"
+    UPDATED = "UPDATED"
+    PUBLISHED = "PUBLISHED"
+    ARCHIVED = "ARCHIVED"
+
+
+class AITokenSource(StrEnum):
+    CHATBOT = "CHATBOT"
+    TEMPLATES = "TEMPLATES"
+    INTEGRATIONS = "INTEGRATIONS"

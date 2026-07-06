@@ -17,7 +17,7 @@ uv run ty check src/                            # Typecheck (ty is strict)
 
 ### Run
 ```bash
-uv run fastapi dev src/contractai_backend/main.py
+uv run fastapi dev src/pactus_backend/main.py
 uv run contractai-backend                      # Uses pyproject entry point
 ```
 
@@ -32,7 +32,7 @@ uv run contractai-backend                      # Uses pyproject entry point
 ## Module Structure
 
 ```
-src/contractai_backend/
+src/pactus_backend/
 ├── modules/
 │   ├── chatbot/        # LangGraph multi-agent chatbot
 │   │   ├── api/        # Routers, schemas, dependencies
@@ -70,4 +70,4 @@ src/contractai_backend/
 ## Config
 
 - `.env` contains all environment variables (API keys, DB credentials)
-- `src/contractai_backend/shared/config.py` defines `settings` via pydantic-settings
+- `src/pactus_backend/shared/config.py` defines `settings` via pydantic-settings

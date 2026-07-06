@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from contractai_backend.core.exceptions.base import ForbiddenError
-from contractai_backend.modules.dashboard.application.repositories import DashboardContractSummary, DashboardMonthlyAmount
-from contractai_backend.modules.dashboard.application.services import ALERT_PREVIEW_LIMIT, RECENT_CONTRACTS_LIMIT, TOP_RANKING_LIMIT, DashboardService
-from contractai_backend.modules.dashboard.domain.value_objs import TopRankingSortBy
-from contractai_backend.modules.documents.domain.value_objs import DocumentType
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.core.exceptions.base import ForbiddenError
+from pactus_backend.modules.dashboard.application.repositories import DashboardContractSummary, DashboardMonthlyAmount
+from pactus_backend.modules.dashboard.application.services import ALERT_PREVIEW_LIMIT, RECENT_CONTRACTS_LIMIT, TOP_RANKING_LIMIT, DashboardService
+from pactus_backend.modules.dashboard.domain.value_objs import TopRankingSortBy
+from pactus_backend.modules.documents.domain.value_objs import DocumentType
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
 
 
 def _make_user(role: UserRole) -> UserTable:

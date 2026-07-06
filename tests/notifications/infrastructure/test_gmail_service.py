@@ -5,12 +5,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from contractai_backend.core.exceptions.base import BadGatewayError
+from pactus_backend.core.exceptions.base import BadGatewayError
 
 
 def _make_service() -> "GmailService":
-    from contractai_backend.modules.notifications.infrastructure.gmail_service import GmailService
-    with patch("contractai_backend.modules.notifications.infrastructure.gmail_service.settings") as s:
+    from pactus_backend.modules.notifications.infrastructure.gmail_service import GmailService
+    with patch("pactus_backend.modules.notifications.infrastructure.gmail_service.settings") as s:
         s.GMAIL_SENDER = "sender@gmail.com"
         s.GMAIL_APP_PASSWORD = "app-password"
         svc = GmailService()
@@ -19,9 +19,9 @@ def _make_service() -> "GmailService":
 
 class TestGmailService:
     def test_raises_validation_error_when_no_credentials(self):
-        from contractai_backend.core.exceptions.base import ValidationError
-        from contractai_backend.modules.notifications.infrastructure.gmail_service import GmailService
-        with patch("contractai_backend.modules.notifications.infrastructure.gmail_service.settings") as s:
+        from pactus_backend.core.exceptions.base import ValidationError
+        from pactus_backend.modules.notifications.infrastructure.gmail_service import GmailService
+        with patch("pactus_backend.modules.notifications.infrastructure.gmail_service.settings") as s:
             s.GMAIL_SENDER = ""
             s.GMAIL_APP_PASSWORD = ""
             with pytest.raises(ValidationError):

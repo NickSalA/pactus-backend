@@ -1,7 +1,7 @@
 """Tests for rendered contract post-processing."""
 
-from contractai_backend.modules.documents.domain import DocumentType
-from contractai_backend.modules.templates.application.services.rendered_contract_formatter import RenderedContractFormatter
+from pactus_backend.modules.documents.domain import DocumentType
+from pactus_backend.modules.templates.application.services.rendered_contract_formatter import RenderedContractFormatter
 
 
 class TestRenderedContractFormatter:

@@ -7,10 +7,10 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from contractai_backend.core.exceptions.base import AppError
-from contractai_backend.modules.dashboard.api.dependencies import get_dashboard_service
-from contractai_backend.modules.dashboard.api.routers import router
-from contractai_backend.modules.dashboard.application.services import (
+from pactus_backend.core.exceptions.base import AppError
+from pactus_backend.modules.dashboard.api.dependencies import get_dashboard_service
+from pactus_backend.modules.dashboard.api.routers import router
+from pactus_backend.modules.dashboard.application.services import (
     AlertCategory,
     AlertColor,
     AreaChartProps,
@@ -21,8 +21,8 @@ from contractai_backend.modules.dashboard.application.services import (
     TopCompanyResponse,
     TopServiceResponse,
 )
-from contractai_backend.shared.api.dependencies.security import get_current_user
-from contractai_backend.shared.api.error_handlers import app_error_handler
+from pactus_backend.shared.api.dependencies.security import get_current_user
+from pactus_backend.shared.api.error_handlers import app_error_handler
 
 
 def _make_app(mock_service) -> FastAPI:

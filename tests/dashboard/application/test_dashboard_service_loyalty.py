@@ -4,10 +4,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from contractai_backend.core.exceptions.base import ForbiddenError
-from contractai_backend.modules.dashboard.application.services import DashboardService
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.core.exceptions.base import ForbiddenError
+from pactus_backend.modules.dashboard.application.services import DashboardService
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
 
 
 def _make_user(role: UserRole) -> UserTable:

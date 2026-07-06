@@ -4,11 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from contractai_backend.modules.integrations.application.services.integration_service import IntegrationService
-from contractai_backend.modules.integrations.domain.exceptions import (
+from pactus_backend.modules.integrations.application.services.integration_service import IntegrationService
+from pactus_backend.modules.integrations.domain.exceptions import (
     CloudFileNotFoundError,
     CloudStorageIntegrationError,
     InvalidCloudTokenError,
+    InvalidIntegrationPayloadError,
 )
 
 
@@ -64,7 +65,7 @@ class TestGetAuthorizationUrl:
 
 class TestProcessImport:
     @pytest.mark.asyncio
-    async def test_returns_true_on_success(self):
+    async def test_completes_successfully(self):
         provider = AsyncMock()
         provider.get_file_metadata.return_value = {"name": "file.pdf", "mimeType": "application/pdf"}
         provider.download_file.return_value = b"pdf content"
@@ -76,10 +77,10 @@ class TestProcessImport:
         files = [{"file_id": "abc", "document": {"name": "Test", "client": "Client"}}]
 
         result = await service.process_import(token={}, files=files, organization_id=1)
-        assert result is True
+        assert result is None
 
     @pytest.mark.asyncio
-    async def test_returns_false_on_invalid_token(self):
+    async def test_raises_on_invalid_token(self):
         provider = AsyncMock()
         provider.get_file_metadata.side_effect = InvalidCloudTokenError()
         ingestion = AsyncMock()
@@ -87,42 +88,30 @@ class TestProcessImport:
         service = _make_service(provider=provider, ingestion=ingestion)
         files = [{"file_id": "unselected-file-id", "document": {}}]
 
-        result = await service.process_import(token={}, files=files, organization_id=1)
-        assert result is False
+        with pytest.raises(InvalidCloudTokenError):
+            await service.process_import(token={}, files=files, organization_id=1)
         provider.get_file_metadata.assert_awaited_once_with({}, "unselected-file-id")
-        provider.download_file.assert_not_awaited()
-        ingestion.ingest_drive_file.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_skips_file_not_found_and_continues(self):
+    async def test_raises_on_file_not_found(self):
         provider = AsyncMock()
-        provider.get_file_metadata.side_effect = [
-            CloudFileNotFoundError(),
-            {"name": "file2.pdf", "mimeType": "application/pdf"},
-        ]
-        provider.download_file.return_value = b"content"
+        provider.get_file_metadata.side_effect = CloudFileNotFoundError()
 
         ingestion = AsyncMock()
-        ingestion.ingest_drive_file.return_value = MagicMock(id=2)
 
         service = _make_service(provider=provider, ingestion=ingestion)
-        files = [
-            {"file_id": "missing", "document": {}},
-            {"file_id": "found", "document": {"name": "T", "client": "C"}},
-        ]
+        files = [{"file_id": "missing", "document": {}}]
 
-        result = await service.process_import(token={}, files=files, organization_id=1)
-        assert result is True
-        ingestion.ingest_drive_file.assert_called_once()
+        with pytest.raises(CloudFileNotFoundError):
+            await service.process_import(token={}, files=files, organization_id=1)
 
     @pytest.mark.asyncio
-    async def test_empty_file_id_skips_file(self):
+    async def test_raises_on_empty_file_id(self):
         provider = AsyncMock()
         ingestion = AsyncMock()
 
         service = _make_service(provider=provider, ingestion=ingestion)
         files = [{"file_id": "", "document": {}}]
 
-        result = await service.process_import(token={}, files=files, organization_id=1)
-        assert result is True
-        provider.get_file_metadata.assert_not_called()
+        with pytest.raises(InvalidIntegrationPayloadError):
+            await service.process_import(token={}, files=files, organization_id=1)

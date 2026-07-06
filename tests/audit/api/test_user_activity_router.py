@@ -7,16 +7,16 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from contractai_backend.core.exceptions.base import AppError
-from contractai_backend.modules.audit.api.dependencies import get_chatbot_activity_service, get_user_activity_service
-from contractai_backend.modules.audit.api.routers.chatbot_activity_router import router as chatbot_router
-from contractai_backend.modules.audit.api.routers.user_activity_router import router
-from contractai_backend.modules.audit.domain.entities import ChatbotActivityTable, UserActivityTable
-from contractai_backend.modules.audit.domain.value_objs import AuditChatbotAction, AuditUserAction
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
-from contractai_backend.shared.api.dependencies.security import get_current_user
-from contractai_backend.shared.api.error_handlers import app_error_handler
+from pactus_backend.core.exceptions.base import AppError
+from pactus_backend.modules.audit.api.dependencies import get_chatbot_activity_service, get_user_activity_service
+from pactus_backend.modules.audit.api.routers.chatbot_activity_router import router as chatbot_router
+from pactus_backend.modules.audit.api.routers.user_activity_router import router
+from pactus_backend.modules.audit.domain.entities import ChatbotActivityTable, UserActivityTable
+from pactus_backend.modules.audit.domain.value_objs import AuditChatbotAction, AuditUserAction
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.shared.api.dependencies.security import get_current_user
+from pactus_backend.shared.api.error_handlers import app_error_handler
 
 
 def _make_app(service, role: UserRole = UserRole.ADMIN) -> FastAPI:
@@ -77,13 +77,6 @@ def _make_chatbot_activity() -> ChatbotActivityTable:
         actor_role="WORKER",
         action=AuditChatbotAction.RESPONSE_GENERATED,
         conversation_id=5,
-        input_tokens=100,
-        output_tokens=50,
-        total_tokens=150,
-        input_cost_usd="0.0001",
-        output_cost_usd="0.0002",
-        total_cost_usd="0.0003",
-        model_used="gemini-test",
         created_at=datetime(2026, 6, 8, tzinfo=UTC),
     )
 
@@ -129,7 +122,6 @@ class TestChatbotActivityRouter:
         assert response.json()[0]["action"] == "RESPONSE_GENERATED"
         assert response.json()[0]["conversation_title"] == "Contrato de servicios"
         assert "conversation_id" not in response.json()[0]
-        assert response.json()[0]["total_tokens"] == 150
         service.list_by_organization.assert_awaited_once_with(organization_id=10, limit=10, offset=2)
 
     @pytest.mark.asyncio

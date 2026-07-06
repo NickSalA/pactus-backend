@@ -7,13 +7,13 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from contractai_backend.modules.organizations.api.dependencies import get_organization_service
-from contractai_backend.modules.organizations.api.routers.organizations_router import router
-from contractai_backend.modules.organizations.application.dto import OrganizationResponse
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
-from contractai_backend.shared.config import settings
-from contractai_backend.shared.api.dependencies.security import get_current_user
+from pactus_backend.modules.organizations.api.dependencies import get_organization_service
+from pactus_backend.modules.organizations.api.routers.organizations_router import router
+from pactus_backend.modules.organizations.application.dto import OrganizationResponse
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.shared.config import settings
+from pactus_backend.shared.api.dependencies.security import get_current_user
 
 
 def _make_app(mock_service, role: UserRole = UserRole.ADMIN) -> FastAPI:

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from azure.core.exceptions import AzureError, ClientAuthenticationError, ResourceNotFoundError
 
-from contractai_backend.shared.infrastructure.azure_provider import AzureKeyVaultProvider
+from pactus_backend.shared.infrastructure.azure_provider import AzureKeyVaultProvider
 
 
 def _make_provider(client: MagicMock | None = None) -> tuple[AzureKeyVaultProvider, MagicMock]:

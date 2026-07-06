@@ -4,10 +4,10 @@ import pytest
 from datetime import date
 from unittest.mock import AsyncMock
 
-from contractai_backend.modules.documents.application.dto import CreateDocumentRequest, FileRequest
-from contractai_backend.modules.documents.application.services import DocumentCommandService
-from contractai_backend.modules.documents.domain import DocumentState
-from contractai_backend.modules.templates.infrastructure.document_adapter import DocumentModuleAdapter
+from pactus_backend.modules.documents.application.dto import CreateDocumentRequest, FileRequest
+from pactus_backend.modules.documents.application.services import DocumentCommandService
+from pactus_backend.modules.documents.domain import DocumentState
+from pactus_backend.modules.templates.infrastructure.document_adapter import DocumentModuleAdapter
 
 
 class TestDocumentModuleAdapter:

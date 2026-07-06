@@ -5,11 +5,11 @@ from uuid import uuid4
 
 import pytest
 
-from contractai_backend.core.exceptions.base import ForbiddenError
-from contractai_backend.modules.users.application.dto.auth_dto import ExternalUserDTO
-from contractai_backend.modules.users.application.services.auth_service import AuthService
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.core.exceptions.base import ForbiddenError
+from pactus_backend.modules.users.application.dto.auth_dto import ExternalUserDTO
+from pactus_backend.modules.users.application.services.auth_service import AuthService
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
 
 
 def _make_external_user(**kwargs) -> ExternalUserDTO:

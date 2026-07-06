@@ -6,14 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from contractai_backend.modules.documents.domain.exceptions import DocumentExtractionError
-from contractai_backend.modules.documents.infrastructure.llama_parser import LlamaParseExtractor
+from pactus_backend.modules.documents.domain.exceptions import DocumentExtractionError
+from pactus_backend.modules.documents.infrastructure.llama_parser import LlamaParseExtractor
 
 
 def _make_extractor() -> LlamaParseExtractor:
-    with patch("contractai_backend.modules.documents.infrastructure.llama_parser.settings") as mock_settings:
+    with patch("pactus_backend.modules.documents.infrastructure.llama_parser.settings") as mock_settings:
         mock_settings.LLAMA_PARSE_API_KEY = "fake-key"
-        with patch("contractai_backend.modules.documents.infrastructure.llama_parser.AsyncLlamaCloud") as mock_cloud:
+        with patch("pactus_backend.modules.documents.infrastructure.llama_parser.AsyncLlamaCloud") as mock_cloud:
             parser = MagicMock()
             parser.files.create = AsyncMock()
             parser.parsing.parse = AsyncMock()

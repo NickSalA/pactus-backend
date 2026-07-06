@@ -4,11 +4,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from contractai_backend.modules.audit.application.services import ChatbotActivityService, UserActivityService
-from contractai_backend.modules.audit.domain.value_objs import AuditChatbotAction, AuditUserAction
-from contractai_backend.modules.chatbot.application.dto import TokenCostResult
-from contractai_backend.modules.users.domain.entities import UserTable
-from contractai_backend.modules.users.domain.value_objs import UserRole
+from pactus_backend.modules.audit.application.services import ChatbotActivityService, UserActivityService
+from pactus_backend.modules.audit.domain.value_objs import AuditChatbotAction, AuditUserAction
+from pactus_backend.modules.chatbot.application.dto import TokenCostResult
+from pactus_backend.modules.users.domain.entities import UserTable
+from pactus_backend.modules.users.domain.value_objs import UserRole
 
 
 def _make_user(**kwargs) -> UserTable:
@@ -75,30 +75,15 @@ class TestChatbotActivityService:
         assert result.actor_user_id == actor.id
         assert result.actor_role == UserRole.WORKER
         assert result.conversation_id == 99
-        assert result.input_tokens is None
         repo.record.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_record_response_generated_includes_costs(self):
+    async def test_record_response_generated(self):
         repo = AsyncMock()
         repo.record.side_effect = lambda activity: activity
         service = ChatbotActivityService(repository=repo)
         actor = _make_user(id=3, role=UserRole.HR)
-        cost = TokenCostResult(
-            input_tokens=100,
-            output_tokens=50,
-            total_tokens=150,
-            input_cost_usd=0.0001,
-            output_cost_usd=0.0002,
-            total_cost_usd=0.0003,
-            model_used="gemini-test",
-        )
 
-        result = await service.record_response_generated(actor=actor, conversation_id=10, cost=cost)
+        result = await service.record_response_generated(actor=actor, conversation_id=10)
 
         assert result.action == AuditChatbotAction.RESPONSE_GENERATED
-        assert result.input_tokens == 100
-        assert result.output_tokens == 50
-        assert result.total_tokens == 150
-        assert str(result.total_cost_usd) == "0.0003"
-        assert result.model_used == "gemini-test"

@@ -7,12 +7,12 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from contractai_backend.core.exceptions.base import AppError
-from contractai_backend.modules.chatbot.api.dependencies import get_conversation_service
-from contractai_backend.modules.chatbot.api.routers.conversation_router import router
-from contractai_backend.modules.chatbot.domain.entities import ConversationTable
-from contractai_backend.shared.api.dependencies.security import get_current_user
-from contractai_backend.shared.api.error_handlers import app_error_handler
+from pactus_backend.core.exceptions.base import AppError
+from pactus_backend.modules.chatbot.api.dependencies import get_conversation_service
+from pactus_backend.modules.chatbot.api.routers.conversation_router import router
+from pactus_backend.modules.chatbot.domain.entities import ConversationTable
+from pactus_backend.shared.api.dependencies.security import get_current_user
+from pactus_backend.shared.api.error_handlers import app_error_handler
 
 
 def _make_app(current_user, service) -> FastAPI:

@@ -2,7 +2,7 @@
 
 import pytest
 
-from contractai_backend.modules.templates.domain.entities import (
+from pactus_backend.modules.templates.domain.entities import (
     TemplateContent,
     TemplateContractDateMapping,
     TemplateField,
