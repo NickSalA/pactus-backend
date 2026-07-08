@@ -180,6 +180,33 @@ class SQLModelDocumentQueryRepository(
         return combined_score, coverage, avg_token_score, full_score
 
     @classmethod
+    def _looks_like_acronym(cls, text: str) -> bool:
+        """Check if normalized text looks like an acronym (short, alphabetic, multi-char)."""
+        return 2 <= len(text) <= 10 and text.isalpha()
+
+    @classmethod
+    def _matches_as_acronym(cls, normalized_query: str, normalized_candidate: str) -> bool:
+        """Check if query letters match the first letters of meaningful words in the candidate."""
+        if not cls._looks_like_acronym(normalized_query):
+            return False
+
+        words = normalized_candidate.split()
+        if len(words) < len(normalized_query):
+            return False
+
+        query_letters = list(normalized_query)
+        word_idx = 0
+        query_idx = 0
+
+        while word_idx < len(words) and query_idx < len(query_letters):
+            word = words[word_idx]
+            if len(word) > 2 and word[0] == query_letters[query_idx]:
+                query_idx += 1
+            word_idx += 1
+
+        return query_idx == len(query_letters)
+
+    @classmethod
     def _is_viable_party_match(cls, query: str, candidate: str) -> bool:
         combined_score, coverage, avg_token_score, full_score = cls._compute_party_match_metrics(query=query, candidate=candidate)
         normalized_query = cls._normalize_lookup_text(query)
@@ -189,6 +216,9 @@ class SQLModelDocumentQueryRepository(
             return False
 
         if normalized_query == normalized_candidate or normalized_query in normalized_candidate or normalized_candidate in normalized_query:
+            return True
+
+        if cls._matches_as_acronym(normalized_query, normalized_candidate):
             return True
 
         query_token_count = len(normalized_query.split())
@@ -310,7 +340,14 @@ class SQLModelDocumentQueryRepository(
         if filters.client:
             normalized = self._normalize_text_filter(filters.client)
             if normalized:
-                statement = statement.where(col(CompanyContractTable.client).ilike(f"%{normalized}%"))
+                client_condition = col(CompanyContractTable.client).ilike(f"%{normalized}%")
+                if self._looks_like_acronym(normalized):
+                    pattern = "%" + "%".join(list(normalized)) + "%"
+                    client_condition = or_(
+                        client_condition,
+                        func.lower(col(CompanyContractTable.client)).ilike(pattern),
+                    )
+                statement = statement.where(client_condition)
 
         if filters.ruc:
             normalized = self._normalize_text_filter(filters.ruc)
