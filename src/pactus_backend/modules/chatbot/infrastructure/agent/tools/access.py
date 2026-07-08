@@ -18,6 +18,7 @@ from .patterns import (
     EXPLICIT_DOCUMENT_TYPE_PATTERNS,
     NAMED_PARTY_PATTERNS,
     TRAILING_PARTY_PATTERN,
+    _refine_party_candidate,
     normalize_access_text,
     resolve_requested_document_state,
 )
@@ -62,7 +63,7 @@ def extract_contract_party_candidate(message: str) -> str | None:
 
         candidate = matches[-1].group("party").strip()
         if candidate := TRAILING_PARTY_PATTERN.sub("", candidate).strip():
-            return candidate
+            return _refine_party_candidate(candidate)
 
     return None
 

@@ -34,10 +34,39 @@ EXPLICIT_DOCUMENT_TYPE_PATTERNS: dict[str, tuple[str, ...]] = {
 
 
 NAMED_PARTY_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bcontratos?\s+de\s+.*?\b(?:de\s+)?(?:la\s+)?(?:empresa|compania|compañia)\s+(?P<party>[^?.!,;]+)"),
+    re.compile(r"\bcontratos?\s+de\s+.*?\bcon\s+(?P<party>[^?.!,;]+)"),
     re.compile(r"\bcontratos?\s+(?:de|con)\s+(?P<party>[^?.!,;]+)"),
     re.compile(r"\b(?:puesto(?:\s+de\s+trabajo)?|cargo|rol|funcion)\s+de\s+(?P<party>[^?.!,;]+)"),
 )
 TRAILING_PARTY_PATTERN = re.compile(r"\b(?:por favor|gracias|porfa)\b.*$")
+
+
+def _refine_party_candidate(candidate: str) -> str:
+    """Extract just the named entity from a descriptive party candidate.
+
+    Handles cases like 'prestacion de servicios de la empresa UNMSM' -> 'UNMSM'.
+    Falls back to the original candidate when no entity keyword is found.
+    """
+    m = re.search(
+        r"\b(?:empresa|compania|compañia|compaÃ±ia)\s+(?P<entity>[^?.!,;]+?)\s*$",
+        candidate,
+        re.IGNORECASE,
+    )
+    if m:
+        return m.group("entity").strip()
+
+    m = re.search(
+        r"\b(?:señor|seÃ±or|senor|señora|seÃ±ora|senora|sr\.?|sra\.?)\s+(?P<entity>[^?.!,;]+?)\s*$",
+        candidate,
+        re.IGNORECASE,
+    )
+    if m:
+        return m.group("entity").strip()
+
+    # Strip leading articles only (la, el, los, las, de la, de el)
+    stripped = re.sub(r"^(?:de\s+)?(?:la|el|los|las)\s+", "", candidate)
+    return stripped if stripped else candidate
 
 
 STATE_PATTERNS: tuple[tuple[DocumentState, tuple[str, ...]], ...] = (

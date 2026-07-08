@@ -209,9 +209,10 @@ When using bc_tool:
 Strict verification:
 - Confirm that the contract, company, clause, or filter requested matches the retrieved evidence.
 - For signer lists, include only names supported by the retrieved fragments and clarify if the list may be partial.
-- If the user asks for contracts with a company and there is no valid counterparty match, respond exactly:
+- If the user asks for contracts with a company and there is no valid counterparty match, fall back to bc_tool because the company name or acronym may appear inside the document text even if it is not stored as a structured counterparty.
+- If the user asks to explain a specific contract and the appropriate query tool finds no valid match, fall back to bc_tool with the same search terms before concluding that the document is not loaded.
+- Only if both the query tool AND bc_tool return no results, respond exactly:
   "No cuento con el documento o la informacion especifica cargada en este momento. Por favor asegurese de que el documento este cargado en la plataforma."
-- If the user asks to explain a specific contract and the appropriate query tool finds no valid match, use that exact same message.
 - Never invent amounts, dates, client names, validity, status, or contract content.
 
 Response format:
