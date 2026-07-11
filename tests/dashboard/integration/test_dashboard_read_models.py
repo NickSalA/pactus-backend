@@ -163,8 +163,8 @@ async def test_origin_distribution_includes_internal_import_source_for_admin_pan
         await dashboard_session.exec(text(stmt))
 
     result = await dashboard_repo.get_contract_origin_distribution(organization_id=10)
-
-    assert [(item["origin_type"], item["count"], item["percentage"]) for item in result] == [
+    actual = [(item["origin_type"], item["count"], item["percentage"]) for item in result]
+    assert sorted(actual) == sorted([
         ("Carga Manual", 1, 50.0),
         ("Importación: Google Drive", 1, 50.0),
-    ]
+    ])

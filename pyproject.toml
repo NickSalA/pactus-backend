@@ -110,8 +110,33 @@ dev = [
     "ruff",
     "ty",
     "locust>=2.44.1",
+    "pytest-cov>=7.1.0",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "--cov=src --cov-report=xml --cov-report=html --cov-report=term"
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+omit = [
+    "src/pactus_backend/main.py",
+    "src/pactus_backend/factory.py",
+    "src/pactus_backend/shared/logger.py",
+]
+
+[tool.coverage.report]
+exclude_also = [
+    "def __repr__",
+    "if self.debug:",
+    "if TYPE_CHECKING:",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+    "\\.\\.\\.",
+]
+show_missing = true
+fail_under = 64
