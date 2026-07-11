@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v0.8.1 (2026-07-11)
+
+### Bug Fixes
+
+- Update CORS origin URL by removing trailing slash
+  ([`1cc7527`](https://github.com/NickSalA/pactus-backend/commit/1cc7527ba628917f12a19dc9c551694fb7bbcca2))
+
+### Continuous Integration
+
+- Add GitHub Actions workflow for linting, type checking, and testing with Postgres service
+  ([`b97467f`](https://github.com/NickSalA/pactus-backend/commit/b97467f842196296c262c1ccaf57cf941129fcf5))
+
+- Include develop branch in workflow triggers
+  ([`b5af5b7`](https://github.com/NickSalA/pactus-backend/commit/b5af5b7b5a73ea33b5d0af80ad1d97a2e29624df))
+
+
 ## Unreleased
 
 ### Chores
