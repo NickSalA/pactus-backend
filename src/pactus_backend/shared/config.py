@@ -90,6 +90,12 @@ class Settings(BaseSettings):
     @property
     def DATABASE_URL(self) -> str:  # noqa: N802
         """Recupera la URL de la base de datos desde Key Vault o variable de entorno."""
+        test_url = os.environ.get("TEST_DATABASE_URL")
+        if test_url:
+            if test_url.startswith("postgresql://"):
+                return test_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            return test_url
+
         if not self.DATABASE_HOST:
             return "sqlite:///./test.db"
         return f"postgresql+asyncpg://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}"
@@ -97,6 +103,12 @@ class Settings(BaseSettings):
     @property
     def CONN_STRING(self) -> str:  # noqa: N802
         """Recupera la cadena de conexión para el checkpointer."""
+        test_url = os.environ.get("TEST_DATABASE_URL")
+        if test_url:
+            if test_url.startswith("postgresql+asyncpg://"):
+                return test_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+            return test_url
+
         if not self.DATABASE_HOST:
             return "sqlite:///./test.db"
         return f"postgresql://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}?sslmode=require"
@@ -131,8 +143,3 @@ try:
     settings = Settings()
 except ValidationError as e:
     raise RuntimeError(f"Error de validación en la configuración: {e}") from e
-
-
-
-
-
