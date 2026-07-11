@@ -50,7 +50,6 @@ async def _seed_dashboard_data(session: AsyncSession) -> None:
     ]
     for stmt in statements:
         await session.exec(text(stmt))
-    await session.commit()
 
 
 @pytest.mark.asyncio
@@ -150,18 +149,18 @@ async def test_origin_distribution_includes_internal_import_source_for_admin_pan
     dashboard_session: AsyncSession,
 ):
     await _seed_dashboard_data(dashboard_session)
-    await dashboard_session.exec(
-        text(
-            """
-            insert into documents (id, organization_id, type, start_date, end_date, state, created_at, updated_at) values
-              (6, 10, 'google_drive', '2026-01-01', '2026-08-31', 'ACTIVE', '2026-01-06', '2026-06-02');
-
-            insert into labor_contracts (id, document_id, worker_name, position, salary_value, salary_currency) values
-              (2, 6, 'Drive Worker', 'Analyst', 3000, 'PEN');
-            """
-        )
-    )
-    await dashboard_session.commit()
+    statements = [
+        """
+        insert into documents (id, organization_id, type, start_date, end_date, state, created_at, updated_at) values
+          (6, 10, 'google_drive', '2026-01-01', '2026-08-31', 'ACTIVE', '2026-01-06', '2026-06-02');
+        """,
+        """
+        insert into labor_contracts (id, document_id, worker_name, position, salary_value, salary_currency) values
+          (2, 6, 'Drive Worker', 'Analyst', 3000, 'PEN');
+        """
+    ]
+    for stmt in statements:
+        await dashboard_session.exec(text(stmt))
 
     result = await dashboard_repo.get_contract_origin_distribution(organization_id=10)
 

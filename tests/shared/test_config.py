@@ -41,6 +41,7 @@ def _clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "CRON_SECRET",
         "DATABASE_SSL_VERIFY",
         "CHECKPOINTER_SCHEMA",
+        "TEST_DATABASE_URL",
     ):
         monkeypatch.delenv(key, raising=False)
 
