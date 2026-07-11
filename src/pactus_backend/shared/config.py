@@ -1,6 +1,7 @@
 """Configuration settings for the application."""
 
 import os
+import sys
 
 from dotenv import load_dotenv
 from pydantic import Field, ValidationError
@@ -105,9 +106,23 @@ class Settings(BaseSettings):
 load_dotenv()
 
 is_debug = os.environ.get("DEBUG", "False").lower() == "true"
-is_testing = "PYTEST_CURRENT_TEST" in os.environ
+is_testing = "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ
 
-if not is_debug and not is_testing:
+if is_testing:
+    mock_keys = {
+        "GEMINI_API_KEY": "mock-gemini-key",
+        "OPENAI_API_KEY": "mock-openai-key",
+        "QDRANT_API_KEY": "mock-qdrant-key",
+        "LLAMA_PARSE_API_KEY": "mock-llama-key",
+        "SUPABASE_SECRET_KEY": "mock-supabase-secret",
+        "SUPABASE_STORAGE_BUCKET": "mock-supabase-bucket",
+        "GOOGLE_CLIENT_ID": "mock-google-client-id",
+        "GOOGLE_CLIENT_SECRET": "mock-google-client-secret",
+    }
+    for key, val in mock_keys.items():
+        if key not in os.environ:
+            os.environ[key] = val
+elif not is_debug:
     from .infrastructure.azure_provider import AzureKeyVaultProvider
 
     SecretsRegistry.set_provider(AzureKeyVaultProvider(vault_url="https://contractai.vault.azure.net/"))
