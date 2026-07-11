@@ -12,40 +12,44 @@ from pactus_backend.modules.documents.domain.value_objs import CurrencyType, Doc
 
 
 async def _seed_dashboard_data(session: AsyncSession) -> None:
-    await session.exec(
-        text(
-            """
-            insert into services (id, organization_id, name) values
-              (1, 10, 'Cloud Support'),
-              (2, 10, 'Legal Advisory'),
-              (3, 99, 'External Service');
-
-            insert into documents (id, organization_id, type, start_date, end_date, state, created_at, updated_at) values
-              (1, 10, 'manual_upload', '2026-01-01', '2026-12-31', 'ACTIVE', '2026-01-01', '2026-02-01'),
-              (2, 10, 'manual_upload', '2026-01-01', '2026-01-20', 'EXPIRING_SOON', '2026-01-02', '2026-03-01'),
-              (3, 10, 'manual_upload', '2026-01-01', '2026-12-31', 'DRAFT', '2026-01-03', '2026-04-01'),
-              (4, 99, 'manual_upload', '2026-01-01', '2026-12-31', 'ACTIVE', '2026-01-04', '2026-05-01'),
-              (5, 10, 'manual_upload', '2026-01-01', '2026-02-15', 'ACTIVE', '2026-01-05', '2026-06-01');
-
-            insert into company_contracts (id, document_id, ruc, client) values
-              (1, 1, '20111111111', 'TechCorp'),
-              (2, 2, '20222222222', 'Acme SAC'),
-              (3, 3, '20333333333', 'Draft Client'),
-              (4, 4, '20444444444', 'Other Org');
-
-            insert into labor_contracts (id, document_id, worker_name, position, salary_value, salary_currency) values
-              (1, 5, 'Jane Worker', 'Developer', 2500, 'PEN');
-
-            insert into company_contract_services (id, company_contract_id, service_id, description, value, currency, start_date, end_date) values
-              (1, 1, 1, 'Cloud monthly support', 1000, 'PEN', '2026-01-01', '2026-12-31'),
-              (2, 1, 2, 'Legal retainer', 500, 'PEN', '2026-01-01', '2026-12-31'),
-              (3, 2, 2, 'Legal advisory', 800, 'PEN', '2026-01-01', '2026-01-20'),
-              (4, 2, 1, 'Cloud setup', 100, 'USD', '2026-01-01', '2026-01-20'),
-              (5, 3, 1, 'Draft service', 9999, 'PEN', '2026-01-01', '2026-12-31'),
-              (6, 4, 3, 'Other org service', 5000, 'PEN', '2026-01-01', '2026-12-31');
-            """
-        )
-    )
+    statements = [
+        """
+        insert into services (id, organization_id, name) values
+          (1, 10, 'Cloud Support'),
+          (2, 10, 'Legal Advisory'),
+          (3, 99, 'External Service');
+        """,
+        """
+        insert into documents (id, organization_id, type, start_date, end_date, state, created_at, updated_at) values
+          (1, 10, 'manual_upload', '2026-01-01', '2026-12-31', 'ACTIVE', '2026-01-01', '2026-02-01'),
+          (2, 10, 'manual_upload', '2026-01-01', '2026-01-20', 'EXPIRING_SOON', '2026-01-02', '2026-03-01'),
+          (3, 10, 'manual_upload', '2026-01-01', '2026-12-31', 'DRAFT', '2026-01-03', '2026-04-01'),
+          (4, 99, 'manual_upload', '2026-01-01', '2026-12-31', 'ACTIVE', '2026-01-04', '2026-05-01'),
+          (5, 10, 'manual_upload', '2026-01-01', '2026-02-15', 'ACTIVE', '2026-01-05', '2026-06-01');
+        """,
+        """
+        insert into company_contracts (id, document_id, ruc, client) values
+          (1, 1, '20111111111', 'TechCorp'),
+          (2, 2, '20222222222', 'Acme SAC'),
+          (3, 3, '20333333333', 'Draft Client'),
+          (4, 4, '20444444444', 'Other Org');
+        """,
+        """
+        insert into labor_contracts (id, document_id, worker_name, position, salary_value, salary_currency) values
+          (1, 5, 'Jane Worker', 'Developer', 2500, 'PEN');
+        """,
+        """
+        insert into company_contract_services (id, company_contract_id, service_id, description, value, currency, start_date, end_date) values
+          (1, 1, 1, 'Cloud monthly support', 1000, 'PEN', '2026-01-01', '2026-12-31'),
+          (2, 1, 2, 'Legal retainer', 500, 'PEN', '2026-01-01', '2026-12-31'),
+          (3, 2, 2, 'Legal advisory', 800, 'PEN', '2026-01-01', '2026-01-20'),
+          (4, 2, 1, 'Cloud setup', 100, 'USD', '2026-01-01', '2026-01-20'),
+          (5, 3, 1, 'Draft service', 9999, 'PEN', '2026-01-01', '2026-12-31'),
+          (6, 4, 3, 'Other org service', 5000, 'PEN', '2026-01-01', '2026-12-31');
+        """
+    ]
+    for stmt in statements:
+        await session.exec(text(stmt))
     await session.commit()
 
 
